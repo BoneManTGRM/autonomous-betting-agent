@@ -1,0 +1,29 @@
+{
+  "sport": "basketball",
+  "event_name": "Example City Hawks vs Example Valley Wolves",
+  "neutral_site": false,
+  "home_market_price": 1.8,
+  "away_market_price": 2.1,
+  "home": {
+    "name": "Example City Hawks",
+    "rating": 1580,
+    "recent_form": 0.45,
+    "injury_impact": 0.1,
+    "rest_advantage": 0.25,
+    "matchup_edge": 0.2,
+    "weather_fit": 0.0,
+    "data_completeness": 0.92,
+    "source_count": 6
+  },
+  "away": {
+    "name": "Example Valley Wolves",
+    "rating": 1530,
+    "recent_form": 0.15,
+    "injury_impact": 0.25,
+    "rest_advantage": -0.1,
+    "matchup_edge": -0.05,
+    "weather_fit": 0.0,
+    "data_completeness": 0.88,
+    "source_count": 5
+  }
+}
