@@ -15,7 +15,7 @@ This is **research-only software**. It does not place bets, does not guarantee w
 - compares model probabilities with no-vig market probabilities
 - calculates expected-value diagnostics for later testing
 - logs a TGRM-style TEST, DETECT, REPAIR, VERIFY cycle
-- supports backtesting metrics such as Brier score and log loss
+- supports backtesting metrics such as Brier score, accuracy and closing-line delta
 - includes a CLI, sample event file, Streamlit UI and tests
 
 ## ARA/TGRM lineage
