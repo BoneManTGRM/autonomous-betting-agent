@@ -7,7 +7,10 @@ This is **research-only software**. It does not place bets, does not guarantee w
 ## What it does
 
 - estimates win probabilities for two-outcome sports events
-- explains which factors moved the model
+- scans live market feeds when an API key is configured
+- ranks the most likely outcome for upcoming games
+- estimates likely scorelines such as 1-1, 2-1 and 2-3
+- explains which factors moved the manual ARA model
 - tracks confidence, evidence strength and uncertainty
 - compares model probabilities with no-vig market probabilities
 - calculates expected-value diagnostics for later testing
@@ -60,6 +63,14 @@ python run_agent.py examples/sample_event.json --json-output result.json
 streamlit run app_streamlit.py
 ```
 
+Streamlit also includes a multipage live scanner at `pages/live_scanner.py`. Configure `THE_ODDS_API_KEY` in Streamlit secrets to enable live market data.
+
+## Streamlit secrets
+
+```toml
+THE_ODDS_API_KEY = "paste-your-key-here"
+```
+
 ## Run tests
 
 ```bash
@@ -79,6 +90,7 @@ The baseline supports:
 - home advantage
 - data completeness
 - source diversity
+- expected-goals scoreline estimation
 
 All inputs are normalized so results remain interpretable. Future sport-specific modules should replace generic signals with validated features for each sport.
 
@@ -87,7 +99,7 @@ All inputs are normalized so results remain interpretable. Future sport-specific
 1. Pick the first sport.
 2. Add official schedule and statistics providers.
 3. Add injury, lineup and weather providers.
-4. Add odds-provider interfaces with timestamped market snapshots.
+4. Add market-provider interfaces with timestamped snapshots.
 5. Build historical event storage.
 6. Add strict time-aware backtesting that prevents future-data leakage.
 7. Tune weights only on training data.
