@@ -7,7 +7,7 @@ from autonomous_betting_agent.scorelines import estimate_scorelines, expected_go
 st.set_page_config(page_title="Autonomous Betting Agent", layout="wide")
 st.title("Autonomous Betting Agent")
 st.caption("Research-only sports probability estimates using an ARA/TGRM-style workflow.")
-st.page_link("pages/live_scanner.py", label="Open Live Market Scanner", icon="📡")
+st.info("Use the Streamlit sidebar menu to open the Live Market Scanner page. On mobile, tap the arrow/menu control to show the sidebar.")
 
 sport = st.text_input("Sport", "soccer")
 event_name = st.text_input("Event name", "Team A vs Team B")
