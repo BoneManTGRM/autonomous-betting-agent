@@ -1,87 +1,116 @@
+import os
+from difflib import SequenceMatcher
+
 import streamlit as st
 
-from autonomous_betting_agent import AutonomousBettingAgent, EventResearchInput, TeamSnapshot
-from autonomous_betting_agent.output import render_text
+from autonomous_betting_agent.live_odds import list_sports, scan_market
 from autonomous_betting_agent.scorelines import estimate_scorelines, expected_goals_from_probability
 
 st.set_page_config(page_title="Autonomous Betting Agent", layout="wide")
 st.title("Autonomous Betting Agent")
-st.caption("Research-only sports probability estimates using an ARA/TGRM-style workflow.")
-st.info("Use the Streamlit sidebar menu to open the Live Market Scanner page. On mobile, tap the arrow/menu control to show the sidebar.")
+st.caption("Enter teams. The agent searches live market data, ranks likely outcomes, and estimates scorelines.")
 
-sport = st.text_input("Sport", "soccer")
-event_name = st.text_input("Event name", "Team A vs Team B")
-neutral_site = st.checkbox("Neutral site", value=False)
 
-col_home, col_away = st.columns(2)
+def read_key(name: str) -> str:
+    try:
+        return str(st.secrets.get(name, ""))
+    except Exception:
+        return os.getenv(name, "")
 
-with col_home:
-    st.subheader("Home side")
-    home = TeamSnapshot(
-        name=st.text_input("Home name", "Team A"),
-        rating=st.number_input("Home rating", value=1580.0),
-        recent_form=st.slider("Home recent form", -1.0, 1.0, 0.25),
-        injury_impact=st.slider("Home injury impact", 0.0, 1.0, 0.10),
-        rest_advantage=st.slider("Home rest advantage", -1.0, 1.0, 0.10),
-        matchup_edge=st.slider("Home matchup edge", -1.0, 1.0, 0.10),
-        weather_fit=st.slider("Home conditions fit", -1.0, 1.0, 0.0),
-        data_completeness=st.slider("Home data completeness", 0.0, 1.0, 0.80),
-        source_count=st.number_input("Home source count", min_value=0, value=5),
-    )
 
-with col_away:
-    st.subheader("Away side")
-    away = TeamSnapshot(
-        name=st.text_input("Away name", "Team B"),
-        rating=st.number_input("Away rating", value=1530.0),
-        recent_form=st.slider("Away recent form", -1.0, 1.0, 0.05),
-        injury_impact=st.slider("Away injury impact", 0.0, 1.0, 0.20),
-        rest_advantage=st.slider("Away rest advantage", -1.0, 1.0, 0.0),
-        matchup_edge=st.slider("Away matchup edge", -1.0, 1.0, -0.05),
-        weather_fit=st.slider("Away conditions fit", -1.0, 1.0, 0.0),
-        data_completeness=st.slider("Away data completeness", 0.0, 1.0, 0.80),
-        source_count=st.number_input("Away source count", min_value=0, value=5),
-    )
+def clean(value: str) -> str:
+    return " ".join(value.lower().replace("-", " ").split())
 
-home_price = st.number_input("Home market price", min_value=1.01, value=1.80)
-away_price = st.number_input("Away market price", min_value=1.01, value=2.10)
 
-st.subheader("Scoreline settings")
-use_manual_xg = st.checkbox("Use manual expected goals", value=False)
-if use_manual_xg:
-    home_xg = st.number_input("Home expected goals", min_value=0.05, max_value=8.0, value=1.45)
-    away_xg = st.number_input("Away expected goals", min_value=0.05, max_value=8.0, value=1.10)
-else:
-    home_xg = None
-    away_xg = None
+def match_score(query: str, candidate: str) -> float:
+    query = clean(query)
+    candidate = clean(candidate)
+    if not query:
+        return 0.0
+    if query in candidate or candidate in query:
+        return 1.0
+    return SequenceMatcher(None, query, candidate).ratio()
 
-if st.button("Analyze event"):
-    event = EventResearchInput(
-        sport=sport,
-        event_name=event_name,
-        home=home,
-        away=away,
-        neutral_site=neutral_site,
-        home_market_price=home_price,
-        away_market_price=away_price,
-    )
-    result = AutonomousBettingAgent().analyze(event)
-    st.text(render_text(result))
-    st.json(result.__dict__)
 
-    if home_xg is None or away_xg is None:
-        home_xg, away_xg = expected_goals_from_probability(result.home_probability, neutral_site)
+def event_matches(item, team_a: str, team_b: str) -> bool:
+    if not team_a and not team_b:
+        return True
+    names = [item.home_team, item.away_team] + [outcome.name for outcome in item.outcomes]
+    a_ok = not team_a or max(match_score(team_a, name) for name in names) >= 0.55
+    b_ok = not team_b or max(match_score(team_b, name) for name in names) >= 0.55
+    return a_ok and b_ok
 
-    st.subheader("Most likely scorelines / spread")
-    st.write(f"Estimated goals: {home.name} {home_xg:.2f}, {away.name} {away_xg:.2f}")
-    score_rows = []
-    for pick in estimate_scorelines(home_xg, away_xg):
-        if pick.margin > 0:
-            spread = f"{home.name} by {pick.margin}"
-        elif pick.margin < 0:
-            spread = f"{away.name} by {abs(pick.margin)}"
-        else:
-            spread = "Draw"
-        score_rows.append({"Score": pick.label, "Spread": spread, "Probability": f"{pick.probability:.1%}"})
-    st.dataframe(score_rows, use_container_width=True, hide_index=True)
-    st.warning("Exact scores are much harder than winner probabilities. Treat this as a rough research estimate, not a guarantee.")
+
+def show_event(item) -> None:
+    st.subheader(f"{item.away_team} at {item.home_team}")
+    st.write(f"Start: {item.commence_time}")
+    st.write(f"Most likely outcome: {item.favorite} ({item.favorite_probability:.1%})")
+
+    rows = []
+    home_probability = None
+    for outcome in item.outcomes:
+        rows.append(
+            {
+                "Outcome": outcome.name,
+                "Avg market price": round(outcome.average_price, 3),
+                "No-vig probability": f"{outcome.normalized_probability:.1%}",
+                "Sources": outcome.source_count,
+            }
+        )
+        if outcome.name == item.home_team:
+            home_probability = outcome.normalized_probability
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+    if home_probability is not None:
+        home_xg, away_xg = expected_goals_from_probability(home_probability, neutral_site=False)
+        score_rows = []
+        for pick in estimate_scorelines(home_xg, away_xg):
+            if pick.margin > 0:
+                spread = f"{item.home_team} by {pick.margin}"
+            elif pick.margin < 0:
+                spread = f"{item.away_team} by {abs(pick.margin)}"
+            else:
+                spread = "Draw"
+            score_rows.append({"Score": pick.label, "Spread": spread, "Probability": f"{pick.probability:.1%}"})
+        st.write("Most likely scorelines / spread")
+        st.dataframe(score_rows, use_container_width=True, hide_index=True)
+
+    with st.expander("ARA cycle notes"):
+        for note in item.cycle_notes:
+            st.write(f"- {note}")
+    st.caption("Research estimate only. It uses market data until team-stat, injury, lineup, and weather providers are added.")
+
+
+api_key = read_key("THE_ODDS_API_KEY")
+if not api_key:
+    st.warning("Add THE_ODDS_API_KEY in Streamlit secrets to enable autonomous live search.")
+    st.code('THE_ODDS_API_KEY = "paste-your-key-here"', language="toml")
+    st.stop()
+
+sport_search = st.text_input("Sport or competition", "soccer")
+team_a = st.text_input("Team 1", "")
+team_b = st.text_input("Team 2", "")
+max_events = st.slider("Max games to scan", 1, 50, 20)
+
+with st.spinner("Loading sport feeds"):
+    sports = list_sports(api_key, include_all=False)
+terms = [term.lower() for term in sport_search.split() if term.strip()]
+choices = []
+for sport_item in sports:
+    haystack = f"{sport_item.key} {sport_item.group} {sport_item.title} {sport_item.description}".lower()
+    if not terms or any(term in haystack for term in terms):
+        choices.append(sport_item)
+if not choices:
+    choices = sports
+labels = [f"{sport_item.title} | {sport_item.key}" for sport_item in choices]
+selected = st.selectbox("Feed", labels)
+sport_key = choices[labels.index(selected)].key
+
+if st.button("Run autonomous search"):
+    with st.spinner("Searching games and building report"):
+        results = scan_market(api_key, sport_key=sport_key, regions="us,eu,uk", max_events=max_events)
+    filtered = [item for item in results if event_matches(item, team_a, team_b)]
+    if not filtered:
+        st.info("No matching games found in this feed. Try fewer team-name words or a different feed.")
+    for item in filtered:
+        show_event(item)
