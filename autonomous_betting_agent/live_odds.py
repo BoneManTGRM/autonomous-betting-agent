@@ -34,6 +34,19 @@ class OutcomePrice:
 
 
 @dataclass(frozen=True)
+class MarketLine:
+    market: str
+    name: str
+    point: Optional[float]
+    average_price: float
+    source_count: int
+    best_price: Optional[float] = None
+    worst_price: Optional[float] = None
+    price_range: Optional[float] = None
+    best_bookmaker: Optional[str] = None
+
+
+@dataclass(frozen=True)
 class LiveEventSummary:
     event_id: str
     sport_key: str
@@ -47,6 +60,14 @@ class LiveEventSummary:
     bookmaker_count: int
     cycle_notes: List[str]
     market_overround: float = 0.0
+    spreads: List[MarketLine] = None
+    totals: List[MarketLine] = None
+
+
+MARKET_LABELS = {
+    "spreads": "Point spread",
+    "totals": "Game total",
+}
 
 
 def get_api_key(explicit_key: Optional[str] = None) -> str:
@@ -83,7 +104,7 @@ def fetch_odds(
     api_key: str,
     sport_key: str,
     regions: str = "us,eu,uk",
-    markets: str = "h2h",
+    markets: str = "h2h,spreads,totals",
     odds_format: str = "decimal",
 ) -> List[Dict[str, Any]]:
     params = {
@@ -116,6 +137,53 @@ def _prices_by_outcome(bookmakers: Iterable[Dict[str, Any]]) -> Dict[str, List[T
                     continue
                 prices.setdefault(name, []).append((price_float, book_name))
     return prices
+
+
+def _market_lines(bookmakers: Iterable[Dict[str, Any]], market_key: str) -> List[MarketLine]:
+    line_map: Dict[Tuple[str, Optional[float]], List[Tuple[float, str]]] = {}
+    for bookmaker in bookmakers:
+        book_name = str(bookmaker.get("title") or bookmaker.get("key") or "Unknown")
+        for market in bookmaker.get("markets", []):
+            if market.get("key") != market_key:
+                continue
+            for outcome in market.get("outcomes", []):
+                name = str(outcome.get("name", "")).strip()
+                price = outcome.get("price")
+                raw_point = outcome.get("point")
+                if not name or price is None:
+                    continue
+                try:
+                    price_float = float(price)
+                except (TypeError, ValueError):
+                    continue
+                if price_float <= 1.0:
+                    continue
+                try:
+                    point = None if raw_point is None else float(raw_point)
+                except (TypeError, ValueError):
+                    point = None
+                line_map.setdefault((name, point), []).append((price_float, book_name))
+
+    rows: List[MarketLine] = []
+    for (name, point), entries in line_map.items():
+        avg_price = mean([price for price, _ in entries])
+        best_price, best_bookmaker = max(entries, key=lambda pair: pair[0])
+        worst_price = min(price for price, _ in entries)
+        rows.append(
+            MarketLine(
+                market=market_key,
+                name=name,
+                point=point,
+                average_price=avg_price,
+                source_count=len(entries),
+                best_price=best_price,
+                worst_price=worst_price,
+                price_range=best_price - worst_price,
+                best_bookmaker=best_bookmaker,
+            )
+        )
+    rows.sort(key=lambda item: (item.market, item.name, item.point if item.point is not None else 0.0))
+    return rows
 
 
 def summarize_event(event: Dict[str, Any]) -> Optional[LiveEventSummary]:
@@ -151,11 +219,13 @@ def summarize_event(event: Dict[str, Any]) -> Optional[LiveEventSummary]:
     outcomes.sort(key=lambda item: item.normalized_probability, reverse=True)
     favorite = outcomes[0]
     market_overround = total - 1.0
+    spreads = _market_lines(event.get("bookmakers", []), "spreads")
+    totals = _market_lines(event.get("bookmakers", []), "totals")
     cycle_notes = [
-        "TEST: pulled live market prices for the event.",
-        "DETECT: checked whether at least two outcomes had usable prices.",
+        "TEST: pulled live moneyline, spread, and total market prices for the event when available.",
+        "DETECT: checked whether at least two moneyline outcomes had usable prices.",
         "REPAIR: averaged prices across books, found best available prices, and normalized implied probabilities.",
-        "VERIFY: ranked outcomes by no-vig probability and marked draw risk when present.",
+        "VERIFY: ranked outcomes by no-vig probability and attached spreads/totals when providers returned them.",
     ]
     return LiveEventSummary(
         event_id=str(event.get("id", "")),
@@ -170,11 +240,13 @@ def summarize_event(event: Dict[str, Any]) -> Optional[LiveEventSummary]:
         bookmaker_count=len(event.get("bookmakers", [])),
         cycle_notes=cycle_notes,
         market_overround=market_overround,
+        spreads=spreads,
+        totals=totals,
     )
 
 
-def scan_market(api_key: str, sport_key: str, regions: str = "us,eu,uk", max_events: int = 25) -> List[LiveEventSummary]:
-    events = fetch_odds(api_key, sport_key=sport_key, regions=regions)
+def scan_market(api_key: str, sport_key: str, regions: str = "us,eu,uk", max_events: int = 25, markets: str = "h2h,spreads,totals") -> List[LiveEventSummary]:
+    events = fetch_odds(api_key, sport_key=sport_key, regions=regions, markets=markets)
     summaries = []
     for event in events[:max_events]:
         summary = summarize_event(event)
