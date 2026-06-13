@@ -1,4 +1,7 @@
+import math
 import os
+import unicodedata
+from difflib import SequenceMatcher
 
 import streamlit as st
 
@@ -13,45 +16,48 @@ IS_ES = language == "Español"
 TEXT = {
     "title": {"English": "Live market scanner", "Español": "Escáner de mercado en vivo"},
     "caption": {
-        "English": "Scan one provider feed safely. If a feed or region is unavailable, the app shows a warning instead of crashing.",
-        "Español": "Revisa una fuente del proveedor de forma segura. Si una fuente o región no está disponible, la app muestra una advertencia en vez de fallar.",
+        "English": "Scan one feed or run a smart cross-sport dashboard. The scanner ranks games, flags close markets, estimates margins, and never exposes provider errors.",
+        "Español": "Revisa una fuente o ejecuta un panel inteligente multideporte. El escáner ordena partidos, detecta mercados cerrados, estima márgenes y no muestra errores crudos del proveedor.",
     },
     "token": {"English": "Provider access token", "Español": "Clave de acceso del proveedor"},
-    "token_help": {
-        "English": "Paste your own provider access token above. It is used only for this browser session unless the app owner configures one separately.",
-        "Español": "Pega tu propia clave de acceso arriba. Se usa solo en esta sesión del navegador, salvo que el dueño configure una clave aparte.",
-    },
+    "token_help": {"English": "Paste your own provider access token. It is used only for this browser session unless the app owner configures one separately.", "Español": "Pega tu propia clave. Se usa solo en esta sesión del navegador salvo que el dueño configure una aparte."},
+    "mode": {"English": "Scan mode", "Español": "Modo de escaneo"},
+    "smart": {"English": "Smart dashboard", "Español": "Panel inteligente"},
+    "single": {"English": "Single feed", "Español": "Una fuente"},
     "regions": {"English": "Bookmaker market regions", "Español": "Regiones de mercado de casas de apuestas"},
-    "regions_help": {
-        "English": "The Odds API regions: us, us2, uk, eu, au. These are bookmaker markets, not event host countries.",
-        "Español": "Regiones de The Odds API: us, us2, uk, eu, au. Son mercados de casas de apuestas, no países sede del evento.",
-    },
-    "sport_search": {"English": "Sport search", "Español": "Buscar deporte"},
-    "max_events": {"English": "Max events", "Español": "Máximo de eventos"},
+    "regions_help": {"English": "The Odds API regions: us, us2, uk, eu, au. These are bookmaker markets, not event host countries.", "Español": "Regiones de The Odds API: us, us2, uk, eu, au. Son mercados de casas de apuestas, no países sede del evento."},
+    "sport_search": {"English": "Sport / league search", "Español": "Buscar deporte / liga"},
+    "team_filter": {"English": "Team/player filter", "Español": "Filtro de equipo/jugador"},
+    "team_filter_help": {"English": "Optional. Example: Mexico, Lakers, Djokovic, Yankees", "Español": "Opcional. Ejemplo: México, Lakers, Djokovic, Yankees"},
+    "max_feeds": {"English": "Max feeds to scan", "Español": "Máximo de fuentes a revisar"},
+    "max_events": {"English": "Max events per feed", "Español": "Máximo de eventos por fuente"},
     "choose_region": {"English": "Choose at least one market region.", "Español": "Elige al menos una región de mercado."},
     "sport_feed": {"English": "Sport feed", "Español": "Fuente deportiva"},
-    "scan": {"English": "Scan", "Español": "Escanear"},
-    "no_games": {"English": "No games with usable market data were returned for this feed.", "Español": "No se devolvieron partidos con datos de mercado utilizables para esta fuente."},
+    "scan": {"English": "Scan live markets", "Español": "Escanear mercados en vivo"},
+    "no_games": {"English": "No games with usable market data were returned.", "Español": "No se devolvieron partidos con datos de mercado utilizables."},
     "start": {"English": "Start", "Español": "Inicio"},
     "most_likely": {"English": "Most likely", "Español": "Más probable"},
     "outcome": {"English": "Outcome", "Español": "Resultado"},
     "price": {"English": "Price", "Español": "Precio"},
     "probability": {"English": "Probability", "Español": "Probabilidad"},
     "books": {"English": "Books", "Español": "Casas"},
-    "scorelines": {"English": "Most likely scorelines / spread", "Español": "Marcadores / diferencia más probables"},
-    "score": {"English": "Score", "Español": "Marcador"},
+    "scorelines": {"English": "Likely scorelines / margins", "Español": "Marcadores / márgenes probables"},
+    "score": {"English": "Score / margin", "Español": "Marcador / margen"},
     "read": {"English": "Read", "Español": "Lectura"},
     "estimated": {"English": "Estimated probability", "Español": "Probabilidad estimada"},
     "draw": {"English": "Draw", "Español": "Empate"},
     "by": {"English": "by", "Español": "por"},
-    "scoreline_missing": {
-        "English": "Scoreline estimates require a mapped home-team probability. This feed may use a two-outcome or non-team market.",
-        "Español": "Las estimaciones de marcador requieren una probabilidad local mapeada. Esta fuente puede usar un mercado de dos resultados o no ser de equipos.",
-    },
-    "research_note": {
-        "English": "Market-based scan only. Add injuries, lineups, weather and team ratings before trusting a pick.",
-        "Español": "Escaneo basado solo en mercado. Agrega lesiones, alineaciones, clima y ratings antes de confiar en una selección.",
-    },
+    "dashboard": {"English": "Scanner dashboard", "Español": "Panel del escáner"},
+    "events": {"English": "Events found", "Español": "Eventos encontrados"},
+    "feeds": {"English": "Feeds scanned", "Español": "Fuentes revisadas"},
+    "skipped": {"English": "Skipped feeds", "Español": "Fuentes omitidas"},
+    "best_edges": {"English": "Strongest favorites", "Español": "Favoritos más fuertes"},
+    "balanced": {"English": "Closest markets", "Español": "Mercados más cerrados"},
+    "draw_heavy": {"English": "Highest draw risk", "Español": "Mayor riesgo de empate"},
+    "all_games": {"English": "All ranked games", "Español": "Todos los juegos ordenados"},
+    "details": {"English": "Event details", "Español": "Detalles del evento"},
+    "raw": {"English": "Raw market table", "Español": "Tabla cruda de mercado"},
+    "note": {"English": "Market-only scan. Add injuries, lineups, weather, ratings, and news before trusting any pick.", "Español": "Escaneo solo de mercado. Agrega lesiones, alineaciones, clima, ratings y noticias antes de confiar en una selección."},
 }
 
 
@@ -63,6 +69,16 @@ st.title(t("title"))
 st.caption(t("caption"))
 
 ALL_REGIONS = ["us", "us2", "uk", "eu", "au"]
+POPULAR_TERMS = [
+    "nba", "nfl", "mlb", "nhl", "soccer", "fifa", "world cup", "tennis", "ufc", "mma", "boxing", "cricket",
+    "rugby", "golf", "formula", "nascar", "darts", "snooker", "esports", "volleyball", "handball", "lacrosse",
+]
+
+
+def clean(value: str) -> str:
+    value = unicodedata.normalize("NFKD", value or "")
+    value = "".join(char for char in value if not unicodedata.combining(char))
+    return " ".join(value.lower().replace("-", " ").replace(".", " ").split())
 
 
 def safe_error(exc: Exception) -> str:
@@ -71,25 +87,114 @@ def safe_error(exc: Exception) -> str:
     if status in (401, 403):
         return "Provider key was rejected. Check the key and plan access." if not IS_ES else "La clave del proveedor fue rechazada. Revisa la clave y el acceso del plan."
     if status == 422:
-        return "This sport feed is not available for the selected market regions. Try fewer regions or another feed." if not IS_ES else "Esta fuente deportiva no está disponible para las regiones seleccionadas. Prueba menos regiones u otra fuente."
+        return "This feed is not available for the selected market regions. Try fewer regions or another feed." if not IS_ES else "Esta fuente no está disponible para las regiones seleccionadas. Prueba menos regiones u otra fuente."
     if status == 429:
         return "Provider quota or rate limit reached. Wait or use another key." if not IS_ES else "Se alcanzó la cuota o límite del proveedor. Espera o usa otra clave."
     return "Provider request failed. Try another feed or region." if not IS_ES else "Falló la solicitud al proveedor. Prueba otra fuente o región."
+
+
+def is_outright_feed(sport) -> bool:
+    text = clean(f"{sport.key} {sport.title} {sport.description}")
+    return any(word in text for word in ["winner", "championship", "outright"])
+
+
+def sport_relevance(sport, query: str) -> float:
+    text = clean(f"{sport.key} {sport.group} {sport.title} {sport.description}")
+    terms = [clean(term) for term in query.split() if clean(term) and clean(term) != "auto"]
+    score = -25.0 if is_outright_feed(sport) else 0.0
+    if not terms:
+        for index, term in enumerate(POPULAR_TERMS):
+            if clean(term) in text:
+                score += max(1.0, 10.0 - index * 0.25)
+        return score
+    for term in terms:
+        if term in text:
+            score += 12.0
+        else:
+            score += SequenceMatcher(None, term, text).ratio()
+    return score
+
+
+def name_match_score(filter_text: str, item) -> float:
+    if not filter_text.strip():
+        return 1.0
+    query = clean(filter_text)
+    names = [item.home_team, item.away_team] + [outcome.name for outcome in item.outcomes]
+    return max(SequenceMatcher(None, query, clean(name)).ratio() if query not in clean(name) else 1.0 for name in names)
+
+
+def market_snapshot(item) -> dict:
+    top = item.outcomes[0]
+    second = item.outcomes[1] if len(item.outcomes) > 1 else None
+    draw_prob = next((outcome.normalized_probability for outcome in item.outcomes if clean(outcome.name) in ["draw", "empate"]), None)
+    gap = top.normalized_probability - (second.normalized_probability if second else 0.0)
+    return {
+        "event": f"{item.away_team} at {item.home_team}",
+        "sport": item.sport_title,
+        "start": item.commence_time,
+        "favorite": top.name,
+        "favorite_prob": top.normalized_probability,
+        "gap": gap,
+        "draw_prob": draw_prob,
+        "books": item.bookmaker_count,
+        "item": item,
+    }
 
 
 def event_table(item):
     rows = []
     home_probability = None
     for outcome in item.outcomes:
-        rows.append({
-            t("outcome"): outcome.name,
-            t("price"): round(outcome.average_price, 3),
-            t("probability"): f"{outcome.normalized_probability:.1%}",
-            t("books"): outcome.source_count,
-        })
+        rows.append({t("outcome"): outcome.name, t("price"): round(outcome.average_price, 3), t("probability"): f"{outcome.normalized_probability:.1%}", t("books"): outcome.source_count})
         if outcome.name == item.home_team:
             home_probability = outcome.normalized_probability
     return rows, home_probability
+
+
+def margin_rows(item):
+    fav = item.favorite
+    dog = next((outcome.name for outcome in item.outcomes if clean(outcome.name) not in [clean(fav), "draw"]), "Opponent")
+    fav_prob = item.outcomes[0].normalized_probability
+    dog_prob = next((outcome.normalized_probability for outcome in item.outcomes if clean(outcome.name) not in [clean(fav), "draw"]), max(0.0, 1.0 - fav_prob))
+    bands = [("close", 0.45), ("solid", 0.35), ("big", 0.20)]
+    rows = []
+    for label, weight in bands:
+        rows.append({t("score"): f"{fav} {label}", t("read"): f"{fav} {label}", t("estimated"): f"{fav_prob * weight:.1%}"})
+    for label, weight in bands:
+        rows.append({t("score"): f"{dog} {label}", t("read"): f"{dog} {label}", t("estimated"): f"{dog_prob * weight:.1%}"})
+    return sorted(rows, key=lambda row: float(row[t("estimated")].strip("%")), reverse=True)[:6]
+
+
+def scoreline_rows(item, home_probability):
+    if home_probability is None:
+        return margin_rows(item)
+    home_xg, away_xg = expected_goals_from_probability(home_probability, neutral_site=False)
+    rows = []
+    for pick in estimate_scorelines(home_xg, away_xg):
+        if pick.margin > 0:
+            read = f"{item.home_team} {t('by')} {pick.margin}"
+        elif pick.margin < 0:
+            read = f"{item.away_team} {t('by')} {abs(pick.margin)}"
+        else:
+            read = t("draw")
+        rows.append({t("score"): pick.label, t("read"): read, t("estimated"): f"{pick.probability:.1%}"})
+    return rows
+
+
+def display_event(item, expanded=False):
+    rows, home_probability = event_table(item)
+    snap = market_snapshot(item)
+    with st.expander(f"{snap['event']} | {snap['favorite']} {snap['favorite_prob']:.1%}", expanded=expanded):
+        c1, c2, c3 = st.columns(3)
+        c1.metric(t("most_likely"), snap["favorite"])
+        c2.metric(t("probability"), f"{snap['favorite_prob']:.1%}")
+        c3.metric(t("books"), snap["books"])
+        st.write(f"{t('start')}: {snap['start']}")
+        st.write(t("scorelines"))
+        st.dataframe(scoreline_rows(item, home_probability), use_container_width=True, hide_index=True)
+        with st.expander(t("raw")):
+            st.dataframe(rows, use_container_width=True, hide_index=True)
+        st.caption(t("note"))
 
 
 try:
@@ -104,10 +209,11 @@ if not key:
     st.info(t("token_help"))
     st.stop()
 
+scan_mode = st.radio(t("mode"), [t("smart"), t("single")], horizontal=True)
 selected_regions = st.multiselect(t("regions"), ALL_REGIONS, default=ALL_REGIONS, help=t("regions_help"))
 st.caption(t("regions_help"))
 search_text = st.text_input(t("sport_search"), "auto")
-max_events = st.number_input(t("max_events"), min_value=1, max_value=50, value=15, step=1)
+team_filter = st.text_input(t("team_filter"), "", help=t("team_filter_help"))
 
 if not selected_regions:
     st.error(t("choose_region"))
@@ -119,52 +225,91 @@ except Exception as exc:
     st.error(safe_error(exc))
     st.stop()
 
-terms = [x.lower() for x in search_text.split() if x.strip() and x.lower() != "auto"]
-choices = []
-for item in sports:
-    text = f"{item.key} {item.group} {item.title} {item.description}".lower()
-    if not terms or any(term in text for term in terms):
-        choices.append(item)
-if not choices:
-    choices = sports
+ranked_sports = sorted(sports, key=lambda item: sport_relevance(item, search_text), reverse=True)
+ranked_sports = [sport for sport in ranked_sports if not is_outright_feed(sport)] + [sport for sport in ranked_sports if is_outright_feed(sport)]
 
-labels = [f"{item.title} | {item.key}" for item in choices]
-selected = st.selectbox(t("sport_feed"), labels)
-sport_key = choices[labels.index(selected)].key
+if scan_mode == t("smart"):
+    max_feeds = st.number_input(t("max_feeds"), min_value=1, max_value=80, value=20, step=1)
+    max_events = st.number_input(t("max_events"), min_value=1, max_value=50, value=12, step=1)
+    selected_sports = ranked_sports[: int(max_feeds)]
+else:
+    max_events = st.number_input(t("max_events"), min_value=1, max_value=50, value=20, step=1)
+    labels = [f"{item.title} | {item.key}" for item in ranked_sports]
+    selected = st.selectbox(t("sport_feed"), labels)
+    selected_sports = [ranked_sports[labels.index(selected)]]
+
 region_text = ",".join(selected_regions)
 
 if st.button(t("scan"), type="primary"):
-    try:
-        results = scan_market(key, sport_key, regions=region_text, max_events=int(max_events))
-    except Exception as exc:
-        st.warning(safe_error(exc))
-        st.stop()
+    all_items = []
+    skipped = []
+    progress = st.progress(0)
+    status = st.empty()
 
-    if not results:
+    for index, sport in enumerate(selected_sports):
+        status.write(f"Scanning {sport.title}...")
+        try:
+            events = scan_market(key, sport.key, regions=region_text, max_events=int(max_events))
+            all_items.extend(events)
+        except Exception as exc:
+            skipped.append((sport.title, safe_error(exc)))
+        progress.progress((index + 1) / max(1, len(selected_sports)))
+
+    status.empty()
+    progress.empty()
+
+    if team_filter.strip():
+        all_items = [item for item in all_items if name_match_score(team_filter, item) >= 0.45]
+
+    if not all_items:
         st.info(t("no_games"))
+        if skipped:
+            with st.expander(t("skipped")):
+                for title, reason in skipped[:30]:
+                    st.write(f"- {title}: {reason}")
         st.stop()
 
-    for item in results:
-        st.subheader(f"{item.away_team} at {item.home_team}")
-        st.write(f"{t('start')}: {item.commence_time}")
-        st.success(f"{t('most_likely')}: {item.favorite} ({item.favorite_probability:.1%})")
-        rows, home_probability = event_table(item)
-        st.dataframe(rows, use_container_width=True, hide_index=True)
+    snapshots = [market_snapshot(item) for item in all_items]
+    strongest = sorted(snapshots, key=lambda row: row["favorite_prob"], reverse=True)
+    balanced = sorted(snapshots, key=lambda row: row["gap"])
+    draw_heavy = [row for row in sorted(snapshots, key=lambda row: row["draw_prob"] or 0.0, reverse=True) if row["draw_prob"] is not None]
 
-        if home_probability is not None:
-            home_xg, away_xg = expected_goals_from_probability(home_probability, neutral_site=False)
-            score_rows = []
-            for pick in estimate_scorelines(home_xg, away_xg):
-                if pick.margin > 0:
-                    margin = f"{item.home_team} {t('by')} {pick.margin}"
-                elif pick.margin < 0:
-                    margin = f"{item.away_team} {t('by')} {abs(pick.margin)}"
-                else:
-                    margin = t("draw")
-                score_rows.append({t("score"): pick.label, t("read"): margin, t("estimated"): f"{pick.probability:.1%}"})
-            st.write(t("scorelines"))
-            st.dataframe(score_rows, use_container_width=True, hide_index=True)
-        else:
-            st.caption(t("scoreline_missing"))
+    st.subheader(t("dashboard"))
+    c1, c2, c3 = st.columns(3)
+    c1.metric(t("feeds"), len(selected_sports))
+    c2.metric(t("events"), len(all_items))
+    c3.metric(t("skipped"), len(skipped))
 
-        st.caption(t("research_note"))
+    tab1, tab2, tab3, tab4 = st.tabs([t("best_edges"), t("balanced"), t("draw_heavy"), t("all_games")])
+
+    with tab1:
+        for row in strongest[:10]:
+            display_event(row["item"], expanded=row == strongest[0])
+    with tab2:
+        for row in balanced[:10]:
+            display_event(row["item"], expanded=False)
+    with tab3:
+        if not draw_heavy:
+            st.info("No three-outcome draw markets found." if not IS_ES else "No se encontraron mercados de empate.")
+        for row in draw_heavy[:10]:
+            display_event(row["item"], expanded=False)
+    with tab4:
+        table = [{
+            "Event": row["event"],
+            "Sport": row["sport"],
+            "Start": row["start"],
+            "Favorite": row["favorite"],
+            "Favorite %": f"{row['favorite_prob']:.1%}",
+            "Gap": f"{row['gap']:.1%}",
+            "Draw %": "" if row["draw_prob"] is None else f"{row['draw_prob']:.1%}",
+            "Books": row["books"],
+        } for row in strongest]
+        st.dataframe(table, use_container_width=True, hide_index=True)
+
+    with st.expander(t("diagnostics")):
+        st.write(f"{t('feeds')}: {len(selected_sports)}")
+        st.write(f"{t('events')}: {len(all_items)}")
+        if skipped:
+            st.write(f"{t('skipped')}: {len(skipped)}")
+            for title, reason in skipped[:30]:
+                st.write(f"- {title}: {reason}")
