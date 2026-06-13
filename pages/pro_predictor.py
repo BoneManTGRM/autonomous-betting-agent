@@ -18,8 +18,12 @@ IS_ES = language == "Español"
 TEXT = {
     "title": {"English": "Pro Predictor", "Español": "Predictor Profesional"},
     "caption": {
-        "English": "Main all-sports predictor. It ranks current markets, shows moneyline/spread/total data when available, penalizes weak data and draw/upset risk, tracks session movement, and separates strong reads from avoid spots. Research-only; no guaranteed winners.",
-        "Español": "Panel principal de predicción deportiva. Ordena mercados actuales, muestra ganador/spread/total cuando están disponibles, penaliza datos débiles y riesgo de empate o sorpresa, rastrea movimiento durante la sesión y separa lecturas fuertes de jugadas que conviene evitar. Solo para investigación; no garantiza ganadores.",
+        "English": "Main all-sports predictor. It ranks current markets, compares sportsbook prices, estimates market probability, and now saves the latest scan for the Self Learning Engine. Research-only; no guaranteed winners.",
+        "Español": "Predictor principal de todos los deportes. Ordena mercados actuales, compara momios, estima probabilidad implícita y ahora guarda el escaneo más reciente para el Motor de Aprendizaje. Solo investigación; no garantiza ganadores.",
+    },
+    "help": {
+        "English": "How to read it: ARA compares sportsbook odds, shows the best available price, estimates market probability, then scores the read. It is not a guarantee; it is a ranked research signal.",
+        "Español": "Cómo leerlo: ARA compara momios, muestra el mejor precio disponible, estima la probabilidad del mercado y califica la lectura. No es garantía; es una señal de investigación ordenada.",
     },
     "token": {"English": "Provider key", "Español": "Clave del proveedor"},
     "target": {"English": "Scan target", "Español": "Tipo de escaneo"},
@@ -43,8 +47,8 @@ TEXT = {
     "movement": {"English": "Line movement", "Español": "Movimiento de línea"},
     "all_rows": {"English": "All ranked markets", "Español": "Todos los mercados ordenados"},
     "diagnostics": {"English": "Diagnostics", "Español": "Diagnóstico"},
-    "no_data": {"English": "No usable markets were returned. Try fewer regions, a broader sport search, or leave the team filter blank.", "Español": "No se encontraron mercados útiles. Prueba con menos regiones, una búsqueda deportiva más amplia o deja vacío el filtro de equipo."},
-    "no_match": {"English": "No strong team/player match was found. The app will not pretend unrelated markets match.", "Español": "No se encontró una coincidencia confiable para ese equipo o jugador. La app no mostrará mercados sin relación como si fueran coincidencias."},
+    "no_data": {"English": "No usable markets were returned. Try fewer regions, a broader sport search, or leave the team filter blank.", "Español": "No se encontraron mercados útiles. Prueba con menos regiones, una búsqueda más amplia o deja vacío el filtro."},
+    "no_match": {"English": "No strong team/player match was found. The app will not pretend unrelated markets match.", "Español": "No se encontró una coincidencia confiable. La app no mostrará mercados sin relación."},
     "pick": {"English": "Prediction", "Español": "Predicción"},
     "market_prob": {"English": "Market probability", "Español": "Probabilidad implícita"},
     "score": {"English": "Predictor score", "Español": "Puntaje del predictor"},
@@ -72,9 +76,9 @@ TEXT = {
     "name": {"English": "Name", "Español": "Nombre"},
     "point": {"English": "Point", "Español": "Línea"},
     "session_movement": {"English": "Session movement", "Español": "Movimiento en esta sesión"},
-    "no_strong": {"English": "No strong reads. That is a valid result.", "Español": "No hay lecturas fuertes. Eso también es un resultado válido."},
+    "no_strong": {"English": "No strong reads. That is a valid result.", "Español": "No hay lecturas fuertes. Eso también es válido."},
     "no_avoid": {"English": "No avoid spots after filters.", "Español": "No hay lecturas para evitar con estos filtros."},
-    "no_movement": {"English": "Run another scan later in the same session to see movement.", "Español": "Ejecuta otro escaneo más tarde en esta misma sesión para ver movimiento."},
+    "no_movement": {"English": "Run another scan later in the same session to see movement.", "Español": "Ejecuta otro escaneo más tarde en esta sesión para ver movimiento."},
     "skipped_feeds": {"English": "Skipped feeds", "Español": "Feeds omitidos"},
     "markets": {"English": "Markets", "Español": "Mercados"},
     "skipped": {"English": "Skipped", "Español": "Omitidos"},
@@ -83,20 +87,32 @@ TEXT = {
     "events_before_filters": {"English": "Events returned before filters", "Español": "Eventos devueltos antes de filtros"},
     "rows_after_filters": {"English": "Rows after filters", "Español": "Filas después de filtros"},
     "markets_requested": {"English": "Markets requested: h2h, spreads, totals", "Español": "Mercados solicitados: ganador, spread y total"},
-    "scoring_note": {"English": "Scoring: market probability + data quality + market gap - sport/draw/thin-market/team-match risk.", "Español": "Puntaje: probabilidad implícita + calidad de datos + ventaja del mercado - riesgo por deporte, empate, mercado débil o mala coincidencia."},
+    "scoring_note": {"English": "Scoring: market probability + data quality + market gap - sport/draw/thin-market/team-match risk.", "Español": "Puntaje: probabilidad + calidad de datos + ventaja de mercado - riesgo por deporte, empate, mercado débil o mala coincidencia."},
+    "saved_learning": {"English": "Latest scan saved for Self Learning Engine.", "Español": "Escaneo más reciente guardado para el Motor de Aprendizaje."},
 }
 
 ALL_REGIONS = ["us", "us2", "uk", "eu", "au"]
 POPULAR_FEEDS = ["upcoming", "nba", "mlb", "nfl", "ncaaf", "ncaab", "soccer", "fifa", "world cup", "tennis", "nhl", "ufc", "mma", "boxing", "cricket", "rugby", "golf", "formula", "nascar"]
-ALIASES = {"mexico": ["mexico", "méxico", "mex", "el tri"], "chivas": ["chivas", "guadalajara", "cd guadalajara", "club deportivo guadalajara", "deportivo guadalajara"], "lakers": ["lakers", "los angeles lakers", "la lakers", "lal"], "knicks": ["knicks", "new york knicks", "ny knicks"], "spurs": ["spurs", "san antonio spurs"], "yankees": ["yankees", "new york yankees", "ny yankees"], "cowboys": ["cowboys", "dallas cowboys"]}
+ALIASES = {
+    "mexico": ["mexico", "méxico", "mex", "el tri"],
+    "chivas": ["chivas", "guadalajara", "cd guadalajara", "club deportivo guadalajara", "deportivo guadalajara", "chivas guadalajara"],
+    "lakers": ["lakers", "los angeles lakers", "la lakers", "lal"],
+    "knicks": ["knicks", "new york knicks", "ny knicks"],
+    "spurs": ["spurs", "san antonio spurs"],
+    "yankees": ["yankees", "new york yankees", "ny yankees"],
+    "cowboys": ["cowboys", "dallas cowboys"],
+}
+
 
 def t(key):
     return TEXT.get(key, {}).get(language) or TEXT.get(key, {}).get("English") or key
+
 
 def clean(value):
     value = unicodedata.normalize("NFKD", str(value or ""))
     value = "".join(char for char in value if not unicodedata.combining(char))
     return " ".join(value.lower().replace("-", " ").replace(".", " ").replace("'", "").split())
+
 
 def alias_terms(value):
     base = clean(value)
@@ -106,6 +122,7 @@ def alias_terms(value):
         if base == clean(key) or base in cleaned:
             terms.update(cleaned)
     return sorted(term for term in terms if term)
+
 
 def strict_match(filter_text, event):
     if not filter_text.strip():
@@ -131,6 +148,7 @@ def strict_match(filter_text, event):
                 matched = f"{alias} -> {name}"
     return best, matched
 
+
 def safe_error(exc):
     status = getattr(getattr(exc, "response", None), "status_code", None)
     if status in (401, 403):
@@ -141,9 +159,10 @@ def safe_error(exc):
         return "límite de cuota o velocidad" if IS_ES else "quota/rate limit"
     return "falló la solicitud" if IS_ES else "request failed"
 
+
 def is_outright(sport):
-    text = clean(f"{sport.key} {sport.title} {sport.description}")
-    return any(term in text for term in ["winner", "championship", "outright"])
+    return any(term in clean(f"{sport.key} {sport.title} {sport.description}") for term in ["winner", "championship", "outright"])
+
 
 def sport_score(sport, query):
     text = clean(f"{sport.key} {sport.group} {sport.title} {sport.description}")
@@ -158,6 +177,7 @@ def sport_score(sport, query):
                 score += max(1.0, 12.0 - index * 0.35)
     return score
 
+
 def sport_risk(event):
     text = clean(f"{event.sport_key} {event.sport_title}")
     if any(term in text for term in ["soccer", "fifa", "world cup"]):
@@ -167,6 +187,7 @@ def sport_risk(event):
     if any(term in text for term in ["tennis", "mma", "ufc", "boxing"]):
         return 7
     return 5
+
 
 def scan_feed(api_key, sport_key, regions, max_events):
     attempts = [",".join(regions)] + regions
@@ -187,8 +208,10 @@ def scan_feed(api_key, sport_key, regions, max_events):
             errors.append(f"{region}: {safe_error(exc)}")
     return results, errors
 
+
 def top_non_draw(event):
     return next((outcome for outcome in event.outcomes if clean(outcome.name) != "draw"), event.outcomes[0])
+
 
 def classify(row):
     if row["predictor_score"] >= 78 and row["market_probability"] >= 0.58 and row["data_quality"] >= 70:
@@ -196,6 +219,7 @@ def classify(row):
     if row["predictor_score"] < 55 or row["market_probability"] < 0.45:
         return "Evitar" if IS_ES else "Avoid"
     return "Seguimiento" if IS_ES else "Watch"
+
 
 def snapshot(event, match_score, matched, previous):
     pick = top_non_draw(event)
@@ -219,15 +243,38 @@ def snapshot(event, match_score, matched, previous):
     old = previous.get(key, {})
     price_move = None if "best_price" not in old else best_price - old["best_price"]
     prob_move = None if "market_probability" not in old else pick.normalized_probability - old["market_probability"]
-    row = {"key": key, "event": f"{event.away_team} at {event.home_team}", "sport": event.sport_title, "start": event.commence_time, "prediction": pick.name, "market_probability": pick.normalized_probability, "predictor_score": predictor_score, "data_quality": data_quality, "risk_penalty": risk_penalty, "best_price": best_price, "best_book": pick.best_bookmaker or "", "books": books, "draw_probability": draw, "gap": gap, "price_move": price_move, "probability_move": prob_move, "match_score": match_score, "matched": matched, "event_object": event}
+    row = {
+        "key": key,
+        "event": f"{event.away_team} at {event.home_team}",
+        "sport": event.sport_title,
+        "start": event.commence_time,
+        "prediction": pick.name,
+        "market_probability": pick.normalized_probability,
+        "predictor_score": predictor_score,
+        "data_quality": data_quality,
+        "risk_penalty": risk_penalty,
+        "best_price": best_price,
+        "best_book": pick.best_bookmaker or "",
+        "books": books,
+        "draw_probability": draw,
+        "gap": gap,
+        "price_move": price_move,
+        "probability_move": prob_move,
+        "match_score": match_score,
+        "matched": matched,
+        "event_object": event,
+    }
     row["classification"] = classify(row)
     return row
+
 
 def moneyline_table(event):
     return [{t("outcome"): outcome.name, t("avg_price"): round(outcome.average_price, 3), t("best_price"): round((outcome.best_price or outcome.average_price), 3), t("best_book"): outcome.best_bookmaker or "", t("no_vig_probability"): f"{outcome.normalized_probability:.1%}", t("books"): outcome.source_count} for outcome in event.outcomes]
 
+
 def line_table(lines):
     return [{t("name"): line.name, t("point"): "" if line.point is None else line.point, t("avg_price"): round(line.average_price, 3), t("best_price"): round((line.best_price or line.average_price), 3), t("best_book"): line.best_bookmaker or "", t("books"): line.source_count} for line in (lines or [])]
+
 
 def headline_line(lines, label):
     rows = line_table(lines)
@@ -236,14 +283,31 @@ def headline_line(lines, label):
     first = rows[0]
     return f"{label}: {first[t('name')]} {first[t('point')]} @ {first[t('best_price')]}"
 
+
 def safe_dataframe(rows, empty_message=None):
     if rows:
         st.dataframe(rows, use_container_width=True, hide_index=True)
     else:
         st.caption(empty_message or t("not_returned"))
 
+
 def visible_row(row):
     return {t("event"): row["event"], t("sport"): row["sport"], t("start"): row["start"], t("pick"): row["prediction"], t("market_prob"): f"{row['market_probability']:.1%}", t("score"): row["predictor_score"], t("classification"): row["classification"], t("quality"): row["data_quality"], t("risk_penalty"): row["risk_penalty"], t("best_price"): round(row["best_price"], 3), t("best_book"): row["best_book"], t("books"): row["books"], t("draw_probability"): "" if row["draw_probability"] is None else f"{row['draw_probability']:.1%}", t("match_score"): f"{row['match_score']:.0%}", t("matched"): row["matched"]}
+
+
+def learning_row(row):
+    return {
+        "event": row["event"],
+        "sport": row["sport"],
+        "pick": row["prediction"],
+        "probability": round(float(row["market_probability"]), 4),
+        "predictor_score": int(row["predictor_score"]),
+        "read": row["classification"],
+        "result": "unknown",
+        "source": "pro_predictor_session",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
 
 def display(row, expanded=False):
     event = row["event_object"]
@@ -267,6 +331,7 @@ def display(row, expanded=False):
         with st.expander(t("moneyline")):
             safe_dataframe(moneyline_table(event))
 
+
 def csv_text(rows):
     visible = [visible_row(row) for row in rows]
     output = io.StringIO()
@@ -275,8 +340,10 @@ def csv_text(rows):
     writer.writerows(visible)
     return output.getvalue()
 
+
 st.title(t("title"))
 st.caption(t("caption"))
+st.info(t("help"))
 
 try:
     saved_key = str(st.secrets.get("THE_ODDS_API_KEY", ""))
@@ -358,9 +425,13 @@ if st.button(t("scan"), type="primary"):
     st.session_state.pro_predictor_memory = memory
 
     ranked = sorted(rows, key=lambda row: (row["predictor_score"], row["market_probability"], row["data_quality"]), reverse=True)
-    strong = [row for row in ranked if (row["classification"] == "Strong" or row["classification"] == "Lectura fuerte")]
-    watch = [row for row in ranked if (row["classification"] == "Watch" or row["classification"] == "Seguimiento")]
-    avoid = [row for row in sorted(rows, key=lambda row: row["predictor_score"]) if (row["classification"] == "Avoid" or row["classification"] == "Evitar")]
+    st.session_state.ara_latest_predictions = [learning_row(row) for row in ranked]
+    st.session_state.ara_latest_predictions_source = "Pro Predictor"
+    st.session_state.ara_latest_predictions_saved_at = datetime.now(timezone.utc).isoformat()
+
+    strong = [row for row in ranked if row["classification"] in ["Strong", "Lectura fuerte"]]
+    watch = [row for row in ranked if row["classification"] in ["Watch", "Seguimiento"]]
+    avoid = [row for row in sorted(rows, key=lambda row: row["predictor_score"]) if row["classification"] in ["Avoid", "Evitar"]]
     movers = sorted([row for row in ranked if row["price_move"] is not None], key=lambda row: abs(row["price_move"]), reverse=True)
 
     st.subheader(t("dashboard"))
@@ -369,6 +440,7 @@ if st.button(t("scan"), type="primary"):
     c2.metric(t("strong"), len(strong))
     c3.metric(t("skipped"), len(skipped))
     c4.metric(t("top_score"), f"{ranked[0]['predictor_score']}/100")
+    st.success(t("saved_learning"))
 
     st.download_button(t("download"), data=csv_text(ranked), file_name="pro_predictor.csv", mime="text/csv")
 
