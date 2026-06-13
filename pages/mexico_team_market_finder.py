@@ -15,16 +15,19 @@ IS_ES = language == "Español"
 
 LABELS = {
     "title": {"English": "Mexico Team Market Finder", "Español": "Buscador de Equipos Mexicanos"},
-    "caption": {"English": "Strict matcher for Mexico national team and Mexican clubs. If the selected club is not listed by the provider, it will not show unrelated teams as matches.", "Español": "Buscador estricto para Selección Mexicana y clubes mexicanos. Si el proveedor no lista el club seleccionado, no mostrará equipos sin relación como coincidencias."},
+    "caption": {
+        "English": "Strict matcher for Mexico national team and Mexican clubs. It searches odds-provider markets only. If the provider has no current odds for the selected club, the page will say that clearly and will not treat unrelated teams as matches.",
+        "Español": "Buscador estricto para Selección Mexicana y clubes mexicanos. Solo busca mercados del proveedor de odds. Si el proveedor no tiene odds actuales para el club seleccionado, la página lo dirá claramente y no tratará equipos sin relación como coincidencias.",
+    },
     "token": {"English": "Provider key", "Español": "Clave del proveedor"},
     "team": {"English": "Team", "Español": "Equipo"},
     "custom": {"English": "Custom search", "Español": "Búsqueda manual"},
     "league": {"English": "League search", "Español": "Buscar liga"},
     "regions": {"English": "Regions", "Español": "Regiones"},
-    "scan": {"English": "Search team markets", "Español": "Buscar mercados del equipo"},
-    "no_team": {"English": "No current market was found for this team. This usually means the provider does not list that club right now.", "Español": "No se encontró mercado actual para este equipo. Normalmente significa que el proveedor no lista ese club ahora mismo."},
-    "all_found": {"English": "General soccer markets found", "Español": "Mercados generales de futbol encontrados"},
-    "matches": {"English": "Team matches", "Español": "Coincidencias del equipo"},
+    "scan": {"English": "Search selected team", "Español": "Buscar equipo seleccionado"},
+    "no_team": {"English": "No current odds market was found for the selected team. This is not a matcher error; it means the odds provider did not return that club/team in the scanned markets right now.", "Español": "No se encontró un mercado de odds actual para el equipo seleccionado. No es un error de coincidencia; significa que el proveedor no devolvió ese club/equipo en los mercados escaneados ahora mismo."},
+    "general": {"English": "General soccer markets found", "Español": "Mercados generales de futbol encontrados"},
+    "matches": {"English": "Selected team matches", "Español": "Coincidencias del equipo seleccionado"},
     "all": {"English": "All scanned markets", "Español": "Todos los mercados escaneados"},
     "diag": {"English": "Diagnostics", "Español": "Diagnóstico"},
     "start": {"English": "Start", "Español": "Inicio"},
@@ -39,6 +42,10 @@ LABELS = {
     "estimated": {"English": "Estimated probability", "Español": "Probabilidad estimada"},
     "draw": {"English": "Draw", "Español": "Empate"},
     "by": {"English": "by", "Español": "por"},
+    "selected": {"English": "Selected team", "Español": "Equipo seleccionado"},
+    "events": {"English": "Markets returned", "Español": "Mercados devueltos"},
+    "found": {"English": "Team markets found", "Español": "Mercados del equipo"},
+    "skipped": {"English": "Skipped feeds", "Español": "Fuentes omitidas"},
 }
 
 TEAMS = {
@@ -230,7 +237,7 @@ def show_event(row, expanded=False):
         c3.metric(tr("price"), row["Best price"])
         c4.metric(tr("quality"), f"{row['Market data quality']}/100")
         st.write(f"{tr('start')}: {row['Start']}")
-        st.write(f"{tr('matched')}: {row['Matched']}")
+        st.write(f"Matched: {row['Matched']}")
         sc = scorelines(event)
         if sc:
             st.write(tr("scorelines"))
@@ -260,6 +267,7 @@ regions = st.multiselect(tr("regions"), ALL_REGIONS, default=["us", "eu", "uk"])
 max_feeds = st.number_input("Max feeds", min_value=1, max_value=100, value=50)
 max_events = st.number_input("Max events per feed", min_value=1, max_value=50, value=50)
 
+selected_name = custom.strip() or team
 aliases = aliases_for(team, custom)
 st.caption("Aliases: " + ", ".join(aliases[:20]))
 
@@ -295,14 +303,19 @@ if st.button(tr("scan"), type="primary"):
     team_rows = sorted([r for r in rows if r["_score"] >= 0.85], key=lambda r: (r["_score"], r["_prob"]), reverse=True)
     all_rows = sorted(rows, key=lambda r: r["_prob"], reverse=True)
 
-    st.subheader("Mexico soccer dashboard")
+    if not team_rows:
+        st.error(f"{tr('selected')}: {selected_name} — {tr('no_team')}")
+    else:
+        st.success(f"{tr('selected')}: {selected_name} — {len(team_rows)} {tr('found')}")
+
+    st.subheader("Team Market Finder Dashboard" if not IS_ES else "Panel del Buscador de Equipos")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Feeds scanned", len(ranked))
-    c2.metric("Events found", len(rows))
-    c3.metric("Team matches", len(team_rows))
-    c4.metric("Skipped feeds", len(skipped))
+    c2.metric(tr("events"), len(rows))
+    c3.metric(tr("found"), len(team_rows))
+    c4.metric(tr("skipped"), len(skipped))
 
-    tabs = st.tabs([tr("matches"), tr("all_found"), tr("diag")])
+    tabs = st.tabs([tr("matches"), tr("general"), tr("diag")])
     with tabs[0]:
         if not team_rows:
             st.warning(tr("no_team"))
@@ -317,8 +330,11 @@ if st.button(tr("scan"), type="primary"):
             st.info("No markets returned." if not IS_ES else "No se devolvieron mercados.")
     with tabs[2]:
         st.write(f"Strict team threshold: 85%")
+        st.write(f"Selected team: {selected_name}")
+        st.write(f"Aliases searched: {', '.join(aliases)}")
         st.write(f"Scanned feeds: {len(ranked)}")
-        st.write(f"Returned events: {len(rows)}")
+        st.write(f"Returned markets: {len(rows)}")
+        st.write(f"Selected-team markets found: {len(team_rows)}")
         if skipped:
             for title, reason in skipped[:50]:
                 st.write(f"- {title}: {reason}")
