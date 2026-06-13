@@ -11,11 +11,11 @@ st.title("Autonomous Betting Agent")
 st.caption("Enter the teams. The agent searches live market data, ranks likely outcomes, and estimates scorelines.")
 
 
-def read_key(name: str) -> str:
+def read_provider_token() -> str:
     try:
-        return str(st.secrets.get(name, ""))
+        return str(st.secrets.get("THE_ODDS_API_KEY", ""))
     except Exception:
-        return os.getenv(name, "")
+        return os.getenv("THE_ODDS_API_KEY", "")
 
 
 def clean(value: str) -> str:
@@ -49,14 +49,7 @@ def show_event(item) -> None:
     rows = []
     home_probability = None
     for outcome in item.outcomes:
-        rows.append(
-            {
-                "Outcome": outcome.name,
-                "Avg market price": round(outcome.average_price, 3),
-                "No-vig probability": f"{outcome.normalized_probability:.1%}",
-                "Sources": outcome.source_count,
-            }
-        )
+        rows.append({"Outcome": outcome.name, "Avg market price": round(outcome.average_price, 3), "No-vig probability": f"{outcome.normalized_probability:.1%}", "Sources": outcome.source_count})
         if outcome.name == item.home_team:
             home_probability = outcome.normalized_probability
     st.dataframe(rows, use_container_width=True, hide_index=True)
@@ -81,10 +74,11 @@ def show_event(item) -> None:
     st.caption("Research estimate only. This uses market data until team-stat, injury, lineup, and weather providers are added.")
 
 
-api_key = read_key("THE_ODDS_API_KEY")
-if not api_key:
-    st.warning("Add THE_ODDS_API_KEY in Streamlit secrets to enable autonomous live search.")
-    st.code('THE_ODDS_API_KEY = "paste-your-key-here"', language="toml")
+saved_token = read_provider_token()
+entry_token = st.text_input("Provider access token", value="", type="password")
+provider_token = entry_token.strip() or saved_token
+if not provider_token:
+    st.info("Paste your own provider access token above. It is used only for this browser session unless the app owner configures one separately.")
     st.stop()
 
 team_one = st.text_input("Team 1", "")
@@ -97,7 +91,7 @@ with st.expander("Advanced settings"):
     choose_feed = st.checkbox("Choose exact feed", value=False)
 
 with st.spinner("Loading sport feeds"):
-    sports = list_sports(api_key, include_all=False)
+    sports = list_sports(provider_token, include_all=False)
 terms = [term.lower() for term in competition.split() if term.strip()]
 choices = []
 for sport_item in sports:
@@ -119,7 +113,7 @@ if st.button("Run autonomous agent"):
     with st.spinner("Searching games and building report"):
         for sport_item in selected_sports:
             try:
-                all_results.extend(scan_market(api_key, sport_key=sport_item.key, regions=region_text, max_events=int(max_events)))
+                all_results.extend(scan_market(provider_token, sport_key=sport_item.key, regions=region_text, max_events=int(max_events)))
             except Exception as exc:
                 st.warning(f"Skipped {sport_item.title}: {exc}")
     filtered = [item for item in all_results if event_matches(item, team_one, team_two)]
