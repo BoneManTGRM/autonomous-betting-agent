@@ -198,33 +198,33 @@ def round_projection(event, pick_name: str, probability: float, quality: int):
     if boxing:
         if strong_favorite:
             path = "Stoppage pressure or clear decision"
-            window = "Rounds 5-8, with late decision still live"
-            rows = [("Early stoppage", "Rounds 1-4", "22%"), ("Middle-round stoppage", "Rounds 5-8", "38%"), ("Late rounds / decision", "Rounds 9-12 or decision", "40%")]
+            window = "Rounds 5-8, late decision live"
+            rows = [("Early", "Rds 1-4", "22%"), ("Middle", "Rds 5-8", "38%"), ("Late/decision", "Rds 9-12/decision", "40%")]
         elif close_fight:
             path = "Decision or late-round swing"
             window = "Rounds 9-12 or decision"
-            rows = [("Early stoppage", "Rounds 1-4", "14%"), ("Middle rounds", "Rounds 5-8", "26%"), ("Late rounds / decision", "Rounds 9-12 or decision", "60%")]
+            rows = [("Early", "Rds 1-4", "14%"), ("Middle", "Rds 5-8", "26%"), ("Late/decision", "Rds 9-12/decision", "60%")]
         else:
-            path = "Controlled pressure with decision risk"
+            path = "Pressure edge, decision risk"
             window = "Rounds 7-12 or decision"
-            rows = [("Early stoppage", "Rounds 1-4", "18%"), ("Middle rounds", "Rounds 5-8", "32%"), ("Late rounds / decision", "Rounds 9-12 or decision", "50%")]
+            rows = [("Early", "Rds 1-4", "18%"), ("Middle", "Rds 5-8", "32%"), ("Late/decision", "Rds 9-12/decision", "50%")]
     else:
         if strong_favorite:
-            path = "Finish threat with decision fallback"
-            window = "Round 1-2 finish, or decision if control-heavy"
-            rows = [("Fast finish", "Round 1", "24%"), ("Mid-fight finish", "Round 2", "22%"), ("Late / decision", "Round 3+ or decision", "54%")]
+            path = "Finish threat, decision fallback"
+            window = "Round 1-2 or decision"
+            rows = [("Fast finish", "R1", "24%"), ("Mid fight", "R2", "22%"), ("Late/decision", "R3+/decision", "54%")]
         elif close_fight:
-            path = "Competitive fight; decision risk elevated"
+            path = "Competitive, decision risk high"
             window = "Round 3+ or decision"
-            rows = [("Fast finish", "Round 1", "17%"), ("Mid-fight finish", "Round 2", "18%"), ("Late / decision", "Round 3+ or decision", "65%")]
+            rows = [("Fast finish", "R1", "17%"), ("Mid fight", "R2", "18%"), ("Late/decision", "R3+/decision", "65%")]
         else:
-            path = "Moderate edge; finish possible but not dominant"
+            path = "Moderate edge, finish possible"
             window = "Round 2-3 or decision"
-            rows = [("Fast finish", "Round 1", "20%"), ("Mid-fight finish", "Round 2", "21%"), ("Late / decision", "Round 3+ or decision", "59%")]
+            rows = [("Fast finish", "R1", "20%"), ("Mid fight", "R2", "21%"), ("Late/decision", "R3+/decision", "59%")]
 
     if quality < 60:
-        path += " | low data quality"
-        window += " | lower confidence"
+        path += " | lower confidence"
+        window += " | low data"
 
     return {
         "path": f"{pick_name}: {path}",
@@ -285,11 +285,10 @@ def show_event(row, expanded=False):
         if row["Matched"]:
             st.write(f"Matched: {row['Matched']}")
         with st.expander(t("round_projection"), expanded=True):
-            st.warning(t("estimate_note"))
-            c5, c6 = st.columns(2)
-            c5.metric(t("estimated_method"), projection["path"])
-            c6.metric(t("estimated_round"), projection["window"])
-            st.dataframe(projection["rows"], use_container_width=True, hide_index=True)
+            st.caption(t("estimate_note"))
+            st.markdown(f"**{t('estimated_method')}:** {projection['path']}")
+            st.markdown(f"**{t('estimated_round')}:** {projection['window']}")
+            st.dataframe(projection["rows"], use_container_width=True, hide_index=True, height=150)
         with st.expander(t("moneyline"), expanded=True):
             st.dataframe(market_table(event), use_container_width=True, hide_index=True)
 
