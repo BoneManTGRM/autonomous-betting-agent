@@ -47,7 +47,8 @@ TEXT = {
     "estimated_method": {"English": "Estimated path", "Español": "Ruta estimada"},
     "estimate_note": {"English": "Estimate only. This is not a sportsbook round prop unless the provider returns round-specific markets.", "Español": "Solo estimación. No es una línea oficial de ronda a menos que el proveedor devuelva mercados específicos por ronda."},
     "scenario": {"English": "Scenario", "Español": "Escenario"},
-    "estimate": {"English": "Estimate", "Español": "Estimación"},
+    "round_short": {"English": "Round", "Español": "Ronda"},
+    "estimate_short": {"English": "Prob.", "Español": "Prob."},
     "feeds_scanned": {"English": "Feeds scanned", "Español": "Feeds escaneados"},
     "markets_returned": {"English": "Markets returned", "Español": "Mercados devueltos"},
     "fighter_markets": {"English": "Fighter markets found", "Español": "Mercados del peleador"},
@@ -59,6 +60,11 @@ TEXT = {
     "markets_requested": {"English": "Markets requested: h2h/moneyline only. Round projections are model estimates unless official round props are added later.", "Español": "Mercados solicitados: solo ganador/moneyline. Las proyecciones de ronda son estimaciones del modelo hasta agregar props oficiales por ronda."},
     "aliases_used": {"English": "Aliases used", "Español": "Alias usados"},
     "custom_note": {"English": "Manual fighter search is the real coverage layer. Presets are shortcuts.", "Español": "La búsqueda manual es la cobertura real. Los atajos solo facilitan nombres comunes."},
+    "matched": {"English": "Matched", "Español": "Coincidió"},
+    "outcome": {"English": "Outcome", "Español": "Resultado"},
+    "avg_price": {"English": "Average price", "Español": "Momio promedio"},
+    "best_book": {"English": "Best book", "Español": "Mejor casa"},
+    "books": {"English": "Books", "Español": "Casas"},
 }
 
 ALL_REGIONS = ["us", "us2", "uk", "eu", "au"]
@@ -120,7 +126,7 @@ def fighter_aliases(value: str) -> list[str]:
 
 def match_score(filter_text, event):
     if not filter_text.strip():
-        return 1.0, "all"
+        return 1.0, "todos" if IS_ES else "all"
     aliases = fighter_aliases(filter_text)
     names = [event.home_team, event.away_team] + [outcome.name for outcome in event.outcomes]
     best = 0.0
@@ -137,7 +143,7 @@ def match_score(filter_text, event):
                 score = ratio if ratio >= 0.88 else 0.0
             if score > best:
                 best = score
-                matched = f"{alias} -> {name}"
+                matched = f"{alias} → {name}"
     return best, matched
 
 
@@ -197,39 +203,39 @@ def round_projection(event, pick_name: str, probability: float, quality: int):
 
     if boxing:
         if strong_favorite:
-            path = "Stoppage pressure or clear decision"
-            window = "Rounds 5-8, late decision live"
-            rows = [("Early", "Rds 1-4", "22%"), ("Middle", "Rds 5-8", "38%"), ("Late/decision", "Rds 9-12/decision", "40%")]
+            path = "Presión para finalizar o decisión clara" if IS_ES else "Stoppage pressure or clear decision"
+            window = "Rondas 5-8; decisión tardía posible" if IS_ES else "Rounds 5-8, late decision live"
+            rows = [("Temprano" if IS_ES else "Early", "R1-4" if IS_ES else "Rds 1-4", "22%"), ("Medio" if IS_ES else "Middle", "R5-8" if IS_ES else "Rds 5-8", "38%"), ("Tarde/decisión" if IS_ES else "Late/decision", "R9-12/decisión" if IS_ES else "Rds 9-12/decision", "40%")]
         elif close_fight:
-            path = "Decision or late-round swing"
-            window = "Rounds 9-12 or decision"
-            rows = [("Early", "Rds 1-4", "14%"), ("Middle", "Rds 5-8", "26%"), ("Late/decision", "Rds 9-12/decision", "60%")]
+            path = "Decisión o giro en rondas finales" if IS_ES else "Decision or late-round swing"
+            window = "Rondas 9-12 o decisión" if IS_ES else "Rounds 9-12 or decision"
+            rows = [("Temprano" if IS_ES else "Early", "R1-4" if IS_ES else "Rds 1-4", "14%"), ("Medio" if IS_ES else "Middle", "R5-8" if IS_ES else "Rds 5-8", "26%"), ("Tarde/decisión" if IS_ES else "Late/decision", "R9-12/decisión" if IS_ES else "Rds 9-12/decision", "60%")]
         else:
-            path = "Pressure edge, decision risk"
-            window = "Rounds 7-12 or decision"
-            rows = [("Early", "Rds 1-4", "18%"), ("Middle", "Rds 5-8", "32%"), ("Late/decision", "Rds 9-12/decision", "50%")]
+            path = "Ventaja por presión; riesgo de decisión" if IS_ES else "Pressure edge, decision risk"
+            window = "Rondas 7-12 o decisión" if IS_ES else "Rounds 7-12 or decision"
+            rows = [("Temprano" if IS_ES else "Early", "R1-4" if IS_ES else "Rds 1-4", "18%"), ("Medio" if IS_ES else "Middle", "R5-8" if IS_ES else "Rds 5-8", "32%"), ("Tarde/decisión" if IS_ES else "Late/decision", "R9-12/decisión" if IS_ES else "Rds 9-12/decision", "50%")]
     else:
         if strong_favorite:
-            path = "Finish threat, decision fallback"
-            window = "Round 1-2 or decision"
-            rows = [("Fast finish", "R1", "24%"), ("Mid fight", "R2", "22%"), ("Late/decision", "R3+/decision", "54%")]
+            path = "Amenaza de finalización; decisión como respaldo" if IS_ES else "Finish threat, decision fallback"
+            window = "R1-R2 o decisión" if IS_ES else "Round 1-2 or decision"
+            rows = [("Final rápido" if IS_ES else "Fast finish", "R1", "24%"), ("Mitad de pelea" if IS_ES else "Mid fight", "R2", "22%"), ("Tarde/decisión" if IS_ES else "Late/decision", "R3+/decisión" if IS_ES else "R3+/decision", "54%")]
         elif close_fight:
-            path = "Competitive, decision risk high"
-            window = "Round 3+ or decision"
-            rows = [("Fast finish", "R1", "17%"), ("Mid fight", "R2", "18%"), ("Late/decision", "R3+/decision", "65%")]
+            path = "Pelea pareja; riesgo alto de decisión" if IS_ES else "Competitive, decision risk high"
+            window = "R3+ o decisión" if IS_ES else "Round 3+ or decision"
+            rows = [("Final rápido" if IS_ES else "Fast finish", "R1", "17%"), ("Mitad de pelea" if IS_ES else "Mid fight", "R2", "18%"), ("Tarde/decisión" if IS_ES else "Late/decision", "R3+/decisión" if IS_ES else "R3+/decision", "65%")]
         else:
-            path = "Moderate edge, finish possible"
-            window = "Round 2-3 or decision"
-            rows = [("Fast finish", "R1", "20%"), ("Mid fight", "R2", "21%"), ("Late/decision", "R3+/decision", "59%")]
+            path = "Ventaja moderada; finalización posible" if IS_ES else "Moderate edge, finish possible"
+            window = "R2-R3 o decisión" if IS_ES else "Round 2-3 or decision"
+            rows = [("Final rápido" if IS_ES else "Fast finish", "R1", "20%"), ("Mitad de pelea" if IS_ES else "Mid fight", "R2", "21%"), ("Tarde/decisión" if IS_ES else "Late/decision", "R3+/decisión" if IS_ES else "R3+/decision", "59%")]
 
     if quality < 60:
-        path += " | lower confidence"
-        window += " | low data"
+        path += " | baja confianza" if IS_ES else " | lower confidence"
+        window += " | pocos datos" if IS_ES else " | low data"
 
     return {
         "path": f"{pick_name}: {path}",
         "window": window,
-        "rows": [{t("scenario"): scenario, t("estimated_round"): estimate, t("estimate"): probability_text} for scenario, estimate, probability_text in rows],
+        "rows": [{t("scenario"): scenario, t("round_short"): estimate, t("estimate_short"): probability_text} for scenario, estimate, probability_text in rows],
     }
 
 
@@ -263,12 +269,12 @@ def snapshot(event, score, matched):
 
 def market_table(event):
     return [{
-        "Outcome": outcome.name,
-        "Average price": round(outcome.average_price, 3),
-        "Best price": round((outcome.best_price or outcome.average_price), 3),
-        "Best book": outcome.best_bookmaker or "",
-        "No-vig probability": f"{outcome.normalized_probability:.1%}",
-        "Books": outcome.source_count,
+        t("outcome"): outcome.name,
+        t("avg_price"): round(outcome.average_price, 3),
+        t("price"): round((outcome.best_price or outcome.average_price), 3),
+        t("best_book"): outcome.best_bookmaker or "",
+        t("prob"): f"{outcome.normalized_probability:.1%}",
+        t("books"): outcome.source_count,
     } for outcome in event.outcomes]
 
 
@@ -283,7 +289,7 @@ def show_event(row, expanded=False):
         c4.metric(t("quality"), f"{row['Data quality']}/100")
         st.write(f"{t('start')}: {row['Start']}")
         if row["Matched"]:
-            st.write(f"Matched: {row['Matched']}")
+            st.write(f"{t('matched')}: {row['Matched']}")
         with st.expander(t("round_projection"), expanded=True):
             st.caption(t("estimate_note"))
             st.markdown(f"**{t('estimated_method')}:** {projection['path']}")
