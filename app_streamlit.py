@@ -15,17 +15,17 @@ IS_ES = language == "Español"
 TEXT = {
     "title": {"English": "Autonomous Betting Agent", "Español": "Agente Autónomo de Pronósticos"},
     "caption": {
-        "English": "Paste a provider token, type one game, and let the agent search feeds, rank likely outcomes, estimate scorelines, and explain confidence.",
-        "Español": "Pega una clave del proveedor, escribe un partido y deja que el agente busque, ordene resultados, estime marcadores y explique la confianza.",
+        "English": "Paste a provider key, type one game, and let the agent search across sports, rank likely outcomes, estimate scorelines or margins, and explain confidence.",
+        "Español": "Pega una clave del proveedor, escribe un partido y deja que el agente busque en varios deportes, ordene resultados, estime marcadores o márgenes y explique la confianza.",
     },
     "token": {"English": "The Odds API key", "Español": "Clave de The Odds API"},
     "token_help": {"English": "Each user can paste their own key. It is used only for this browser session unless the app owner configures one separately.", "Español": "Cada usuario puede pegar su propia clave. Se usa solo en esta sesión del navegador salvo que el dueño configure una aparte."},
     "game": {"English": "Game", "Español": "Partido"},
-    "game_help": {"English": "Example: Mexico vs South Korea", "Español": "Ejemplo: México vs Corea del Sur"},
+    "game_help": {"English": "Examples: Mexico vs South Korea, Lakers vs Celtics, Chiefs vs Bills, Yankees vs Dodgers", "Español": "Ejemplos: México vs Corea del Sur, Lakers vs Celtics, Chiefs vs Bills, Yankees vs Dodgers"},
     "competition": {"English": "Sport / competition", "Español": "Deporte / competición"},
     "advanced": {"English": "Advanced settings", "Español": "Configuración avanzada"},
     "market_regions": {"English": "Bookmaker market regions", "Español": "Regiones de mercado de casas de apuestas"},
-    "host_note": {"English": "FIFA 2026 host countries are Canada, Mexico and the USA. The region selector is for bookmaker markets, not host countries.", "Español": "Las sedes de FIFA 2026 son Canadá, México y Estados Unidos. El selector de regiones es para mercados de casas de apuestas, no países sede."},
+    "host_note": {"English": "Canada, Mexico, and the USA are FIFA 2026 host countries. The selector below is for bookmaker market regions, not host countries.", "Español": "Canadá, México y Estados Unidos son países sede de FIFA 2026. El selector abajo es para mercados de casas de apuestas, no países sede."},
     "team1": {"English": "Team 1 override", "Español": "Equipo 1 manual"},
     "team2": {"English": "Team 2 override", "Español": "Equipo 2 manual"},
     "max_feeds": {"English": "Max feeds to scan", "Español": "Máximo de fuentes a revisar"},
@@ -46,7 +46,7 @@ TEXT = {
     "verdict": {"English": "Agent verdict", "Español": "Veredicto del agente"},
     "favorite": {"English": "Favorite", "Español": "Favorito"},
     "confidence": {"English": "Confidence", "Español": "Confianza"},
-    "top_score": {"English": "Top score", "Español": "Marcador principal"},
+    "top_score": {"English": "Top score / margin", "Español": "Marcador / margen principal"},
     "draw_risk": {"English": "Draw risk", "Español": "Riesgo de empate"},
     "high": {"English": "High", "Español": "Alta"},
     "medium": {"English": "Medium", "Español": "Media"},
@@ -57,10 +57,10 @@ TEXT = {
     "avg_price": {"English": "Avg price", "Español": "Precio promedio"},
     "probability": {"English": "No-vig probability", "Español": "Probabilidad sin margen"},
     "sources": {"English": "Books", "Español": "Casas"},
-    "scorelines": {"English": "Most likely scorelines", "Español": "Marcadores más probables"},
-    "score": {"English": "Score", "Español": "Marcador"},
-    "spread": {"English": "Spread", "Español": "Diferencia"},
-    "score_prob": {"English": "Score probability", "Español": "Probabilidad del marcador"},
+    "scorelines": {"English": "Most likely scorelines / margins", "Español": "Marcadores / márgenes más probables"},
+    "score": {"English": "Score / margin", "Español": "Marcador / margen"},
+    "spread": {"English": "Read", "Español": "Lectura"},
+    "score_prob": {"English": "Estimated probability", "Español": "Probabilidad estimada"},
     "draw": {"English": "Draw", "Español": "Empate"},
     "by": {"English": "by", "Español": "por"},
     "why": {"English": "Why the agent says this", "Español": "Por qué el agente dice esto"},
@@ -80,7 +80,6 @@ COUNTRY_ALIASES = {
     "mexico": ["mexico", "méxico", "mexican", "el tri"],
     "south korea": ["south korea", "korea republic", "republic of korea", "korea", "corea del sur"],
     "usa": ["usa", "united states", "usmnt", "united states of america", "estados unidos"],
-    "united states": ["usa", "united states", "usmnt", "united states of america", "estados unidos"],
     "canada": ["canada", "canadá", "canadian"],
     "england": ["england", "english", "inglaterra"],
     "brazil": ["brazil", "brasil"],
@@ -90,6 +89,30 @@ COUNTRY_ALIASES = {
     "france": ["france", "francia"],
     "japan": ["japan", "japon", "japón"],
 }
+
+TEAM_SPORT_HINTS = {
+    "lakers": "nba", "celtics": "nba", "warriors": "nba", "knicks": "nba", "bulls": "nba", "heat": "nba", "mavericks": "nba", "nuggets": "nba", "suns": "nba", "bucks": "nba",
+    "chiefs": "nfl", "bills": "nfl", "cowboys": "nfl", "eagles": "nfl", "ravens": "nfl", "packers": "nfl", "patriots": "nfl", "steelers": "nfl", "49ers": "nfl", "niners": "nfl",
+    "yankees": "mlb", "dodgers": "mlb", "red sox": "mlb", "mets": "mlb", "cubs": "mlb", "braves": "mlb", "astros": "mlb", "padres": "mlb",
+    "maple leafs": "nhl", "bruins": "nhl", "rangers": "nhl", "canadiens": "nhl", "oilers": "nhl", "panthers": "nhl", "avalanche": "nhl",
+}
+
+SPORT_SYNONYMS = {
+    "auto": [],
+    "soccer": ["soccer", "fifa", "football", "world cup", "international", "concacaf", "epl", "premier", "la liga", "mls"],
+    "nba": ["nba", "basketball"],
+    "nfl": ["nfl", "americanfootball", "american football", "football"],
+    "mlb": ["mlb", "baseball"],
+    "nhl": ["nhl", "hockey", "icehockey", "ice hockey"],
+    "tennis": ["tennis", "atp", "wta"],
+    "mma": ["mma", "ufc", "mixed martial"],
+    "boxing": ["boxing", "boxeo"],
+    "cricket": ["cricket"],
+    "rugby": ["rugby"],
+    "golf": ["golf"],
+}
+
+POPULAR_HINTS = ["nba", "nfl", "mlb", "nhl", "soccer", "epl", "mls", "tennis", "mma", "ufc", "baseball", "basketball", "football", "hockey"]
 
 
 def read_provider_token() -> str:
@@ -106,12 +129,11 @@ def clean(value: str) -> str:
 
 
 def parse_game(text: str) -> tuple[str, str]:
-    cleaned = text.strip()
-    separators = [" vs ", " v ", " versus ", " at ", " @ ", " contra "]
-    lowered = f" {cleaned.lower()} "
-    for sep in separators:
-        if sep in lowered:
-            left, right = lowered.split(sep, 1)
+    raw = text.strip()
+    padded = f" {raw.lower()} "
+    for sep in [" vs ", " v ", " versus ", " at ", " @ ", " contra "]:
+        if sep in padded:
+            left, right = padded.split(sep, 1)
             return left.strip().title(), right.strip().title()
     return "", ""
 
@@ -127,10 +149,21 @@ def aliases(value: str) -> list[str]:
 
 def is_known_country(value: str) -> bool:
     base = clean(value)
-    for key, alias_list in COUNTRY_ALIASES.items():
-        if base == clean(key) or base in [clean(alias) for alias in alias_list]:
-            return True
-    return False
+    return any(base == clean(key) or base in [clean(alias) for alias in vals] for key, vals in COUNTRY_ALIASES.items())
+
+
+def infer_sport_hints(text: str, team_one: str, team_two: str) -> set[str]:
+    haystack = clean(f"{text} {team_one} {team_two}")
+    hints = set()
+    for sport, words in SPORT_SYNONYMS.items():
+        if any(clean(word) in haystack for word in words):
+            hints.add(sport)
+    for team, sport in TEAM_SPORT_HINTS.items():
+        if clean(team) in haystack:
+            hints.add(sport)
+    if is_known_country(team_one) and is_known_country(team_two):
+        hints.add("soccer")
+    return hints
 
 
 def match_score(query: str, candidate: str) -> float:
@@ -153,9 +186,7 @@ def event_score(item, team_one: str, team_two: str) -> float:
     names = [item.home_team, item.away_team] + [outcome.name for outcome in item.outcomes]
     one_score = best_name_score(team_one, names)
     two_score = best_name_score(team_two, names)
-    if team_one and team_two:
-        return (one_score + two_score) / 2.0
-    return max(one_score, two_score)
+    return (one_score + two_score) / 2.0 if team_one and team_two else max(one_score, two_score)
 
 
 def is_outright_feed(sport_item) -> bool:
@@ -163,19 +194,47 @@ def is_outright_feed(sport_item) -> bool:
     return any(word in text for word in ["winner", "championship", "outright"])
 
 
+def sport_kind(item) -> str:
+    text = clean(f"{getattr(item, 'sport_key', '')} {getattr(item, 'sport_title', '')}")
+    if any(x in text for x in ["soccer", "fifa", "epl", "mls"]):
+        return "soccer"
+    if any(x in text for x in ["basketball", "nba", "ncaab"]):
+        return "basketball"
+    if any(x in text for x in ["americanfootball", "nfl", "ncaaf"]):
+        return "football"
+    if any(x in text for x in ["baseball", "mlb"]):
+        return "baseball"
+    if any(x in text for x in ["icehockey", "hockey", "nhl"]):
+        return "hockey"
+    if "tennis" in text:
+        return "tennis"
+    if any(x in text for x in ["mma", "ufc"]):
+        return "mma"
+    return "general"
+
+
 def sport_score(sport_item, competition: str, team_one: str, team_two: str) -> float:
     haystack = clean(f"{sport_item.key} {sport_item.group} {sport_item.title} {sport_item.description}")
-    score_value = -20.0 if is_outright_feed(sport_item) else 0.0
-    for word in [clean(w) for w in competition.split() if clean(w)]:
+    score_value = -30.0 if is_outright_feed(sport_item) else 0.0
+    hints = infer_sport_hints(competition, team_one, team_two)
+    if not hints or "auto" in hints:
+        for idx, hint in enumerate(POPULAR_HINTS):
+            if hint in haystack:
+                score_value += max(1.0, 8.0 - idx * 0.25)
+    for hint in hints:
+        for synonym in SPORT_SYNONYMS.get(hint, [hint]):
+            if clean(synonym) in haystack:
+                score_value += 10.0
+    for word in [clean(w) for w in competition.split() if clean(w) and clean(w) != "auto"]:
         if word in haystack:
-            score_value += 4.0
+            score_value += 3.0
     if is_known_country(team_one) and is_known_country(team_two):
         for word in ["international", "world", "fifa", "cup", "friendlies", "concacaf", "uefa"]:
             if word in haystack:
-                score_value += 6.0
+                score_value += 7.0
         for word in ["serie", "division", "league", "liga", "campeonato", "superleague"]:
             if word in haystack and "international" not in haystack and "world" not in haystack:
-                score_value -= 3.0
+                score_value -= 4.0
     return score_value
 
 
@@ -209,7 +268,7 @@ def poisson(k: int, lam: float) -> float:
     return math.exp(-lam) * (lam ** k) / math.factorial(k)
 
 
-def grid_scorelines(home_xg: float, away_xg: float, max_goals: int = 6) -> list[dict]:
+def grid_scorelines(home_xg: float, away_xg: float, max_goals: int = 7) -> list[dict]:
     rows = []
     for h in range(max_goals + 1):
         hp = poisson(h, home_xg)
@@ -220,7 +279,7 @@ def grid_scorelines(home_xg: float, away_xg: float, max_goals: int = 6) -> list[
 
 def one_x_two_from_xg(home_xg: float, away_xg: float) -> tuple[float, float, float]:
     home_win = draw = away_win = 0.0
-    for row in grid_scorelines(home_xg, away_xg, max_goals=7):
+    for row in grid_scorelines(home_xg, away_xg):
         if row["home"] > row["away"]:
             home_win += row["prob"]
         elif row["home"] == row["away"]:
@@ -246,6 +305,33 @@ def fit_xg(home_prob: float, draw_prob: float | None, away_prob: float) -> tuple
     return best[1], best[2]
 
 
+def win_margin_rows(item, fav_prob: float, dog_prob: float) -> list[dict]:
+    kind = sport_kind(item)
+    fav = item.favorite
+    dog = next((o.name for o in item.outcomes if clean(o.name) not in [clean(fav), "draw"]), "Opponent")
+    if kind == "tennis":
+        fav_bands = [("2-0 sets", 0.62), ("2-1 sets", 0.38)]
+        dog_bands = [("2-1 sets", 0.55), ("2-0 sets", 0.45)]
+    elif kind in ["baseball", "hockey", "soccer"]:
+        fav_bands = [("by 1", 0.55), ("by 2", 0.28), ("by 3+", 0.17)]
+        dog_bands = [("by 1", 0.58), ("by 2", 0.27), ("by 3+", 0.15)]
+    elif kind == "basketball":
+        fav_bands = [("by 1-5", 0.32), ("by 6-10", 0.33), ("by 11+", 0.35)]
+        dog_bands = [("by 1-5", 0.42), ("by 6-10", 0.33), ("by 11+", 0.25)]
+    elif kind == "football":
+        fav_bands = [("by 1-3", 0.33), ("by 4-7", 0.34), ("by 8+", 0.33)]
+        dog_bands = [("by 1-3", 0.42), ("by 4-7", 0.33), ("by 8+", 0.25)]
+    else:
+        fav_bands = [("close win", 0.45), ("medium win", 0.35), ("comfortable win", 0.20)]
+        dog_bands = [("close win", 0.50), ("medium win", 0.32), ("comfortable win", 0.18)]
+    rows = []
+    for label, weight in fav_bands:
+        rows.append({t("score"): f"{fav} {label}", t("spread"): f"{fav} {label}", t("score_prob"): f"{fav_prob * weight:.1%}"})
+    for label, weight in dog_bands:
+        rows.append({t("score"): f"{dog} {label}", t("spread"): f"{dog} {label}", t("score_prob"): f"{dog_prob * weight:.1%}"})
+    return sorted(rows, key=lambda row: float(row[t("score_prob")].strip("%")), reverse=True)[:6]
+
+
 def confidence_value(match: float, item) -> tuple[str, float]:
     top = item.outcomes[0].normalized_probability
     second = item.outcomes[1].normalized_probability if len(item.outcomes) > 1 else 0.0
@@ -268,37 +354,46 @@ def show_event(item, match: float | None = None, scan_summary: str = "") -> None
     if home_prob is None or away_prob is None:
         st.warning("Could not map market outcomes to home/away teams." if not IS_ES else "No se pudieron mapear los resultados del mercado.")
         return
-    home_xg, away_xg = fit_xg(home_prob, draw_prob, away_prob)
-    scores = grid_scorelines(home_xg, away_xg)[:8]
-    top_score = f"{scores[0]['home']}-{scores[0]['away']}"
+
     conf_label, conf_value = confidence_value(match or 0.0, item)
     draw_text = f"{draw_prob:.1%}" if draw_prob is not None else "N/A"
+    fav_prob = item.outcomes[0].normalized_probability
+    dog_prob = next((o.normalized_probability for o in item.outcomes if clean(o.name) not in [clean(item.favorite), "draw"]), 1.0 - fav_prob)
+
+    if draw_prob is not None:
+        home_xg, away_xg = fit_xg(home_prob, draw_prob, away_prob)
+        scores = grid_scorelines(home_xg, away_xg)[:8]
+        top_summary = f"{scores[0]['home']}-{scores[0]['away']}"
+        score_rows = []
+        for row in scores:
+            margin = row["home"] - row["away"]
+            if margin > 0:
+                read = f"{item.home_team} {t('by')} {margin}"
+            elif margin < 0:
+                read = f"{item.away_team} {t('by')} {abs(margin)}"
+            else:
+                read = t("draw")
+            score_rows.append({t("score"): f"{row['home']}-{row['away']}", t("spread"): read, t("score_prob"): f"{row['prob']:.1%}"})
+        model_note = f"xG model: {item.home_team} {home_xg:.2f}, {item.away_team} {away_xg:.2f}"
+    else:
+        score_rows = win_margin_rows(item, fav_prob, dog_prob)
+        top_summary = score_rows[0][t("score")]
+        model_note = "Margin model: estimated from moneyline strength only" if not IS_ES else "Modelo de margen: estimado solo desde la fuerza del mercado"
 
     st.subheader(f"{item.away_team} at {item.home_team}")
     st.success(f"{t('verdict')}: {item.favorite} — {item.favorite_probability:.1%}")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric(t("favorite"), item.favorite)
     c2.metric(t("confidence"), f"{conf_label} ({conf_value:.0%})")
-    c3.metric(t("top_score"), top_score)
+    c3.metric(t("top_score"), top_summary)
     c4.metric(t("draw_risk"), draw_text)
 
     st.write(f"{t('start')}: {item.commence_time}")
-    st.write(f"xG model: {item.home_team} {home_xg:.2f}, {item.away_team} {away_xg:.2f}")
+    st.write(model_note)
 
-    market_rows = [{t("outcome"): o.name, t("avg_price"): round(o.average_price, 3), t("probability"): f"{o.normalized_probability:.1%}", t("sources"): o.source_count} for o in item.outcomes]
     st.write(t("market_view"))
-    st.dataframe(market_rows, use_container_width=True, hide_index=True)
+    st.dataframe([{t("outcome"): o.name, t("avg_price"): round(o.average_price, 3), t("probability"): f"{o.normalized_probability:.1%}", t("sources"): o.source_count} for o in item.outcomes], use_container_width=True, hide_index=True)
 
-    score_rows = []
-    for row in scores:
-        margin = row["home"] - row["away"]
-        if margin > 0:
-            spread = f"{item.home_team} {t('by')} {margin}"
-        elif margin < 0:
-            spread = f"{item.away_team} {t('by')} {abs(margin)}"
-        else:
-            spread = t("draw")
-        score_rows.append({t("score"): f"{row['home']}-{row['away']}", t("spread"): spread, t("score_prob"): f"{row['prob']:.1%}"})
     st.write(t("scorelines"))
     st.dataframe(score_rows, use_container_width=True, hide_index=True)
 
@@ -307,13 +402,15 @@ def show_event(item, match: float | None = None, scan_summary: str = "") -> None
         st.write(f"- Team-match confidence: {(match or 0):.0%}." if not IS_ES else f"- Confianza de coincidencia: {(match or 0):.0%}.")
         if draw_prob is not None and draw_prob >= 0.25:
             st.write("- Draw risk is meaningful, so exact-score confidence should stay cautious." if not IS_ES else "- El riesgo de empate es importante, por eso la confianza del marcador debe ser cautelosa.")
+        if draw_prob is None:
+            st.write("- Margin bands are approximate because this version only uses moneyline markets, not spread or total markets." if not IS_ES else "- Los márgenes son aproximados porque esta versión usa moneyline, no líneas de spread o totales.")
         st.write("- This is market-implied research, not a guaranteed prediction." if not IS_ES else "- Esto es investigación basada en mercado, no una predicción garantizada.")
 
     with st.expander(t("cycle")):
         st.write(f"- TEST: {scan_summary}")
-        st.write("- DETECT: matched team aliases and ignored obvious futures/outright feeds." if not IS_ES else "- DETECTAR: coincidió alias de equipos e ignoró fuentes de futuros.")
-        st.write("- REPAIR: normalized market probabilities and fitted an expected-goals score model." if not IS_ES else "- REPARAR: normalizó probabilidades y ajustó un modelo de goles esperados.")
-        st.write("- VERIFY: reported confidence, draw risk, and scoreline uncertainty." if not IS_ES else "- VERIFICAR: reportó confianza, riesgo de empate e incertidumbre del marcador.")
+        st.write("- DETECT: inferred sport hints, matched team aliases, and ignored obvious futures/outright feeds." if not IS_ES else "- DETECTAR: infirió deporte, coincidió alias e ignoró fuentes de futuros.")
+        st.write("- REPAIR: normalized market probabilities and selected a sport-appropriate score/margin model." if not IS_ES else "- REPARAR: normalizó probabilidades y seleccionó un modelo de marcador/margen según el deporte.")
+        st.write("- VERIFY: reported confidence, market depth, draw risk, and uncertainty." if not IS_ES else "- VERIFICAR: reportó confianza, profundidad de mercado, riesgo de empate e incertidumbre.")
     st.caption(t("research_note"))
 
 
@@ -326,14 +423,14 @@ if not provider_token:
 
 game_text = st.text_input(t("game"), "Mexico vs South Korea", help=t("game_help"))
 default_one, default_two = parse_game(game_text)
-competition = st.text_input(t("competition"), "international soccer")
+competition = st.text_input(t("competition"), "auto")
 
 with st.expander(t("advanced")):
     st.caption(t("host_note"))
     team_one = st.text_input(t("team1"), default_one)
     team_two = st.text_input(t("team2"), default_two)
     selected_regions = st.multiselect(t("market_regions"), ["us", "uk", "eu", "au"], default=["us", "eu", "uk"])
-    max_feeds = st.number_input(t("max_feeds"), min_value=1, max_value=30, value=12, step=1)
+    max_feeds = st.number_input(t("max_feeds"), min_value=1, max_value=40, value=18, step=1)
     max_events = st.number_input(t("max_events"), min_value=1, max_value=50, value=30, step=1)
     show_nearest = st.checkbox(t("nearest"), value=True)
 
@@ -345,7 +442,7 @@ if st.button(t("run"), type="primary"):
         st.error(t("choose_region"))
         st.stop()
     if not team_one and not team_two:
-        st.error("Enter a game like Mexico vs South Korea." if not IS_ES else "Escribe un partido como México vs Corea del Sur.")
+        st.error("Enter a game like Mexico vs South Korea or Lakers vs Celtics." if not IS_ES else "Escribe un partido como México vs Corea del Sur o Lakers vs Celtics.")
         st.stop()
 
     with st.spinner(t("loading")):
@@ -389,6 +486,7 @@ if st.button(t("run"), type="primary"):
 
     with st.expander(t("diagnostics")):
         st.write(scan_summary)
+        st.write("Sport hints: " + ", ".join(sorted(infer_sport_hints(competition, team_one, team_two)) or ["auto"]))
         if skipped:
             st.write(f"{t('skipped')}: {len(skipped)}")
             for title, reason in skipped[:20]:
