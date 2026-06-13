@@ -7,7 +7,8 @@ This is **research-only software**. It does not place bets, does not guarantee w
 ## What it does
 
 - estimates win probabilities for two-outcome sports events
-- scans live market feeds when an API key is configured
+- lets each app user paste their own provider access token
+- scans live market feeds when a provider token is supplied
 - ranks the most likely outcome for upcoming games
 - estimates likely scorelines such as 1-1, 2-1 and 2-3
 - explains which factors moved the manual ARA model
@@ -63,13 +64,9 @@ python run_agent.py examples/sample_event.json --json-output result.json
 streamlit run app_streamlit.py
 ```
 
-Streamlit also includes a multipage live scanner at `pages/live_scanner.py`. Configure `THE_ODDS_API_KEY` in Streamlit secrets to enable live market data.
+The Streamlit app asks each user for a provider access token on the app screen. This means the app owner does not have to store a shared token in Streamlit secrets.
 
-## Streamlit secrets
-
-```toml
-THE_ODDS_API_KEY = "paste-your-key-here"
-```
+Optional owner fallback: the app can still read `THE_ODDS_API_KEY` from Streamlit secrets or environment variables, but this is not required when each user provides their own token.
 
 ## Run tests
 
@@ -81,16 +78,14 @@ python -m unittest discover -s tests
 
 The baseline supports:
 
-- rating difference
-- recent form
-- injury impact
-- rest and schedule advantage
-- matchup-specific edge
-- weather or playing-condition fit
-- home advantage
-- data completeness
-- source diversity
+- live market feed scanning
+- fuzzy team-name matching
+- market-implied no-vig probabilities
+- likely outcome ranking
 - expected-goals scoreline estimation
+- scoreline and spread table generation
+- ARA/TGRM cycle notes
+- Brier score, accuracy and closing-line delta backtesting helpers
 
 All inputs are normalized so results remain interpretable. Future sport-specific modules should replace generic signals with validated features for each sport.
 
