@@ -12,6 +12,7 @@ st.title("Autonomous Betting Agent")
 st.caption("Paste a provider token, enter two teams, and let the agent search feeds, rank likely outcomes, and estimate scorelines.")
 
 COUNTRY_ALIASES = {
+    "canada": ["canada", "canadian"],
     "mexico": ["mexico", "méxico", "mexican", "el tri"],
     "south korea": ["south korea", "korea republic", "republic of korea", "korea"],
     "usa": ["usa", "united states", "usmnt", "united states of america"],
@@ -105,7 +106,7 @@ def explain_error(exc: Exception) -> str:
     if status in (401, 403):
         return "provider token was rejected"
     if status == 422:
-        return "feed is not available for the selected market regions"
+        return "feed is not available for the selected provider regions"
     if status == 429:
         return "provider quota or rate limit reached"
     return "provider request failed"
@@ -158,14 +159,15 @@ team_two = st.text_input("Team 2", "")
 competition = st.text_input("Sport / competition", "international soccer")
 
 with st.expander("Advanced settings"):
-    selected_regions = st.multiselect("Market regions", ["us", "uk", "eu", "au"], default=["us", "eu", "uk"])
+    st.caption("Provider regions are odds-market regions, not host countries. For tournament games hosted in North America, keep us, eu, and uk selected.")
+    selected_regions = st.multiselect("Provider regions", ["us", "uk", "eu", "au"], default=["us", "eu", "uk"])
     max_feeds = st.number_input("Max feeds to scan", min_value=1, max_value=30, value=12, step=1)
     max_events = st.number_input("Max games per feed", min_value=1, max_value=50, value=30, step=1)
     show_nearest = st.checkbox("Show closest games if no exact match", value=True)
 
 if st.button("Run autonomous agent", type="primary"):
     if not selected_regions:
-        st.error("Choose at least one market region.")
+        st.error("Choose at least one provider region.")
         st.stop()
 
     with st.spinner("Loading and ranking sport feeds"):
@@ -215,4 +217,4 @@ if st.button("Run autonomous agent", type="primary"):
             for score, item in scored[:5]:
                 show_event(item, score)
         else:
-            st.write("Try competition terms like international soccer, fifa, world cup, concacaf, nba, nfl, mlb, tennis, or choose more market regions.")
+            st.write("Try competition terms like international soccer, fifa, world cup, concacaf, nba, nfl, mlb, tennis, or choose more provider regions.")
