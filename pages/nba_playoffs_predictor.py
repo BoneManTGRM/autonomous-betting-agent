@@ -14,8 +14,8 @@ IS_ES = language == "Español"
 TEXT = {
     "title": {"English": "NBA Playoffs Predictor", "Español": "Predictor de Playoffs NBA"},
     "caption": {
-        "English": "NBA-only scanner. It will not mix in college football, tennis, soccer, or other sports. If NBA markets are not returned by the provider, it says that clearly.",
-        "Español": "Escáner solo para NBA. No mezcla futbol americano universitario, tenis, futbol u otros deportes. Si el proveedor no devuelve mercados NBA, lo dice claramente.",
+        "English": "NBA-only scanner with moneyline, point spread, and totals when the provider returns them. It will not mix in college football, tennis, soccer, or other sports.",
+        "Español": "Escáner solo para NBA con moneyline, spread y totales cuando el proveedor los devuelve. No mezcla futbol americano universitario, tenis, futbol u otros deportes.",
     },
     "token": {"English": "Provider key", "Español": "Clave del proveedor"},
     "team": {"English": "Optional team filter", "Español": "Filtro opcional de equipo"},
@@ -28,7 +28,9 @@ TEXT = {
     "matches": {"English": "Team matches", "Español": "Coincidencias"},
     "all": {"English": "All NBA markets", "Español": "Todos los mercados NBA"},
     "diag": {"English": "Diagnostics", "Español": "Diagnóstico"},
-    "raw": {"English": "Raw market table", "Español": "Tabla cruda"},
+    "raw": {"English": "Moneyline table", "Español": "Tabla moneyline"},
+    "spread": {"English": "Point spread", "Español": "Spread"},
+    "totals": {"English": "Game total", "Español": "Total del juego"},
     "pick": {"English": "Market lean", "Español": "Lectura de mercado"},
     "prob": {"English": "Probability", "Español": "Probabilidad"},
     "price": {"English": "Best price", "Español": "Mejor precio"},
@@ -141,7 +143,7 @@ def scan_resilient(api_key, sport_key, regions, max_events):
     errors = []
     for region in attempts:
         try:
-            events = scan_market(api_key, sport_key, regions=region, max_events=max_events)
+            events = scan_market(api_key, sport_key, regions=region, max_events=max_events, markets="h2h,spreads,totals")
             for event in events:
                 key = event.event_id or f"{event.sport_key}:{event.home_team}:{event.away_team}:{event.commence_time}"
                 if key not in seen:
@@ -189,8 +191,29 @@ def market_table(event):
     } for o in event.outcomes]
 
 
+def line_table(lines):
+    return [{
+        "Name": line.name,
+        "Point": "" if line.point is None else line.point,
+        "Average price": round(line.average_price, 3),
+        "Best price": round((line.best_price or line.average_price), 3),
+        "Best book": line.best_bookmaker or "",
+        "Books": line.source_count,
+    } for line in (lines or [])]
+
+
+def headline_line(lines, market_name):
+    rows = line_table(lines)
+    if not rows:
+        return f"{market_name}: not returned"
+    first = rows[0]
+    return f"{market_name}: {first['Name']} {first['Point']} @ {first['Best price']}"
+
+
 def show_event(row, expanded=False):
+    event = row["_event"]
     with st.expander(f"{row['Event']} | {row['Pick']} {row['Probability']} | Q{row['Data quality']}", expanded=expanded):
+        st.info(f"{headline_line(event.spreads, t('spread'))} | {headline_line(event.totals, t('totals'))}")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric(t("pick"), row["Pick"])
         c2.metric(t("prob"), row["Probability"])
@@ -199,8 +222,20 @@ def show_event(row, expanded=False):
         st.write(f"{t('start')}: {row['Start']}")
         if row["Matched"]:
             st.write(f"Matched: {row['Matched']}")
+        with st.expander(t("spread"), expanded=True):
+            spreads = line_table(event.spreads)
+            if spreads:
+                st.dataframe(spreads, use_container_width=True, hide_index=True)
+            else:
+                st.caption("Point spread was not returned for this event." if not IS_ES else "El spread no fue devuelto para este evento.")
+        with st.expander(t("totals"), expanded=False):
+            totals = line_table(event.totals)
+            if totals:
+                st.dataframe(totals, use_container_width=True, hide_index=True)
+            else:
+                st.caption("Game total was not returned for this event." if not IS_ES else "El total no fue devuelto para este evento.")
         with st.expander(t("raw")):
-            st.dataframe(market_table(row["_event"]), use_container_width=True, hide_index=True)
+            st.dataframe(market_table(event), use_container_width=True, hide_index=True)
 
 
 st.title(t("title"))
@@ -281,6 +316,7 @@ if st.button(t("scan"), type="primary"):
         st.dataframe([{k: v for k, v in row.items() if not k.startswith("_")} for row in rows], use_container_width=True, hide_index=True)
     with tabs[2]:
         st.write("This page only scans NBA feeds. It does not use upcoming all-sports fallback, so college football cannot appear here.")
+        st.write("Markets requested: h2h, spreads, totals")
         st.write("NBA sport keys: " + ", ".join([s.key for s in nba_sports]))
         if skipped:
             for title, reason in skipped:
