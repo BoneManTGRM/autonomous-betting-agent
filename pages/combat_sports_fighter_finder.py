@@ -17,8 +17,8 @@ IS_ES = language == "Español"
 TEXT = {
     "title": {"English": "Combat Sports Fighter Finder", "Español": "Buscador de Peleadores"},
     "caption": {
-        "English": "Boxing, UFC, and MMA moneyline finder. It scans provider-returned combat markets and uses strict fighter matching so unrelated events are not treated as matches.",
-        "Español": "Buscador de ganador/moneyline para boxeo, UFC y MMA. Escanea mercados de combate devueltos por el proveedor y usa coincidencia estricta de peleadores para no mostrar eventos sin relación.",
+        "English": "Boxing, UFC, and MMA moneyline finder. It scans provider-returned combat markets, matches fighter names strictly, and gives a clearly labeled estimated finish/round profile.",
+        "Español": "Buscador de ganador/moneyline para boxeo, UFC y MMA. Escanea mercados de combate devueltos por el proveedor, usa coincidencia estricta de peleadores y muestra una estimación clara de finalización/ronda.",
     },
     "token": {"English": "Provider key", "Español": "Clave del proveedor"},
     "mode": {"English": "Search mode", "Español": "Modo de búsqueda"},
@@ -42,6 +42,12 @@ TEXT = {
     "quality": {"English": "Data quality", "Español": "Calidad de datos"},
     "start": {"English": "Start", "Español": "Inicio"},
     "moneyline": {"English": "Moneyline", "Español": "Ganador / moneyline"},
+    "round_projection": {"English": "Estimated finish / round", "Español": "Finalización / ronda estimada"},
+    "estimated_round": {"English": "Estimated round window", "Español": "Ventana estimada de ronda"},
+    "estimated_method": {"English": "Estimated path", "Español": "Ruta estimada"},
+    "estimate_note": {"English": "Estimate only. This is not a sportsbook round prop unless the provider returns round-specific markets.", "Español": "Solo estimación. No es una línea oficial de ronda a menos que el proveedor devuelva mercados específicos por ronda."},
+    "scenario": {"English": "Scenario", "Español": "Escenario"},
+    "estimate": {"English": "Estimate", "Español": "Estimación"},
     "feeds_scanned": {"English": "Feeds scanned", "Español": "Feeds escaneados"},
     "markets_returned": {"English": "Markets returned", "Español": "Mercados devueltos"},
     "fighter_markets": {"English": "Fighter markets found", "Español": "Mercados del peleador"},
@@ -50,7 +56,7 @@ TEXT = {
     "note": {"English": "Custom fighter search works for any fighter name returned by the odds provider. The preset list only adds common aliases; it is not meant to be every fighter who exists.", "Español": "La búsqueda manual funciona con cualquier peleador que el proveedor devuelva. La lista de atajos solo agrega alias comunes; no pretende incluir a todos los peleadores que existen."},
     "download": {"English": "Download CSV", "Español": "Descargar CSV"},
     "feeds_found": {"English": "Dedicated combat feeds found", "Español": "Feeds dedicados de combate encontrados"},
-    "markets_requested": {"English": "Markets requested: h2h/moneyline only. This avoids failures because boxing and MMA feeds often do not support spread/total markets.", "Español": "Mercados solicitados: solo ganador/moneyline. Esto evita fallas porque los feeds de boxeo y MMA normalmente no aceptan spread/total."},
+    "markets_requested": {"English": "Markets requested: h2h/moneyline only. Round projections are model estimates unless official round props are added later.", "Español": "Mercados solicitados: solo ganador/moneyline. Las proyecciones de ronda son estimaciones del modelo hasta agregar props oficiales por ronda."},
     "aliases_used": {"English": "Aliases used", "Español": "Alias usados"},
     "custom_note": {"English": "Manual fighter search is the real coverage layer. Presets are shortcuts.", "Español": "La búsqueda manual es la cobertura real. Los atajos solo facilitan nombres comunes."},
 }
@@ -63,6 +69,7 @@ FIGHTER_ALIASES = {
     "Oleksandr Usyk": ["oleksandr usyk", "usyk"],
     "Tyson Fury": ["tyson fury", "fury", "gypsy king"],
     "Anthony Joshua": ["anthony joshua", "joshua", "aj"],
+    "Deontay Wilder": ["deontay wilder", "wilder", "bronze bomber"],
     "Gervonta Davis": ["gervonta davis", "tank davis", "tank"],
     "Ryan Garcia": ["ryan garcia", "king ry"],
     "Devin Haney": ["devin haney", "haney"],
@@ -71,6 +78,9 @@ FIGHTER_ALIASES = {
     "David Benavidez": ["david benavidez", "benavidez", "mexican monster"],
     "Artur Beterbiev": ["artur beterbiev", "beterbiev"],
     "Dmitry Bivol": ["dmitry bivol", "bivol"],
+    "Jesse Rodriguez": ["jesse rodriguez", "bam rodriguez", "bam"],
+    "Teofimo Lopez": ["teofimo lopez", "teófimo lópez", "teofimo"],
+    "Vasiliy Lomachenko": ["vasiliy lomachenko", "vasyl lomachenko", "lomachenko", "loma"],
     "Alex Pereira": ["alex pereira", "poatan"],
     "Jon Jones": ["jon jones", "bones jones", "bones"],
     "Tom Aspinall": ["tom aspinall", "aspinall"],
@@ -148,6 +158,11 @@ def is_combat_sport(sport):
     return any(term in text for term in combat_terms) and not any(term in text for term in ["winner", "championship", "outright"])
 
 
+def is_boxing_event(event) -> bool:
+    text = clean(f"{event.sport_key} {event.sport_title}")
+    return "boxing" in text or "box" in text
+
+
 def combat_score(sport):
     text = clean(f"{sport.key} {sport.group} {sport.title} {sport.description}")
     return sum(10 for term in ["ufc", "mma", "boxing", "mixed martial", "pfl", "bellator", "fight"] if term in text)
@@ -175,12 +190,56 @@ def scan_feed(api_key, sport_key, regions, max_events):
     return results, errors
 
 
+def round_projection(event, pick_name: str, probability: float, quality: int):
+    boxing = is_boxing_event(event)
+    strong_favorite = probability >= 0.66
+    close_fight = probability < 0.56
+
+    if boxing:
+        if strong_favorite:
+            path = "Stoppage pressure or clear decision"
+            window = "Rounds 5-8, with late decision still live"
+            rows = [("Early stoppage", "Rounds 1-4", "22%"), ("Middle-round stoppage", "Rounds 5-8", "38%"), ("Late rounds / decision", "Rounds 9-12 or decision", "40%")]
+        elif close_fight:
+            path = "Decision or late-round swing"
+            window = "Rounds 9-12 or decision"
+            rows = [("Early stoppage", "Rounds 1-4", "14%"), ("Middle rounds", "Rounds 5-8", "26%"), ("Late rounds / decision", "Rounds 9-12 or decision", "60%")]
+        else:
+            path = "Controlled pressure with decision risk"
+            window = "Rounds 7-12 or decision"
+            rows = [("Early stoppage", "Rounds 1-4", "18%"), ("Middle rounds", "Rounds 5-8", "32%"), ("Late rounds / decision", "Rounds 9-12 or decision", "50%")]
+    else:
+        if strong_favorite:
+            path = "Finish threat with decision fallback"
+            window = "Round 1-2 finish, or decision if control-heavy"
+            rows = [("Fast finish", "Round 1", "24%"), ("Mid-fight finish", "Round 2", "22%"), ("Late / decision", "Round 3+ or decision", "54%")]
+        elif close_fight:
+            path = "Competitive fight; decision risk elevated"
+            window = "Round 3+ or decision"
+            rows = [("Fast finish", "Round 1", "17%"), ("Mid-fight finish", "Round 2", "18%"), ("Late / decision", "Round 3+ or decision", "65%")]
+        else:
+            path = "Moderate edge; finish possible but not dominant"
+            window = "Round 2-3 or decision"
+            rows = [("Fast finish", "Round 1", "20%"), ("Mid-fight finish", "Round 2", "21%"), ("Late / decision", "Round 3+ or decision", "59%")]
+
+    if quality < 60:
+        path += " | low data quality"
+        window += " | lower confidence"
+
+    return {
+        "path": f"{pick_name}: {path}",
+        "window": window,
+        "rows": [{t("scenario"): scenario, t("estimated_round"): estimate, t("estimate"): probability_text} for scenario, estimate, probability_text in rows],
+    }
+
+
 def snapshot(event, score, matched):
     top = event.outcomes[0]
     second = event.outcomes[1] if len(event.outcomes) > 1 else None
     gap = top.normalized_probability - (second.normalized_probability if second else 0)
     max_range = max((outcome.price_range or 0.0) for outcome in event.outcomes)
     quality = max(0, min(100, round(45 + min(event.bookmaker_count, 12) * 3.5 + min(gap, 0.30) * 80 - min(max_range, 1.5) * 6)))
+    projection = round_projection(event, top.name, top.normalized_probability, quality)
     return {
         "Event": f"{event.away_team} at {event.home_team}",
         "Sport": event.sport_title,
@@ -191,10 +250,13 @@ def snapshot(event, score, matched):
         "Best book": top.best_bookmaker or "",
         "Books": event.bookmaker_count,
         "Data quality": quality,
+        "Estimated path": projection["path"],
+        "Estimated round": projection["window"],
         "Match": f"{score:.0%}",
         "Matched": matched,
         "_score": score,
         "_prob": top.normalized_probability,
+        "_round_projection": projection,
         "_event": event,
     }
 
@@ -212,7 +274,8 @@ def market_table(event):
 
 def show_event(row, expanded=False):
     event = row["_event"]
-    with st.expander(f"{row['Event']} | {row['Pick']} {row['No-vig probability']} | Q{row['Data quality']}", expanded=expanded):
+    projection = row["_round_projection"]
+    with st.expander(f"{row['Event']} | {row['Pick']} {row['No-vig probability']} | {row['Estimated round']} | Q{row['Data quality']}", expanded=expanded):
         c1, c2, c3, c4 = st.columns(4)
         c1.metric(t("pick"), row["Pick"])
         c2.metric(t("prob"), row["No-vig probability"])
@@ -221,6 +284,12 @@ def show_event(row, expanded=False):
         st.write(f"{t('start')}: {row['Start']}")
         if row["Matched"]:
             st.write(f"Matched: {row['Matched']}")
+        with st.expander(t("round_projection"), expanded=True):
+            st.warning(t("estimate_note"))
+            c5, c6 = st.columns(2)
+            c5.metric(t("estimated_method"), projection["path"])
+            c6.metric(t("estimated_round"), projection["window"])
+            st.dataframe(projection["rows"], use_container_width=True, hide_index=True)
         with st.expander(t("moneyline"), expanded=True):
             st.dataframe(market_table(event), use_container_width=True, hide_index=True)
 
