@@ -9,7 +9,6 @@ import streamlit as st
 st.set_page_config(page_title="Self Learning Engine", layout="wide")
 
 language = st.selectbox("Translate page", ["English", "Español"], index=0)
-IS_ES = language == "Español"
 
 TEXT = {
     "title": {"English": "Self Learning Engine", "Español": "Motor de Aprendizaje"},
@@ -31,14 +30,10 @@ TEXT = {
     "score": {"English": "Predictor score", "Español": "Puntaje del predictor"},
     "read": {"English": "Read", "Español": "Lectura"},
     "result": {"English": "Result", "Español": "Resultado"},
-    "won": {"English": "won", "Español": "ganó"},
-    "lost": {"English": "lost", "Español": "perdió"},
-    "unknown": {"English": "unknown", "Español": "pendiente"},
     "add": {"English": "Add record", "Español": "Agregar registro"},
     "resolved": {"English": "Resolved picks", "Español": "Selecciones resueltas"},
     "hit_rate": {"English": "Hit rate", "Español": "Tasa de acierto"},
     "avg_prob": {"English": "Avg predicted", "Español": "Promedio predicho"},
-    "edge_gap": {"English": "Actual minus predicted", "Español": "Real menos predicho"},
     "brier": {"English": "Brier score", "Español": "Brier score"},
     "learned": {"English": "What ARA learned", "Español": "Lo que ARA aprendió"},
     "best_area": {"English": "Best current area", "Español": "Mejor área actual"},
@@ -57,10 +52,11 @@ TEXT = {
 }
 
 EXPECTED_COLUMNS = ["event", "sport", "pick", "probability", "predictor_score", "read", "result", "source", "created_at"]
+
 RESULT_MAP = {
     "won": "won", "win": "won", "w": "won", "ganó": "won", "gano": "won", "ganada": "won", "acierto": "won",
     "lost": "lost", "loss": "lost", "l": "lost", "perdió": "lost", "perdio": "lost", "perdida": "lost", "fallo": "lost",
-    "unknown": "unknown", "pending": "unknown", "pendiente": "unknown", "": "unknown", "nan": "unknown",
+    "unknown": "unknown", "pending": "unknown", "pendiente": "unknown", "": "unknown", "nan": "unknown", "none": "unknown",
 }
 
 
@@ -68,9 +64,28 @@ def t(key: str) -> str:
     return TEXT.get(key, {}).get(language) or TEXT.get(key, {}).get("English") or key
 
 
+def clean_text(value, default: str = "unknown") -> str:
+    if value is None:
+        return default
+    try:
+        if pd.isna(value):
+            return default
+    except Exception:
+        pass
+    text = str(value).strip()
+    if text.lower() in {"", "nan", "none", "null", "<na>"}:
+        return default
+    return text
+
+
 def parse_probability(value) -> float:
-    if value is None or pd.isna(value):
+    if value is None:
         return 0.0
+    try:
+        if pd.isna(value):
+            return 0.0
+    except Exception:
+        pass
     text = str(value).strip().replace("%", "")
     try:
         number = float(text)
@@ -82,14 +97,19 @@ def parse_probability(value) -> float:
 
 
 def parse_score(value) -> float:
-    if value is None or pd.isna(value):
+    if value is None:
         return 0.0
+    try:
+        if pd.isna(value):
+            return 0.0
+    except Exception:
+        pass
     match = re.search(r"\d+(?:\.\d+)?", str(value))
     return max(0.0, min(100.0, float(match.group(0)))) if match else 0.0
 
 
 def normalize_result(value) -> str:
-    return RESULT_MAP.get(str(value or "unknown").strip().lower(), "unknown")
+    return RESULT_MAP.get(clean_text(value, "unknown").lower(), "unknown")
 
 
 def find_col(df: pd.DataFrame, names: list[str]):
@@ -112,26 +132,53 @@ def normalize_upload(df: pd.DataFrame) -> pd.DataFrame:
     score_col = find_col(df, ["predictor score", "puntaje", "score"])
     read_col = find_col(df, ["classification", "clasificación", "clasificacion", "read", "lectura"])
     result_col = find_col(df, ["result", "resultado"])
-    rows = []
+
     if not event_col or not pick_col or not prob_col:
         return pd.DataFrame(columns=EXPECTED_COLUMNS)
+
+    rows = []
     for _, row in df.iterrows():
-        event = str(row.get(event_col, "")).strip()
-        pick = str(row.get(pick_col, "")).strip()
+        event = clean_text(row.get(event_col, ""), "")
+        pick = clean_text(row.get(pick_col, ""), "")
         if not event or not pick:
             continue
+
+        sport = clean_text(row.get(sport_col, "unknown") if sport_col else "unknown")
+        read = clean_text(row.get(read_col, "unknown") if read_col else "unknown")
+        result = normalize_result(row.get(result_col, "unknown") if result_col else "unknown")
+
         rows.append({
             "event": event,
-            "sport": str(row.get(sport_col, "unknown")).strip() if sport_col else "unknown",
+            "sport": sport,
             "pick": pick,
             "probability": parse_probability(row.get(prob_col, 0)),
             "predictor_score": parse_score(row.get(score_col, 0)) if score_col else 0.0,
-            "read": str(row.get(read_col, "unknown")).strip() if read_col else "unknown",
-            "result": normalize_result(row.get(result_col, "unknown")) if result_col else "unknown",
+            "read": read,
+            "result": result,
             "source": "upload",
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
+
     return pd.DataFrame(rows, columns=EXPECTED_COLUMNS)
+
+
+def clean_tracker(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    for col in EXPECTED_COLUMNS:
+        if col not in df.columns:
+            df[col] = 0.0 if col in ["probability", "predictor_score"] else "unknown"
+
+    df = df[EXPECTED_COLUMNS]
+    df["event"] = df["event"].apply(lambda x: clean_text(x, ""))
+    df["sport"] = df["sport"].apply(clean_text)
+    df["pick"] = df["pick"].apply(lambda x: clean_text(x, ""))
+    df["probability"] = df["probability"].apply(parse_probability)
+    df["predictor_score"] = df["predictor_score"].apply(parse_score)
+    df["read"] = df["read"].apply(clean_text)
+    df["result"] = df["result"].apply(normalize_result)
+    df["source"] = df["source"].apply(clean_text)
+    df["created_at"] = df["created_at"].apply(lambda x: clean_text(x, datetime.now(timezone.utc).isoformat()))
+    return df[df["event"].ne("") & df["pick"].ne("")]
 
 
 def tracker_df() -> pd.DataFrame:
@@ -143,24 +190,6 @@ def tracker_df() -> pd.DataFrame:
     return clean_tracker(df)
 
 
-def clean_tracker(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    for col in EXPECTED_COLUMNS:
-        if col not in df.columns:
-            df[col] = "unknown" if col not in ["probability", "predictor_score"] else 0.0
-    df = df[EXPECTED_COLUMNS]
-    df["event"] = df["event"].astype(str).str.strip()
-    df["sport"] = df["sport"].astype(str).str.strip().replace({"": "unknown", "nan": "unknown"})
-    df["pick"] = df["pick"].astype(str).str.strip()
-    df["read"] = df["read"].astype(str).str.strip().replace({"": "unknown", "nan": "unknown"})
-    df["result"] = df["result"].apply(normalize_result)
-    df["probability"] = df["probability"].apply(parse_probability)
-    df["predictor_score"] = df["predictor_score"].apply(parse_score)
-    df["source"] = df["source"].astype(str).replace({"": "unknown", "nan": "unknown"})
-    df["created_at"] = df["created_at"].astype(str).replace({"": datetime.now(timezone.utc).isoformat(), "nan": datetime.now(timezone.utc).isoformat()})
-    return df[df["event"].ne("") & df["pick"].ne("")]
-
-
 def set_tracker(df: pd.DataFrame) -> None:
     st.session_state.ara_learning_records = clean_tracker(df).to_dict("records")
 
@@ -168,7 +197,8 @@ def set_tracker(df: pd.DataFrame) -> None:
 def merge_into_tracker(new_df: pd.DataFrame) -> int:
     current = tracker_df()
     before = len(current)
-    combined = pd.concat([current, new_df], ignore_index=True).drop_duplicates(subset=["event", "pick", "probability"], keep="last")
+    combined = pd.concat([current, clean_tracker(new_df)], ignore_index=True)
+    combined = combined.drop_duplicates(subset=["event", "pick", "probability"], keep="last")
     set_tracker(combined)
     return max(0, len(tracker_df()) - before)
 
@@ -179,24 +209,31 @@ def csv_text(df: pd.DataFrame) -> str:
     return output.getvalue()
 
 
-def summarize_group(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
+def summarize_group(df: pd.DataFrame, group_col: str, area_type: str) -> pd.DataFrame:
     rows = []
     grouped = df.copy()
-    grouped[group_col] = grouped[group_col].astype(str).fillna("unknown")
+    grouped[group_col] = grouped[group_col].apply(clean_text)
+
     for key, group in grouped.groupby(group_col, dropna=False):
+        key = clean_text(key)
         actual = float(group["actual"].mean())
         predicted = float(group["probability"].mean())
         brier = float(((group["probability"] - group["actual"]) ** 2).mean())
+
         rows.append({
-            group_col: str(key),
+            "area": f"{area_type}: {key}",
+            "area_type": area_type,
+            group_col: key,
             "records": int(len(group)),
             "avg_predicted": round(predicted, 3),
             "actual_hit_rate": round(actual, 3),
             "actual_minus_predicted": round(actual - predicted, 3),
             "brier": round(brier, 3),
         })
+
     if not rows:
-        return pd.DataFrame(columns=[group_col, "records", "avg_predicted", "actual_hit_rate", "actual_minus_predicted", "brier"])
+        return pd.DataFrame(columns=["area", "area_type", group_col, "records", "avg_predicted", "actual_hit_rate", "actual_minus_predicted", "brier"])
+
     return pd.DataFrame(rows).sort_values(["records", "actual_minus_predicted"], ascending=[False, False])
 
 
@@ -205,19 +242,27 @@ def add_probability_bucket(df: pd.DataFrame) -> pd.DataFrame:
     bins = [0, 0.4, 0.5, 0.6, 0.7, 0.8, 1.01]
     labels = ["0-40%", "40-50%", "50-60%", "60-70%", "70-80%", "80-100%"]
     df["probability_bucket"] = pd.cut(df["probability"], bins=bins, labels=labels, include_lowest=True).astype(str)
+    df["probability_bucket"] = df["probability_bucket"].apply(clean_text)
     return df
 
 
 def best_and_worst(summaries: list[pd.DataFrame]) -> tuple[str, str]:
-    combined = pd.concat([df for df in summaries if not df.empty], ignore_index=True) if any(not df.empty for df in summaries) else pd.DataFrame()
-    if combined.empty:
+    valid = [df for df in summaries if not df.empty and "area" in df.columns]
+    if not valid:
         return "Not enough data", "Not enough data"
+
+    combined = pd.concat(valid, ignore_index=True)
+    combined["area"] = combined["area"].apply(clean_text)
     qualified = combined[combined["records"] >= 2]
     if qualified.empty:
         qualified = combined
+
     best = qualified.sort_values(["actual_minus_predicted", "records"], ascending=[False, False]).iloc[0]
     worst = qualified.sort_values(["actual_minus_predicted", "records"], ascending=[True, False]).iloc[0]
-    return f"{best.iloc[0]} | {int(best['records'])} records | {best['actual_hit_rate']:.1%} actual", f"{worst.iloc[0]} | {int(worst['records'])} records | {worst['actual_hit_rate']:.1%} actual"
+    return (
+        f"{best['area']} | {int(best['records'])} records | {best['actual_hit_rate']:.1%} actual",
+        f"{worst['area']} | {int(worst['records'])} records | {worst['actual_hit_rate']:.1%} actual",
+    )
 
 
 st.title(t("title"))
@@ -227,6 +272,7 @@ st.info(t("not_auto"))
 latest_predictions = st.session_state.get("ara_latest_predictions", [])
 latest_source = st.session_state.get("ara_latest_predictions_source", "Predictor")
 latest_saved_at = st.session_state.get("ara_latest_predictions_saved_at", "")
+
 if latest_predictions:
     st.success(f"{t('latest_info')}: {len(latest_predictions)} from {latest_source} {latest_saved_at}")
     if st.button(t("import_latest"), type="primary"):
@@ -255,7 +301,10 @@ memory_upload = st.file_uploader(t("upload_memory"), type=["csv"], key="memory_u
 if memory_upload is not None:
     try:
         memory_df = pd.read_csv(memory_upload)
-        normalized_memory = clean_tracker(memory_df) if {"event", "pick", "probability", "result"}.issubset(memory_df.columns) else normalize_upload(memory_df)
+        if {"event", "pick", "probability", "result"}.issubset(memory_df.columns):
+            normalized_memory = clean_tracker(memory_df)
+        else:
+            normalized_memory = normalize_upload(memory_df)
         merge_into_tracker(normalized_memory)
     except Exception as exc:
         st.warning(f"{t('could_not_load')} {memory_upload.name}: {exc}")
@@ -268,6 +317,7 @@ with st.expander(t("manual"), expanded=False):
     predictor_score = st.number_input(t("score"), min_value=0.0, max_value=100.0, value=50.0, step=1.0)
     read = st.text_input(t("read"), "manual")
     result = st.selectbox(t("result"), ["unknown", "won", "lost"])
+
     if st.button(t("add")) and event.strip() and pick.strip():
         new_row = pd.DataFrame([{
             "event": event,
@@ -299,6 +349,7 @@ editable = st.data_editor(
     },
     key="self_learning_editor",
 )
+
 set_tracker(editable)
 editable = tracker_df()
 
@@ -308,6 +359,7 @@ if resolved.empty:
 else:
     resolved["actual"] = resolved["result"].map({"won": 1.0, "lost": 0.0})
     resolved = add_probability_bucket(resolved)
+
     hit_rate = float(resolved["actual"].mean())
     avg_prob = float(resolved["probability"].mean())
     brier = float(((resolved["probability"] - resolved["actual"]) ** 2).mean())
@@ -318,9 +370,9 @@ else:
     c3.metric(t("avg_prob"), f"{avg_prob:.1%}")
     c4.metric(t("brier"), f"{brier:.3f}")
 
-    bucket_summary = summarize_group(resolved, "probability_bucket")
-    sport_summary = summarize_group(resolved, "sport")
-    read_summary = summarize_group(resolved, "read")
+    bucket_summary = summarize_group(resolved, "probability_bucket", "Probability bucket")
+    sport_summary = summarize_group(resolved, "sport", "Sport")
+    read_summary = summarize_group(resolved, "read", "Read")
     best, worst = best_and_worst([bucket_summary, sport_summary, read_summary])
 
     c5, c6 = st.columns(2)
@@ -344,6 +396,7 @@ else:
     st.download_button(t("download_memory"), data=csv_text(learning_memory), file_name="ara_learning_memory.csv", mime="text/csv")
 
 st.download_button(t("download_tracker"), data=csv_text(editable), file_name="ara_self_learning_tracker.csv", mime="text/csv")
+
 if st.button(t("clear")):
     st.session_state.ara_learning_records = []
     st.rerun()
