@@ -19,43 +19,71 @@ TEXT = {
     "title": {"English": "Pro Predictor", "Español": "Predictor Pro"},
     "caption": {
         "English": "Main all-sports predictor. It ranks current markets, shows moneyline/spread/total data when available, penalizes weak data and draw/upset risk, tracks session movement, and separates strong reads from avoid spots. Research-only; no guaranteed winners.",
-        "Español": "Predictor principal multideporte. Ordena mercados actuales, muestra moneyline/spread/total cuando está disponible, penaliza datos débiles y riesgo de empate/sorpresa, rastrea movimiento por sesión y separa lecturas fuertes de situaciones a evitar. Solo investigación; no garantiza ganadores.",
+        "Español": "Panel principal de predicción deportiva. Ordena mercados actuales, muestra ganador/spread/total cuando están disponibles, castiga datos débiles y riesgo de empate o sorpresa, rastrea movimiento durante la sesión y separa lecturas fuertes de jugadas que conviene evitar. Solo para investigación; no garantiza ganadores.",
     },
     "token": {"English": "Provider key", "Español": "Clave del proveedor"},
-    "target": {"English": "Scan target", "Español": "Objetivo del escaneo"},
+    "target": {"English": "Scan target", "Español": "Tipo de escaneo"},
     "all": {"English": "All sports", "Español": "Todos los deportes"},
-    "league": {"English": "One league/sport", "Español": "Una liga/deporte"},
-    "team": {"English": "One team/player", "Español": "Un equipo/jugador"},
-    "sport_search": {"English": "Sport/feed search", "Español": "Buscar deporte/fuente"},
-    "team_filter": {"English": "Team/player filter", "Español": "Filtro de equipo/jugador"},
-    "regions": {"English": "Bookmaker regions", "Español": "Regiones de casas"},
-    "controls": {"English": "Predictor controls", "Español": "Controles del predictor"},
-    "max_feeds": {"English": "Max feeds", "Español": "Máximo de fuentes"},
-    "max_events": {"English": "Max events per feed", "Español": "Máximo de eventos por fuente"},
+    "league": {"English": "One league/sport", "Español": "Una liga o deporte"},
+    "team": {"English": "One team/player", "Español": "Un equipo o jugador"},
+    "sport_search": {"English": "Sport/feed search", "Español": "Buscar liga o feed"},
+    "team_filter": {"English": "Team/player filter", "Español": "Filtro de equipo o jugador"},
+    "regions": {"English": "Bookmaker regions", "Español": "Regiones de casas de apuesta"},
+    "controls": {"English": "Predictor controls", "Español": "Ajustes del predictor"},
+    "max_feeds": {"English": "Max feeds", "Español": "Máximo de feeds"},
+    "max_events": {"English": "Max events per feed", "Español": "Máximo de eventos por feed"},
     "min_books": {"English": "Minimum books", "Español": "Mínimo de casas"},
-    "min_probability": {"English": "Minimum market probability", "Español": "Probabilidad mínima de mercado"},
+    "min_probability": {"English": "Minimum market probability", "Español": "Probabilidad implícita mínima"},
     "scan": {"English": "Run Pro Predictor", "Español": "Ejecutar Predictor Pro"},
     "dashboard": {"English": "Predictor dashboard", "Español": "Panel del predictor"},
-    "top": {"English": "Top ranked markets", "Español": "Mercados principales"},
+    "top": {"English": "Top ranked markets", "Español": "Mejores mercados ordenados"},
     "strong": {"English": "Strong reads", "Español": "Lecturas fuertes"},
-    "watch": {"English": "Watch list", "Español": "Lista de observación"},
-    "avoid": {"English": "Avoid / weak reads", "Español": "Evitar / débiles"},
+    "watch": {"English": "Watch list", "Español": "Solo seguimiento"},
+    "avoid": {"English": "Avoid / weak reads", "Español": "Evitar / lecturas débiles"},
     "movement": {"English": "Line movement", "Español": "Movimiento de línea"},
     "all_rows": {"English": "All ranked markets", "Español": "Todos los mercados ordenados"},
     "diagnostics": {"English": "Diagnostics", "Español": "Diagnóstico"},
-    "no_data": {"English": "No usable markets were returned. Try fewer regions, a broader sport search, or leave the team filter blank.", "Español": "No se devolvieron mercados utilizables. Prueba menos regiones, una búsqueda más amplia o deja el filtro vacío."},
-    "no_match": {"English": "No strong team/player match was found. The app will not pretend unrelated markets match.", "Español": "No se encontró coincidencia fuerte. La app no fingirá que mercados sin relación coinciden."},
+    "no_data": {"English": "No usable markets were returned. Try fewer regions, a broader sport search, or leave the team filter blank.", "Español": "No se encontraron mercados útiles. Prueba con menos regiones, una búsqueda deportiva más amplia o deja vacío el filtro de equipo."},
+    "no_match": {"English": "No strong team/player match was found. The app will not pretend unrelated markets match.", "Español": "No se encontró una coincidencia confiable para ese equipo o jugador. La app no mostrará mercados sin relación como si fueran coincidencias."},
     "pick": {"English": "Prediction", "Español": "Predicción"},
-    "market_prob": {"English": "Market probability", "Español": "Probabilidad de mercado"},
-    "score": {"English": "Predictor score", "Español": "Puntaje predictor"},
+    "market_prob": {"English": "Market probability", "Español": "Probabilidad implícita"},
+    "score": {"English": "Predictor score", "Español": "Puntaje del predictor"},
     "risk": {"English": "Read", "Español": "Lectura"},
-    "best_price": {"English": "Best price", "Español": "Mejor precio"},
+    "best_price": {"English": "Best price", "Español": "Mejor momio"},
     "quality": {"English": "Data quality", "Español": "Calidad de datos"},
     "start": {"English": "Start", "Español": "Inicio"},
-    "moneyline": {"English": "Moneyline", "Español": "Moneyline"},
-    "spread": {"English": "Point spread", "Español": "Spread"},
+    "moneyline": {"English": "Moneyline", "Español": "Ganador / moneyline"},
+    "spread": {"English": "Point spread", "Español": "Spread / hándicap"},
     "total": {"English": "Game total", "Español": "Total del juego"},
     "download": {"English": "Download predictor CSV", "Español": "Descargar CSV del predictor"},
+    "not_returned": {"English": "Not returned", "Español": "No disponible"},
+    "event": {"English": "Event", "Español": "Evento"},
+    "sport": {"English": "Sport", "Español": "Deporte"},
+    "classification": {"English": "Classification", "Español": "Clasificación"},
+    "risk_penalty": {"English": "Risk penalty", "Español": "Castigo por riesgo"},
+    "books": {"English": "Books", "Español": "Casas"},
+    "draw_probability": {"English": "Draw probability", "Español": "Probabilidad de empate"},
+    "match_score": {"English": "Match score", "Español": "Coincidencia"},
+    "matched": {"English": "Matched", "Español": "Coincidió"},
+    "outcome": {"English": "Outcome", "Español": "Resultado"},
+    "avg_price": {"English": "Avg price", "Español": "Momio promedio"},
+    "best_book": {"English": "Best book", "Español": "Mejor casa"},
+    "no_vig_probability": {"English": "No-vig probability", "Español": "Probabilidad sin margen"},
+    "name": {"English": "Name", "Español": "Nombre"},
+    "point": {"English": "Point", "Español": "Línea"},
+    "session_movement": {"English": "Session movement", "Español": "Movimiento en esta sesión"},
+    "no_strong": {"English": "No strong reads. That is a valid result.", "Español": "No hay lecturas fuertes. Eso también es un resultado válido."},
+    "no_avoid": {"English": "No avoid spots after filters.", "Español": "No hay lecturas para evitar con estos filtros."},
+    "no_movement": {"English": "Run another scan later in the same session to see movement.", "Español": "Ejecuta otro escaneo más tarde en esta misma sesión para ver movimiento."},
+    "skipped_feeds": {"English": "Skipped feeds", "Español": "Feeds omitidos"},
+    "markets": {"English": "Markets", "Español": "Mercados"},
+    "skipped": {"English": "Skipped", "Español": "Omitidos"},
+    "top_score": {"English": "Top score", "Español": "Puntaje máximo"},
+    "feeds_scanned": {"English": "Feeds scanned", "Español": "Feeds escaneados"},
+    "events_before_filters": {"English": "Events returned before filters", "Español": "Eventos devueltos antes de filtros"},
+    "rows_after_filters": {"English": "Rows after filters", "Español": "Filas después de filtros"},
+    "markets_requested": {"English": "Markets requested: h2h, spreads, totals", "Español": "Mercados solicitados: ganador, spread y total"},
+    "scoring_note": {"English": "Scoring: market probability + data quality + market gap - sport/draw/thin-market/team-match risk.", "Español": "Puntaje: probabilidad implícita + calidad de datos + ventaja del mercado - riesgo por deporte, empate, mercado débil o mala coincidencia."},
 }
 
 ALL_REGIONS = ["us", "us2", "uk", "eu", "au"]
@@ -122,12 +150,12 @@ def strict_match(filter_text, event):
 def safe_error(exc):
     status = getattr(getattr(exc, "response", None), "status_code", None)
     if status in (401, 403):
-        return "key rejected"
+        return "clave rechazada" if IS_ES else "key rejected"
     if status == 422:
-        return "region/feed unavailable"
+        return "feed o región no disponible" if IS_ES else "region/feed unavailable"
     if status == 429:
-        return "quota/rate limit"
-    return "request failed"
+        return "límite de cuota o velocidad" if IS_ES else "quota/rate limit"
+    return "falló la solicitud" if IS_ES else "request failed"
 
 
 def is_outright(sport):
@@ -186,10 +214,10 @@ def top_non_draw(event):
 
 def classify(row):
     if row["predictor_score"] >= 78 and row["market_probability"] >= 0.58 and row["data_quality"] >= 70:
-        return "Strong"
+        return "Lectura fuerte" if IS_ES else "Strong"
     if row["predictor_score"] < 55 or row["market_probability"] < 0.45:
-        return "Avoid"
-    return "Watch"
+        return "Evitar" if IS_ES else "Avoid"
+    return "Seguimiento" if IS_ES else "Watch"
 
 
 def snapshot(event, match_score, matched, previous):
@@ -241,64 +269,64 @@ def snapshot(event, match_score, matched, previous):
 
 def moneyline_table(event):
     return [{
-        "Outcome": outcome.name,
-        "Avg price": round(outcome.average_price, 3),
-        "Best price": round((outcome.best_price or outcome.average_price), 3),
-        "Best book": outcome.best_bookmaker or "",
-        "No-vig probability": f"{outcome.normalized_probability:.1%}",
-        "Books": outcome.source_count,
+        t("outcome"): outcome.name,
+        t("avg_price"): round(outcome.average_price, 3),
+        t("best_price"): round((outcome.best_price or outcome.average_price), 3),
+        t("best_book"): outcome.best_bookmaker or "",
+        t("no_vig_probability"): f"{outcome.normalized_probability:.1%}",
+        t("books"): outcome.source_count,
     } for outcome in event.outcomes]
 
 
 def line_table(lines):
     return [{
-        "Name": line.name,
-        "Point": "" if line.point is None else line.point,
-        "Average price": round(line.average_price, 3),
-        "Best price": round((line.best_price or line.average_price), 3),
-        "Best book": line.best_bookmaker or "",
-        "Books": line.source_count,
+        t("name"): line.name,
+        t("point"): "" if line.point is None else line.point,
+        t("avg_price"): round(line.average_price, 3),
+        t("best_price"): round((line.best_price or line.average_price), 3),
+        t("best_book"): line.best_bookmaker or "",
+        t("books"): line.source_count,
     } for line in (lines or [])]
 
 
 def headline_line(lines, label):
     rows = line_table(lines)
     if not rows:
-        return f"{label}: not returned"
+        return f"{label}: {t('not_returned')}"
     first = rows[0]
-    return f"{label}: {first['Name']} {first['Point']} @ {first['Best price']}"
+    return f"{label}: {first[t('name')]} {first[t('point')]} @ {first[t('best_price')]}"
 
 
-def safe_dataframe(rows, empty_message="Not returned"):
+def safe_dataframe(rows, empty_message=None):
     if rows:
         st.dataframe(rows, use_container_width=True, hide_index=True)
     else:
-        st.caption(empty_message)
+        st.caption(empty_message or t("not_returned"))
 
 
 def visible_row(row):
     return {
-        "Event": row["event"],
-        "Sport": row["sport"],
-        "Start": row["start"],
-        "Prediction": row["prediction"],
-        "Market probability": f"{row['market_probability']:.1%}",
-        "Predictor score": row["predictor_score"],
-        "Classification": row["classification"],
-        "Data quality": row["data_quality"],
-        "Risk penalty": row["risk_penalty"],
-        "Best price": round(row["best_price"], 3),
-        "Best book": row["best_book"],
-        "Books": row["books"],
-        "Draw probability": "" if row["draw_probability"] is None else f"{row['draw_probability']:.1%}",
-        "Match score": f"{row['match_score']:.0%}",
-        "Matched": row["matched"],
+        t("event"): row["event"],
+        t("sport"): row["sport"],
+        t("start"): row["start"],
+        t("pick"): row["prediction"],
+        t("market_prob"): f"{row['market_probability']:.1%}",
+        t("score"): row["predictor_score"],
+        t("classification"): row["classification"],
+        t("quality"): row["data_quality"],
+        t("risk_penalty"): row["risk_penalty"],
+        t("best_price"): round(row["best_price"], 3),
+        t("best_book"): row["best_book"],
+        t("books"): row["books"],
+        t("draw_probability"): "" if row["draw_probability"] is None else f"{row['draw_probability']:.1%}",
+        t("match_score"): f"{row['match_score']:.0%}",
+        t("matched"): row["matched"],
     }
 
 
 def display(row, expanded=False):
     event = row["event_object"]
-    with st.expander(f"{row['event']} | {row['prediction']} {row['market_probability']:.1%} | Score {row['predictor_score']}/100 | {row['classification']}", expanded=expanded):
+    with st.expander(f"{row['event']} | {row['prediction']} {row['market_probability']:.1%} | {t('score')} {row['predictor_score']}/100 | {row['classification']}", expanded=expanded):
         st.info(f"{headline_line(event.spreads, t('spread'))} | {headline_line(event.totals, t('total'))}")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric(t("pick"), row["prediction"])
@@ -306,11 +334,11 @@ def display(row, expanded=False):
         c3.metric(t("score"), f"{row['predictor_score']}/100")
         c4.metric(t("risk"), row["classification"])
         st.write(f"{t('start')}: {row['start']}")
-        st.write(f"{t('quality')}: {row['data_quality']}/100 | Risk penalty: {row['risk_penalty']} | Books: {row['books']}")
+        st.write(f"{t('quality')}: {row['data_quality']}/100 | {t('risk_penalty')}: {row['risk_penalty']} | {t('books')}: {row['books']}")
         if row["price_move"] is not None:
-            st.write(f"Session movement: price {row['price_move']:+.3f}, probability {row['probability_move']:+.1%}")
+            st.write(f"{t('session_movement')}: {t('best_price')} {row['price_move']:+.3f}, {t('market_prob')} {row['probability_move']:+.1%}")
         if row["matched"]:
-            st.write(f"Matched: {row['matched']} | Match score: {row['match_score']:.0%}")
+            st.write(f"{t('matched')}: {row['matched']} | {t('match_score')}: {row['match_score']:.0%}")
         with st.expander(t("spread"), expanded=True):
             safe_dataframe(line_table(event.spreads))
         with st.expander(t("total")):
@@ -338,7 +366,7 @@ except Exception:
 
 api_key = st.text_input(t("token"), type="password").strip() or saved_key
 if not api_key:
-    st.info("Paste your provider key." if not IS_ES else "Pega tu clave del proveedor.")
+    st.info("Pega tu clave del proveedor." if IS_ES else "Paste your provider key.")
     st.stop()
 
 target = st.radio(t("target"), [t("all"), t("league"), t("team")], horizontal=True)
@@ -373,7 +401,7 @@ if st.button(t("scan"), type="primary"):
     progress = st.progress(0)
     status = st.empty()
     for index, sport in enumerate(selected_sports):
-        status.write(f"Scanning {sport.title}...")
+        status.write(("Escaneando" if IS_ES else "Scanning") + f" {sport.title}...")
         events, errors = scan_feed(api_key, sport.key, regions, int(max_events))
         all_events.extend(events)
         if errors and not events:
@@ -400,7 +428,7 @@ if st.button(t("scan"), type="primary"):
     if not rows:
         st.info(t("no_data"))
         if skipped:
-            with st.expander("Skipped feeds", expanded=True):
+            with st.expander(t("skipped_feeds"), expanded=True):
                 for title, reason in skipped[:60]:
                     st.write(f"- {title}: {reason}")
         st.stop()
@@ -411,17 +439,17 @@ if st.button(t("scan"), type="primary"):
     st.session_state.pro_predictor_memory = memory
 
     ranked = sorted(rows, key=lambda row: (row["predictor_score"], row["market_probability"], row["data_quality"]), reverse=True)
-    strong = [row for row in ranked if row["classification"] == "Strong"]
-    watch = [row for row in ranked if row["classification"] == "Watch"]
-    avoid = [row for row in sorted(rows, key=lambda row: row["predictor_score"]) if row["classification"] == "Avoid"]
+    strong = [row for row in ranked if (row["classification"] == "Strong" or row["classification"] == "Lectura fuerte")]
+    watch = [row for row in ranked if (row["classification"] == "Watch" or row["classification"] == "Seguimiento")]
+    avoid = [row for row in sorted(rows, key=lambda row: row["predictor_score"]) if (row["classification"] == "Avoid" or row["classification"] == "Evitar")]
     movers = sorted([row for row in ranked if row["price_move"] is not None], key=lambda row: abs(row["price_move"]), reverse=True)
 
     st.subheader(t("dashboard"))
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Markets", len(rows))
-    c2.metric("Strong", len(strong))
-    c3.metric("Skipped", len(skipped))
-    c4.metric("Top score", f"{ranked[0]['predictor_score']}/100")
+    c1.metric(t("markets"), len(rows))
+    c2.metric(t("strong"), len(strong))
+    c3.metric(t("skipped"), len(skipped))
+    c4.metric(t("top_score"), f"{ranked[0]['predictor_score']}/100")
 
     st.download_button(t("download"), data=csv_text(ranked), file_name="pro_predictor.csv", mime="text/csv")
 
@@ -431,7 +459,7 @@ if st.button(t("scan"), type="primary"):
             display(row, expanded=row == ranked[0])
     with tabs[1]:
         if not strong:
-            st.info("No strong reads. That is a valid result." if not IS_ES else "No hay lecturas fuertes. Eso es válido.")
+            st.info(t("no_strong"))
         for row in strong[:25]:
             display(row)
     with tabs[2]:
@@ -439,22 +467,22 @@ if st.button(t("scan"), type="primary"):
             display(row)
     with tabs[3]:
         if not avoid:
-            st.info("No avoid spots after filters." if not IS_ES else "No hay lecturas para evitar.")
+            st.info(t("no_avoid"))
         for row in avoid[:25]:
             display(row)
     with tabs[4]:
         if not movers:
-            st.info("Run another scan later in the same session to see movement." if not IS_ES else "Ejecuta otro escaneo después para ver movimiento.")
+            st.info(t("no_movement"))
         for row in movers[:25]:
             display(row)
     with tabs[5]:
         safe_dataframe([visible_row(row) for row in ranked])
     with tabs[6]:
-        st.write(f"Feeds scanned: {len(selected_sports)}")
-        st.write(f"Events returned before filters: {len(all_events)}")
-        st.write(f"Rows after filters: {len(rows)}")
-        st.write("Markets requested: h2h, spreads, totals")
-        st.write("Scoring: market probability + data quality + market gap - sport/draw/thin-market/team-match risk.")
+        st.write(f"{t('feeds_scanned')}: {len(selected_sports)}")
+        st.write(f"{t('events_before_filters')}: {len(all_events)}")
+        st.write(f"{t('rows_after_filters')}: {len(rows)}")
+        st.write(t("markets_requested"))
+        st.write(t("scoring_note"))
         if skipped:
             for title, reason in skipped[:60]:
                 st.write(f"- {title}: {reason}")
