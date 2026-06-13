@@ -14,9 +14,13 @@ IS_ES = language == "Español"
 TEXT = {
     "title": {"English": "Self Learning Engine", "Español": "Motor de Aprendizaje"},
     "caption": {
-        "English": "Upload ARA prediction CSVs, mark final results, and learn which probabilities, sports, and reads actually perform best. This is the first self-feeding layer: manual results now, automatic scores later with a results API.",
-        "Español": "Sube CSVs de predicciones de ARA, marca resultados finales y aprende qué probabilidades, deportes y lecturas funcionan mejor. Esta es la primera capa de autoalimentación: resultados manuales ahora, marcadores automáticos después con una API de resultados.",
+        "English": "Upload ARA prediction CSVs, mark final results, and learn which probabilities, sports, and reads actually perform best. Level 1 can also import the latest Pro Predictor scan from this same app session.",
+        "Español": "Sube CSVs de predicciones de ARA, marca resultados finales y aprende qué probabilidades, deportes y lecturas funcionan mejor. Nivel 1 también puede importar el último escaneo del Predictor Profesional en esta misma sesión.",
     },
+    "import_latest": {"English": "Import latest predictor scan", "Español": "Importar último escaneo del predictor"},
+    "no_latest": {"English": "No latest predictor scan found. Run Pro Predictor first in this same app session.", "Español": "No se encontró un escaneo reciente. Ejecuta primero el Predictor Profesional en esta misma sesión."},
+    "imported_latest": {"English": "Imported latest predictor scan", "Español": "Último escaneo importado"},
+    "latest_info": {"English": "Latest scan ready", "Español": "Último escaneo listo"},
     "upload_predictions": {"English": "Upload prediction CSV", "Español": "Subir CSV de predicciones"},
     "upload_memory": {"English": "Upload previous tracker CSV", "Español": "Subir tracker anterior"},
     "manual": {"English": "Manual record", "Español": "Registro manual"},
@@ -45,8 +49,8 @@ TEXT = {
     "download_tracker": {"English": "Download updated tracker CSV", "Español": "Descargar tracker actualizado"},
     "download_memory": {"English": "Download learning memory CSV", "Español": "Descargar memoria de aprendizaje"},
     "clear": {"English": "Clear session memory", "Español": "Borrar memoria de sesión"},
-    "empty": {"English": "Upload prediction CSVs or add records manually. Then mark won/lost results to feed the model.", "Español": "Sube CSVs de predicciones o agrega registros manualmente. Luego marca ganadas/perdidas para alimentar el modelo."},
-    "not_auto": {"English": "This does not automatically know final scores yet. Add a results API later for automatic grading.", "Español": "Esto todavía no sabe marcadores finales automáticamente. Después se puede agregar una API de resultados para calificación automática."},
+    "empty": {"English": "Upload prediction CSVs, import the latest predictor scan, or add records manually. Then mark won/lost results to feed the model.", "Español": "Sube CSVs, importa el último escaneo del predictor o agrega registros manualmente. Luego marca ganadas/perdidas para alimentar el modelo."},
+    "not_auto": {"English": "Level 1 is automatic inside this app session. It still does not know final scores automatically; that needs a results API later.", "Español": "Nivel 1 es automático dentro de esta sesión. Todavía no sabe marcadores finales automáticamente; eso necesita una API de resultados después."},
     "loaded": {"English": "Loaded", "Español": "Cargados"},
     "could_not_load": {"English": "Could not load", "Español": "No se pudo cargar"},
     "mark_results": {"English": "Mark some results as won or lost to make ARA learn.", "Español": "Marca algunos resultados como ganados o perdidos para que ARA aprenda."},
@@ -161,6 +165,14 @@ def set_tracker(df: pd.DataFrame) -> None:
     st.session_state.ara_learning_records = clean_tracker(df).to_dict("records")
 
 
+def merge_into_tracker(new_df: pd.DataFrame) -> int:
+    current = tracker_df()
+    before = len(current)
+    combined = pd.concat([current, new_df], ignore_index=True).drop_duplicates(subset=["event", "pick", "probability"], keep="last")
+    set_tracker(combined)
+    return max(0, len(tracker_df()) - before)
+
+
 def csv_text(df: pd.DataFrame) -> str:
     output = io.StringIO()
     clean_tracker(df).to_csv(output, index=False, quoting=csv.QUOTE_MINIMAL)
@@ -172,8 +184,6 @@ def summarize_group(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     grouped = df.copy()
     grouped[group_col] = grouped[group_col].astype(str).fillna("unknown")
     for key, group in grouped.groupby(group_col, dropna=False):
-        if group.empty:
-            continue
         actual = float(group["actual"].mean())
         predicted = float(group["probability"].mean())
         brier = float(((group["probability"] - group["actual"]) ** 2).mean())
@@ -207,32 +217,38 @@ def best_and_worst(summaries: list[pd.DataFrame]) -> tuple[str, str]:
         qualified = combined
     best = qualified.sort_values(["actual_minus_predicted", "records"], ascending=[False, False]).iloc[0]
     worst = qualified.sort_values(["actual_minus_predicted", "records"], ascending=[True, False]).iloc[0]
-    best_label = f"{best.iloc[0]} | {int(best['records'])} records | {best['actual_hit_rate']:.1%} actual"
-    worst_label = f"{worst.iloc[0]} | {int(worst['records'])} records | {worst['actual_hit_rate']:.1%} actual"
-    return best_label, worst_label
+    return f"{best.iloc[0]} | {int(best['records'])} records | {best['actual_hit_rate']:.1%} actual", f"{worst.iloc[0]} | {int(worst['records'])} records | {worst['actual_hit_rate']:.1%} actual"
 
 
 st.title(t("title"))
 st.caption(t("caption"))
 st.info(t("not_auto"))
 
+latest_predictions = st.session_state.get("ara_latest_predictions", [])
+latest_source = st.session_state.get("ara_latest_predictions_source", "Predictor")
+latest_saved_at = st.session_state.get("ara_latest_predictions_saved_at", "")
+if latest_predictions:
+    st.success(f"{t('latest_info')}: {len(latest_predictions)} from {latest_source} {latest_saved_at}")
+    if st.button(t("import_latest"), type="primary"):
+        added = merge_into_tracker(pd.DataFrame(latest_predictions))
+        st.success(f"{t('imported_latest')}: {added}")
+        st.rerun()
+else:
+    st.caption(t("no_latest"))
+
 uploaded = st.file_uploader(t("upload_predictions"), type=["csv"], accept_multiple_files=True)
 if uploaded:
-    current = tracker_df()
-    frames = [current] if not current.empty else []
     loaded_count = 0
     for file in uploaded:
         try:
             raw = pd.read_csv(file)
             normalized = normalize_upload(raw)
             if len(normalized):
-                frames.append(normalized)
+                merge_into_tracker(normalized)
                 loaded_count += len(normalized)
         except Exception as exc:
             st.warning(f"{t('could_not_load')} {file.name}: {exc}")
-    if frames:
-        combined = pd.concat(frames, ignore_index=True).drop_duplicates(subset=["event", "pick", "probability"], keep="last")
-        set_tracker(combined)
+    if loaded_count:
         st.success(f"{t('loaded')}: {loaded_count}")
 
 memory_upload = st.file_uploader(t("upload_memory"), type=["csv"], key="memory_upload")
@@ -240,9 +256,7 @@ if memory_upload is not None:
     try:
         memory_df = pd.read_csv(memory_upload)
         normalized_memory = clean_tracker(memory_df) if {"event", "pick", "probability", "result"}.issubset(memory_df.columns) else normalize_upload(memory_df)
-        current = tracker_df()
-        combined = pd.concat([current, normalized_memory], ignore_index=True).drop_duplicates(subset=["event", "pick", "probability"], keep="last")
-        set_tracker(combined)
+        merge_into_tracker(normalized_memory)
     except Exception as exc:
         st.warning(f"{t('could_not_load')} {memory_upload.name}: {exc}")
 
@@ -254,22 +268,20 @@ with st.expander(t("manual"), expanded=False):
     predictor_score = st.number_input(t("score"), min_value=0.0, max_value=100.0, value=50.0, step=1.0)
     read = st.text_input(t("read"), "manual")
     result = st.selectbox(t("result"), ["unknown", "won", "lost"])
-    if st.button(t("add")):
-        if event.strip() and pick.strip():
-            current = tracker_df()
-            new_row = pd.DataFrame([{
-                "event": event,
-                "sport": sport,
-                "pick": pick,
-                "probability": probability,
-                "predictor_score": predictor_score,
-                "read": read,
-                "result": result,
-                "source": "manual",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }])
-            set_tracker(pd.concat([current, new_row], ignore_index=True))
-            st.rerun()
+    if st.button(t("add")) and event.strip() and pick.strip():
+        new_row = pd.DataFrame([{
+            "event": event,
+            "sport": sport,
+            "pick": pick,
+            "probability": probability,
+            "predictor_score": predictor_score,
+            "read": read,
+            "result": result,
+            "source": "manual",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }])
+        merge_into_tracker(new_row)
+        st.rerun()
 
 current = tracker_df()
 if current.empty:
