@@ -80,6 +80,8 @@ class PlayerPropPolicy:
     max_blend_market_weight: float = 0.65
     min_blend_market_weight: float = 0.35
     max_stake_units: float = 0.50
+    extreme_probability_low: float = 0.03
+    extreme_probability_high: float = 0.97
 
 
 def _field(row: Mapping[str, Any], names: tuple[str, ...]) -> Any:
@@ -117,6 +119,7 @@ def implied_probability_from_price(price: Any) -> float | None:
     """Convert decimal or American odds to implied probability.
 
     Decimal odds use values like 1.80 or 2.25. American odds use values like +150 or -120.
+    Values between 1.01 and 99.99 are treated as decimal prices; values >=100 or <=-100 are treated as American odds.
     """
     price_float = parse_float(price)
     if price_float is None:
@@ -277,8 +280,14 @@ def score_player_prop(row: Mapping[str, Any], policy: PlayerPropPolicy = PlayerP
         required.append("prop_type")
     if market is None:
         required.append("market_probability_or_price")
+    elif market <= policy.extreme_probability_low or market >= policy.extreme_probability_high:
+        watch.append("extreme_market_probability")
     if model is None:
         required.append("player_model_probability_or_player_rates")
+    elif model <= policy.extreme_probability_low or model >= policy.extreme_probability_high:
+        watch.append("extreme_model_probability")
+    if market is not None and model is not None and abs(model - market) >= 0.25:
+        watch.append("model_market_disagreement_extreme")
     if books is None:
         watch.append("missing_book_coverage")
     elif books < policy.min_books:
