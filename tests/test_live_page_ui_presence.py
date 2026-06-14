@@ -40,6 +40,5 @@ def test_live_pro_predictor_page_has_strict_70_quality_controls() -> None:
     assert "dedupe_key" in text
     assert "price_probability_gap" in text
     assert "estimated_ev_value" in text
-    assert "market probability below floor" in text
-    assert "EV below target" in text
-    assert "duplicate event/pick" in text
+    assert "TargetModePolicy" in text
+    assert "evaluate_target_mode" in text
