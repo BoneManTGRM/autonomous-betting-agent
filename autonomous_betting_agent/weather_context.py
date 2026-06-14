@@ -14,6 +14,46 @@ MAX_FORECAST_DELTA_SECONDS = 6 * 60 * 60
 # Practical venue/city defaults for odds feeds that return team names but no stadium.
 # More specific team phrases are preferred over generic city/country names.
 CITY_HINTS = {
+    # College football / NCAA locations
+    "rutgers scarlet knights": "Piscataway, New Jersey",
+    "rutgers": "Piscataway, New Jersey",
+    "illinois fighting illini": "Champaign, Illinois",
+    "fighting illini": "Champaign, Illinois",
+    "illinois": "Champaign, Illinois",
+    "usc trojans": "Los Angeles, California",
+    "southern california trojans": "Los Angeles, California",
+    "nebraska cornhuskers": "Lincoln, Nebraska",
+    "cornhuskers": "Lincoln, Nebraska",
+    "nebraska": "Lincoln, Nebraska",
+    "michigan state spartans": "East Lansing, Michigan",
+    "michigan state": "East Lansing, Michigan",
+    "west virginia mountaineers": "Morgantown, West Virginia",
+    "west virginia": "Morgantown, West Virginia",
+    "wake forest demon deacons": "Winston-Salem, North Carolina",
+    "wake forest": "Winston-Salem, North Carolina",
+    "florida state seminoles": "Tallahassee, Florida",
+    "florida state": "Tallahassee, Florida",
+    "alabama crimson tide": "Tuscaloosa, Alabama",
+    "crimson tide": "Tuscaloosa, Alabama",
+    "stanford cardinal": "Stanford, California",
+    "stanford": "Stanford, California",
+    "east carolina pirates": "Greenville, North Carolina",
+    "east carolina": "Greenville, North Carolina",
+    "new mexico state aggies": "Las Cruces, New Mexico",
+    "new mexico state": "Las Cruces, New Mexico",
+    "umass minutemen": "Amherst, Massachusetts",
+    "umass": "Amherst, Massachusetts",
+    "uab blazers": "Birmingham, Alabama",
+    "uab": "Birmingham, Alabama",
+    "ohio bobcats": "Athens, Ohio",
+    "akron zips": "Akron, Ohio",
+    "miami hurricanes": "Miami Gardens, Florida",
+    "miami (oh) redhawks": "Oxford, Ohio",
+    "oregon state beavers": "Corvallis, Oregon",
+    "houston cougars": "Houston, Texas",
+    "coastal carolina chanticleers": "Conway, South Carolina",
+    "toledo rockets": "Toledo, Ohio",
+    "fresno state bulldogs": "Fresno, California",
     # MLB / NFL / MLS full-team aliases
     "new york yankees": "Bronx, New York",
     "new york mets": "Queens, New York",
@@ -37,8 +77,23 @@ CITY_HINTS = {
     "lafc": "Los Angeles, California",
     "new york red bulls": "Harrison, New Jersey",
     "nycfc": "New York, New York",
-    "st louis city": "St. Louis, Missouri",
     "st louis city sc": "St. Louis, Missouri",
+    # International clubs / league examples
+    "ifk mariehamn": "Mariehamn, Åland Islands",
+    "if gnistan": "Helsinki, Finland",
+    "vfl osnabrück": "Osnabrück, Germany",
+    "vfl osnabruck": "Osnabrück, Germany",
+    "bayern munich": "Munich, Germany",
+    "queens club": "London, England",
+    "queen's club": "London, England",
+    "colo colo": "Santiago, Chile",
+    "cobresal": "El Salvador, Chile",
+    # Rugby / AFL
+    "gold coast titans": "Gold Coast, Queensland",
+    "penrith panthers": "Penrith, New South Wales",
+    "brisbane lions": "Brisbane, Queensland",
+    "richmond tigers": "Melbourne, Victoria",
+    "st kilda saints": "Melbourne, Victoria",
     # Common team/city aliases
     "diamondbacks": "Phoenix, Arizona",
     "braves": "Atlanta, Georgia",
@@ -59,8 +114,6 @@ CITY_HINTS = {
     "broncos": "Denver, Colorado",
     "cowboys": "Arlington, Texas",
     "rangers": "Arlington, Texas",
-    "tigers": "Detroit, Michigan",
-    "lions": "Detroit, Michigan",
     "astros": "Houston, Texas",
     "texans": "Houston, Texas",
     "dynamo": "Houston, Texas",
@@ -81,8 +134,6 @@ CITY_HINTS = {
     "athletics": "Sacramento, California",
     "phillies": "Philadelphia, Pennsylvania",
     "eagles": "Philadelphia, Pennsylvania",
-    "pirates": "Pittsburgh, Pennsylvania",
-    "steelers": "Pittsburgh, Pennsylvania",
     "padres": "San Diego, California",
     "49ers": "Santa Clara, California",
     "earthquakes": "San Jose, California",
@@ -95,7 +146,7 @@ CITY_HINTS = {
     "blue jays": "Toronto, Ontario",
     "nationals": "Washington, DC",
     "commanders": "Landover, Maryland",
-    # Generic city aliases
+    # Generic city aliases. Keep these after team aliases.
     "arizona": "Phoenix, Arizona",
     "atlanta": "Atlanta, Georgia",
     "baltimore": "Baltimore, Maryland",
@@ -126,7 +177,7 @@ CITY_HINTS = {
     "texas": "Austin, Texas",
     "toronto": "Toronto, Ontario",
     "washington": "Washington, DC",
-    # Country/team defaults for international soccer when venue data is absent
+    # Country/team defaults for international events when venue data is absent
     "mexico": "Mexico City, Mexico",
     "south africa": "Johannesburg, South Africa",
     "south korea": "Seoul, South Korea",
@@ -147,11 +198,21 @@ CITY_HINTS = {
     "ecuador": "Quito, Ecuador",
     "sweden": "Stockholm, Sweden",
     "tunisia": "Tunis, Tunisia",
+    "spain": "Madrid, Spain",
+    "cape verde": "Praia, Cape Verde",
+    "india": "Mumbai, India",
+    "afghanistan": "Kabul, Afghanistan",
+    "iraq": "Baghdad, Iraq",
+    "norway": "Oslo, Norway",
+    "portugal": "Lisbon, Portugal",
+    "dr congo": "Kinshasa, DR Congo",
 }
 
 OUTDOOR_SPORT_TERMS = [
     "baseball", "mlb", "football", "nfl", "ncaaf", "soccer", "fifa", "world cup",
-    "rugby", "cricket", "tennis", "golf", "aussie", "afl", "formula", "nascar",
+    "rugby", "nrl", "cricket", "odi", "one day", "tennis", "wta", "atp", "golf",
+    "aussie", "afl", "formula", "nascar", "veikkausliiga", "dfb", "pokal",
+    "primera", "division", "división", "liga", "premier", "championship",
 ]
 INDOOR_SPORT_TERMS = ["basketball", "nba", "wnba", "hockey", "nhl", "mma", "ufc", "boxing"]
 
@@ -172,6 +233,14 @@ class WeatherSummary:
     chance_of_snow: int | None
     weather_risk: int
     weather_notes: list[str]
+
+
+@dataclass
+class LocationGuess:
+    location: str
+    confidence: str
+    matched_term: str
+    source: str
 
 
 def clean(value: Any) -> str:
@@ -203,26 +272,36 @@ def is_weather_relevant(sport_text: str) -> bool:
     return any(term in text for term in OUTDOOR_SPORT_TERMS)
 
 
-def city_hint_for(text: str) -> str | None:
+def city_hint_for(text: str) -> tuple[str | None, str | None]:
     clean_text = clean(text)
     if not clean_text:
-        return None
+        return None, None
     # Prefer the most specific matching phrase, for example "new york yankees" over "new york".
     for key in sorted(CITY_HINTS, key=len, reverse=True):
         if key in clean_text:
-            return CITY_HINTS[key]
-    return None
+            return CITY_HINTS[key], key
+    return None, None
+
+
+def infer_weather_location_with_confidence(home_team: str, away_team: str = "", sport_text: str = "") -> LocationGuess:
+    home_location, home_key = city_hint_for(home_team)
+    if home_location:
+        return LocationGuess(home_location, "exact_home_team_or_venue", home_key or "", "home_team")
+
+    sport_location, sport_key = city_hint_for(sport_text)
+    if sport_location:
+        return LocationGuess(sport_location, "sport_or_tournament_hint", sport_key or "", "sport_text")
+
+    combined_location, combined_key = city_hint_for(f"{home_team} {away_team} {sport_text}")
+    if combined_location:
+        return LocationGuess(combined_location, "inferred_from_event_text", combined_key or "", "combined_text")
+
+    fallback = home_team or away_team or "New York"
+    return LocationGuess(fallback, "weak_guess_needs_review", "", "fallback")
 
 
 def infer_weather_location(home_team: str, away_team: str = "", sport_text: str = "") -> str:
-    # Prefer the home side, because weather matters at the venue.
-    home_match = city_hint_for(home_team)
-    if home_match:
-        return home_match
-    combined_match = city_hint_for(f"{home_team} {away_team} {sport_text}")
-    if combined_match:
-        return combined_match
-    return home_team or away_team or "New York"
+    return infer_weather_location_with_confidence(home_team, away_team, sport_text).location
 
 
 def fetch_weather(api_key: str, location: str, kickoff_iso: str | None = None) -> WeatherSummary:
