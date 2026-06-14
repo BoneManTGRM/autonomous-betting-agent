@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from autonomous_betting_agent.sportsdataio_quality import evaluate_pipeline_quality
+from autonomous_betting_agent.sportsdataio_quality import evaluate_pipeline_quality, quality_gate_allows
 
 
 class SportsDataIOQualityTests(unittest.TestCase):
@@ -66,6 +66,23 @@ class SportsDataIOQualityTests(unittest.TestCase):
         gate = evaluate_pipeline_quality(steps_run=[], warnings=["missing data"], counts={})
         self.assertEqual(gate.status, "WATCH")
         self.assertTrue(any("warning" in reason for reason in gate.reasons))
+
+    def test_quality_gate_threshold_helper(self) -> None:
+        pass_gate = evaluate_pipeline_quality(steps_run=[], warnings=[], counts={})
+        watch_gate = evaluate_pipeline_quality(steps_run=[], warnings=["minor"], counts={})
+        fail_gate = evaluate_pipeline_quality(steps_run=["apply_game_results"], warnings=[], counts={"prediction_rows": 10, "prediction_match_matched": 5})
+        self.assertTrue(quality_gate_allows(pass_gate, minimum_status="PASS"))
+        self.assertTrue(quality_gate_allows(pass_gate, minimum_status="WATCH"))
+        self.assertFalse(quality_gate_allows(watch_gate, minimum_status="PASS"))
+        self.assertTrue(quality_gate_allows(watch_gate, minimum_status="WATCH"))
+        self.assertFalse(quality_gate_allows(fail_gate, minimum_status="WATCH"))
+        self.assertTrue(quality_gate_allows(fail_gate, minimum_status="FAIL"))
+        self.assertFalse(quality_gate_allows(None, minimum_status="FAIL"))
+
+    def test_quality_gate_threshold_helper_rejects_unknown_minimum(self) -> None:
+        gate = evaluate_pipeline_quality(steps_run=[], warnings=[], counts={})
+        with self.assertRaises(ValueError):
+            quality_gate_allows(gate, minimum_status="MAYBE")
 
 
 if __name__ == "__main__":
