@@ -102,7 +102,13 @@ def _field(row: Mapping[str, Any], names: tuple[str, ...]) -> Any:
     for name in names:
         key = name.lower().replace(" ", "_").replace("-", "_")
         if key in lookup:
-            return lookup[key]
+            value = lookup[key]
+            try:
+                if pd.isna(value):
+                    return None
+            except TypeError:
+                pass
+            return value
     return None
 
 
