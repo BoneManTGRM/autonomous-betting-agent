@@ -18,9 +18,15 @@ def _fmt(value: Any, default: str = "") -> str:
     return text if text else default
 
 
+def _existing_columns(rows: list[Mapping[str, Any]], columns: list[str]) -> list[str]:
+    available = {key for row in rows for key in row.keys()}
+    return [column for column in columns if column in available]
+
+
 def _table(rows: list[Mapping[str, Any]], columns: list[str], *, limit: int = 25) -> str:
     if not rows:
         return "No rows.\n"
+    columns = _existing_columns(rows, columns) or columns[:8]
     header = "| " + " | ".join(columns) + " |"
     sep = "| " + " | ".join("---" for _ in columns) + " |"
     lines = [header, sep]
@@ -73,13 +79,34 @@ def build_daily_markdown_report(
         "market",
         "selection",
         "best_price",
+        "market_probability",
+        "stats_adjustment",
+        "injury_adjustment",
+        "weather_adjustment",
+        "ara_memory_adjustment",
+        "final_probability",
         "calibrated_probability",
+        "confidence",
+        "reliability_score",
         "ensemble_score",
         "profile_trust_level",
         "recommended_stake_units",
         "risk_tier",
     ]
-    rejected_columns = ["sport", "league", "market", "selection", "ensemble_status", "validation_errors", "do_not_bet_reason", "rejection_reason"]
+    rejected_columns = [
+        "sport",
+        "league",
+        "market",
+        "selection",
+        "final_probability",
+        "confidence",
+        "reliability_score",
+        "ensemble_status",
+        "validation_errors",
+        "do_not_bet_reason",
+        "rejection_reason",
+        "fusion_warning",
+    ]
 
     lines = [
         f"# {title}",
@@ -102,6 +129,7 @@ def build_daily_markdown_report(
     lines.extend([
         _counts_lines("Final bets by sport", _count_by(final_bets, "sport")),
         _counts_lines("Final bets by market", _count_by(final_bets, "market")),
+        _counts_lines("Final bets by confidence", _count_by(final_bets, "confidence")),
         "## Final Bets",
         "",
         _table(final_bets, common_columns),
@@ -114,6 +142,7 @@ def build_daily_markdown_report(
         "## Notes",
         "",
         "- This report is generated from CSV outputs and is meant for review before any action.",
+        "- Multi-source fusion starts from market probability and caps how far extra APIs can move the pick.",
         "- A row in final_bets.csv is still not a guarantee; it only passed the current filters.",
         "- Watchlist and rejected rows should remain tracked for learning, but not mixed into final-bet performance claims.",
         "",
