@@ -11,6 +11,7 @@ from .bankroll_exposure import BankrollPolicy, apply_bankroll_exposure, summariz
 from .ensemble_agreement import apply_ensemble_scoring, summarize_ensemble
 from .line_movement_model import enrich_line_movement_rows, summarize_line_movement
 from .market_accuracy_profiles import enrich_with_market_profiles, summarize_profiles
+from .multi_source_fusion import FusionPolicy, fuse_rows
 from .prediction_validator import ValidationPolicy, validate_prediction_rows, write_report as write_validation_report
 from .reporting import build_daily_markdown_report
 
@@ -72,6 +73,7 @@ def run_final_pick_pipeline(
     market_profile_history_csv: str | Path | None = None,
     bankroll_policy: BankrollPolicy = BankrollPolicy(),
     validation_policy: ValidationPolicy | None = ValidationPolicy(),
+    fusion_policy: FusionPolicy | None = FusionPolicy(),
     strict_validation: bool = False,
 ) -> FinalPickReport:
     base = Path(output_dir)
@@ -98,6 +100,12 @@ def run_final_pick_pipeline(
         elif validation_report.status == "WATCH":
             warnings.append(f"prediction validation passed with {validation_report.warning_count} warning(s)")
 
+    if fusion_policy is not None:
+        rows = fuse_rows(list(rows), policy=fusion_policy, override_model_probability=True)
+        steps.append("multi_source_fusion")
+        if any(not row.get("market_probability") for row in rows):
+            warnings.append("some rows are missing market probability; fusion used model probability fallback where available")
+
     if calibration_history_csv:
         history = read_csv_rows(calibration_history_csv)
         calibrated, calibration_report = apply_calibration(list(rows), history)
@@ -106,7 +114,7 @@ def run_final_pick_pipeline(
         if calibration_report.calibrated_rows < raw_count:
             warnings.append("some rows could not be calibrated because probability was missing")
     else:
-        warnings.append("calibration history not supplied; using raw probabilities")
+        warnings.append("calibration history not supplied; using raw/fused probabilities")
 
     if line_movement_history_csv:
         history = read_csv_rows(line_movement_history_csv)
@@ -176,7 +184,8 @@ def run_final_pick_pipeline(
         ),
         warnings=warnings,
         notes=[
-            "Final bets are rows that survived validation, calibration/profile/ensemble scoring and bankroll exposure checks.",
+            "Final bets are rows that survived validation, multi-source fusion, calibration/profile/ensemble scoring and bankroll exposure checks.",
+            "Fusion starts from market probability and only lets stats, context, injuries and ARA memory move the line within capped limits.",
             "Watchlist rows are not automatic bets; they need better odds, more data or lower exposure risk.",
             "Rejected rows should not be used for performance claims unless separately tracked as rejected candidates.",
         ],
