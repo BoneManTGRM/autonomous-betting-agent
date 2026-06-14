@@ -1,6 +1,7 @@
 import csv
 import io
 import os
+import re
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -11,7 +12,6 @@ from autonomous_betting_agent.weather_context import (
     infer_weather_location,
     is_weather_relevant,
     summary_to_dict,
-    weather_note,
 )
 
 
@@ -79,18 +79,18 @@ def find_col(df: pd.DataFrame, names: list[str]):
 
 
 def split_event(event: str) -> tuple[str, str]:
+    """Return away, home from common event strings.
+
+    Pro Predictor usually outputs "Away at Home". For neutral "vs" formats,
+    ARA still treats the second side as the weather/venue side unless a better
+    venue column is added later.
+    """
     event = clean_text(event)
-    lower = event.lower()
-    if " at " in lower:
-        parts = event.split(" at ")
-        return clean_text(parts[0]), clean_text(parts[-1])
-    if " @ " in event:
-        parts = event.split(" @ ")
-        return clean_text(parts[0]), clean_text(parts[-1])
-    for token in [" vs ", " v ", " versus "]:
-        if token in lower:
-            parts = event.split(token)
-            return clean_text(parts[0]), clean_text(parts[-1])
+    if not event:
+        return "", ""
+    match = re.split(r"\s+(?:at|@|vs\.?|v\.?|versus)\s+", event, maxsplit=1, flags=re.IGNORECASE)
+    if len(match) == 2:
+        return clean_text(match[0]), clean_text(match[1])
     return "", event
 
 
@@ -111,6 +111,8 @@ def market_impact(sport: str, summary) -> str:
     rain = summary.chance_of_rain or 0
     condition = summary.condition.lower()
 
+    if not sport_text:
+        return f"Weather context: {notes}"
     if not is_weather_relevant(sport_text):
         return "Weather usually low impact / likely indoor"
     if any(term in sport_text for term in ["baseball", "mlb"]):
@@ -167,7 +169,7 @@ def weather_row_from_prediction(row, event_col, sport_col, start_col, weather_ke
     sport = clean_text(row.get(sport_col, "")) if sport_col else ""
     start = clean_text(row.get(start_col, "")) if start_col else ""
     away, home = split_event(event)
-    relevant = is_weather_relevant(sport)
+    relevant = is_weather_relevant(sport) if sport else True
 
     base["weather_relevant"] = relevant
     base["weather_event_home"] = home
@@ -175,11 +177,16 @@ def weather_row_from_prediction(row, event_col, sport_col, start_col, weather_ke
 
     if outdoor_only and not relevant:
         base.update({
+            "weather_location_query": "",
             "weather_location": "",
             "weather_condition": "skipped indoor/low relevance",
             "weather_temp_f": "",
+            "weather_feelslike_f": "",
             "weather_wind_mph": "",
+            "weather_wind_dir": "",
             "weather_gust_mph": "",
+            "weather_precip_in": "",
+            "weather_humidity": "",
             "weather_rain_chance": "",
             "weather_snow_chance": "",
             "weather_risk": 0,
@@ -218,8 +225,12 @@ def weather_row_from_prediction(row, event_col, sport_col, start_col, weather_ke
             "weather_location": location,
             "weather_condition": "",
             "weather_temp_f": "",
+            "weather_feelslike_f": "",
             "weather_wind_mph": "",
+            "weather_wind_dir": "",
             "weather_gust_mph": "",
+            "weather_precip_in": "",
+            "weather_humidity": "",
             "weather_rain_chance": "",
             "weather_snow_chance": "",
             "weather_risk": "",
@@ -291,7 +302,17 @@ with tab_batch:
     outdoor_only = st.checkbox(t("outdoor_only"), value=True)
 
     if uploaded is not None:
-        raw = pd.read_csv(uploaded)
+        try:
+            raw = pd.read_csv(uploaded)
+        except Exception as exc:
+            st.error(f"Could not read CSV: {exc}" if not IS_ES else f"No se pudo leer CSV: {exc}")
+            st.stop()
+
+        file_key = f"{uploaded.name}:{len(raw)}:{','.join(map(str, raw.columns))}:{int(max_rows)}:{outdoor_only}"
+        if st.session_state.get("ara_weather_enhanced_key") != file_key:
+            st.session_state.ara_weather_enhanced_csv = pd.DataFrame()
+            st.session_state.ara_weather_enhanced_key = file_key
+
         st.caption(f"Rows loaded: {len(raw)}")
         event_col = find_col(raw, ["event", "evento", "game", "match"])
         sport_col = find_col(raw, ["sport", "deporte", "league", "liga"])
@@ -311,6 +332,7 @@ with tab_batch:
 
                 enhanced = pd.DataFrame(results)
                 st.session_state.ara_weather_enhanced_csv = enhanced
+                st.session_state.ara_weather_enhanced_key = file_key
 
             enhanced = st.session_state.get("ara_weather_enhanced_csv")
             if isinstance(enhanced, pd.DataFrame) and not enhanced.empty:
