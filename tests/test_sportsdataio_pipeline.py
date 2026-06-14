@@ -52,12 +52,17 @@ def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
 
 
 class SportsDataIOPipelineTests(unittest.TestCase):
-    def test_pipeline_runs_fetch_results_features_props_and_profit_review(self) -> None:
+    def test_pipeline_runs_fetch_results_odds_features_props_and_profit_review(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             base = Path(temp_dir)
             predictions = base / "predictions.csv"
+            odds = base / "odds.csv"
             props = base / "props.csv"
-            _write_csv(predictions, [{"sdio_game_id": "10", "prediction": "DAL", "best_price": "1.5", "closing_odds": "1.45"}])
+            _write_csv(predictions, [{"sdio_game_id": "10", "market": "h2h", "prediction": "DAL", "pick_time": "2026-09-10T12:00:00Z"}])
+            _write_csv(odds, [
+                {"game_id": "10", "market": "h2h", "selection": "DAL", "price": "1.50", "bookmaker": "a", "timestamp": "2026-09-10T11:00:00Z"},
+                {"game_id": "10", "market": "h2h", "selection": "DAL", "price": "1.45", "bookmaker": "b", "timestamp": "2026-09-10T20:00:00Z", "is_closing": "true"},
+            ])
             _write_csv(props, [{"sdio_player_id": "7", "player_name": "Jane Doe", "prop_type": "rushing yards", "line": "70", "selection": "over", "best_price": "1.8", "books": "8"}])
 
             report = run_sportsdataio_pipeline(
@@ -66,6 +71,7 @@ class SportsDataIOPipelineTests(unittest.TestCase):
                 games_endpoint="ScoresByDate/2026-SEP-10",
                 player_stats_endpoint="PlayerSeasonStats/2026",
                 predictions_csv=predictions,
+                odds_csv=odds,
                 player_props_csv=props,
                 output_dir=base / "out",
                 include_watch=True,
@@ -74,16 +80,19 @@ class SportsDataIOPipelineTests(unittest.TestCase):
 
             self.assertIn("fetch_games", report.steps_run)
             self.assertIn("apply_game_results", report.steps_run)
+            self.assertIn("apply_odds_clv", report.steps_run)
             self.assertIn("review_profit_goal", report.steps_run)
             self.assertIn("build_player_features", report.steps_run)
             self.assertIn("enrich_and_score_player_props", report.steps_run)
             self.assertEqual(report.counts["prediction_match_matched"], 1)
+            self.assertEqual(report.counts["odds_matched_rows"], 1)
             self.assertEqual(report.counts["profit_goal_finished_rows"], 1)
             self.assertEqual(report.counts["profit_goal_wins"], 1)
             self.assertEqual(report.counts["player_feature_match_matched"], 1)
             self.assertIsNotNone(report.quality_gate)
             self.assertIn(report.quality_gate.status, {"PASS", "WATCH", "FAIL"})
             self.assertTrue(Path(report.outputs.predictions_with_results_csv or "").exists())
+            self.assertTrue(Path(report.outputs.odds_clv_report_json or "").exists())
             self.assertTrue(Path(report.outputs.profit_goal_report_json or "").exists())
             self.assertTrue(Path(report.outputs.player_props_checked_csv or "").exists())
             self.assertTrue(Path(report.outputs.report_json or "").exists())
