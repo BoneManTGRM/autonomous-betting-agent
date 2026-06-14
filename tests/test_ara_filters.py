@@ -98,6 +98,17 @@ class AraFilterTests(unittest.TestCase):
         self.assertFalse(weather_location_mismatch(good_row))
         self.assertNotIn("weather_location_mismatch", risk_flags_for(good_row))
 
+    def test_weather_snapshot_location_mismatch_is_flagged_without_tier(self) -> None:
+        row = {
+            "Sport": "tennis",
+            "location_query": "London, England",
+            "location_name": "England",
+            "region": "Oppland",
+            "country": "Norway",
+        }
+        self.assertTrue(weather_location_mismatch(row))
+        self.assertIn("weather_location_mismatch", risk_flags_for(row))
+
     def test_empty_frame_is_safe(self) -> None:
         enriched = apply_ara_decision_layer(pd.DataFrame())
         self.assertIn("ara_live_decision", enriched.columns)
