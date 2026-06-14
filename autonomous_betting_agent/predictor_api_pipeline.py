@@ -6,10 +6,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from .api_budget import APIBudgetManager
 from .api_clients import OddsAPIClient, WeatherAPIClient
+from .environment_intelligence import enrich_rows_with_environment
 from .final_pick_pipeline import run_final_pick_pipeline
 from .odds_api import odds_api_payload_to_rows, write_json_payload as write_odds_json, write_odds_rows
 from .odds_clv import enrich_predictions_with_odds
+from .sport_key_resolver import resolve_sport_key
 from .sportsdataio import SportsDataIOClient, payload_to_records, write_csv_records, write_json_payload
 from .sportsdataio_normalize import write_normalized_csv
 from .sportsdataio_results import enrich_predictions_with_results
@@ -23,6 +26,7 @@ class PredictorAPIOutputs:
     raw_odds_json: str | None = None
     odds_csv: str | None = None
     raw_weather_json: str | None = None
+    api_call_report_json: str | None = None
     final_report_json: str | None = None
     final_bets_csv: str | None = None
     watchlist_csv: str | None = None
@@ -53,14 +57,35 @@ def write_csv_rows(rows: list[Mapping[str, Any]], path: str | Path) -> None:
             writer.writerow({key: row.get(key, "") for key in fieldnames})
 
 
-def _mark_weather(rows: list[Mapping[str, Any]], *, location: str, available: bool) -> list[dict[str, Any]]:
+def _weather_row(payload: Mapping[str, Any], location: str) -> dict[str, Any]:
+    current = payload.get("current") if isinstance(payload.get("current"), Mapping) else {}
+    return {
+        "weather_location": location,
+        "temp_c": current.get("temp_c", ""),
+        "temp_f": current.get("temp_f", ""),
+        "wind_kph": current.get("wind_kph", ""),
+        "wind_mph": current.get("wind_mph", ""),
+        "gust_mph": current.get("gust_mph", ""),
+        "precip_mm": current.get("precip_mm", ""),
+        "humidity": current.get("humidity", ""),
+    }
+
+
+def _apply_weather_payload(rows: list[Mapping[str, Any]], payload: Mapping[str, Any], *, location: str, sport: str) -> list[dict[str, Any]]:
+    weather = _weather_row(payload, location)
     output: list[dict[str, Any]] = []
     for row in rows:
-        item = dict(row)
-        item["weather_api_status"] = "available" if available else "not_available"
-        item["weather_location"] = item.get("weather_location") or location
-        output.append(item)
-    return output
+        merged = dict(row)
+        merged.update(weather)
+        merged["weather_api_status"] = "available"
+        output.append(merged)
+    return enrich_rows_with_environment(output, sport=sport)
+
+
+def _budgeted_call(budget: APIBudgetManager | None, *, provider: str, endpoint: str, params: Mapping[str, Any], fetcher):
+    if budget is None:
+        return fetcher()
+    return budget.call(provider=provider, endpoint=endpoint, params=params, fetcher=fetcher)
 
 
 def run_predictor_api_pipeline(
@@ -76,10 +101,13 @@ def run_predictor_api_pipeline(
     odds_markets: str = "h2h,spreads,totals",
     weather_client: WeatherAPIClient | None = None,
     weather_location: str | None = None,
+    sport_search: str | None = None,
+    game_search: str | None = None,
     calibration_history_csv: str | Path | None = None,
     line_movement_history_csv: str | Path | None = None,
     market_profile_history_csv: str | Path | None = None,
     run_final_pipeline: bool = True,
+    budget_manager: APIBudgetManager | None = None,
 ) -> PredictorAPIReport:
     base = Path(output_dir)
     base.mkdir(parents=True, exist_ok=True)
@@ -94,7 +122,13 @@ def run_predictor_api_pipeline(
     raw_sdio_json: Path | None = None
     canonical_games_csv: Path | None = None
     if sportsdataio_client and sportsdataio_games_endpoint:
-        payload = sportsdataio_client.raw_endpoint(sportsdataio_games_endpoint, sport=sportsdataio_sport, subfeed="scores")
+        payload = _budgeted_call(
+            budget_manager,
+            provider="sportsdataio",
+            endpoint=sportsdataio_games_endpoint,
+            params={"sport": sportsdataio_sport, "subfeed": "scores"},
+            fetcher=lambda: sportsdataio_client.raw_endpoint(sportsdataio_games_endpoint, sport=sportsdataio_sport, subfeed="scores"),
+        )
         records = payload_to_records(payload)
         raw_sdio_json = base / "sportsdataio_games_raw.json"
         flat_sdio_csv = base / "sportsdataio_games_flat.csv"
@@ -111,8 +145,30 @@ def run_predictor_api_pipeline(
 
     raw_odds_json: Path | None = None
     odds_csv: Path | None = None
-    if odds_client and odds_sport_key:
-        payload = odds_client.odds(sport_key=odds_sport_key, regions=odds_regions, markets=odds_markets)
+    resolved_sport_key = odds_sport_key
+    if odds_client and not resolved_sport_key and sport_search:
+        sports_payload = _budgeted_call(
+            budget_manager,
+            provider="odds_api",
+            endpoint="sports",
+            params={"all": "false"},
+            fetcher=lambda: odds_client.sports(),
+        )
+        match = resolve_sport_key(sports_payload if isinstance(sports_payload, list) else [], sport_search=sport_search, game=game_search or "")
+        resolved_sport_key = match.matched_sport_key
+        counts["sport_key_match_confidence_pct"] = int(round(match.match_confidence * 100))
+        steps.append("resolve_odds_sport_key")
+        if not resolved_sport_key:
+            warnings.append("could not resolve Odds API sport key from sport_search")
+
+    if odds_client and resolved_sport_key:
+        payload = _budgeted_call(
+            budget_manager,
+            provider="odds_api",
+            endpoint=f"sports/{resolved_sport_key}/odds",
+            params={"regions": odds_regions, "markets": odds_markets},
+            fetcher=lambda: odds_client.odds(sport_key=resolved_sport_key or "", regions=odds_regions, markets=odds_markets),
+        )
         odds_rows = odds_api_payload_to_rows(payload)
         raw_odds_json = base / "odds_api_raw.json"
         odds_csv = base / "odds_api_flat.csv"
@@ -126,15 +182,29 @@ def run_predictor_api_pipeline(
 
     raw_weather_json: Path | None = None
     if weather_client and weather_location:
-        payload = weather_client.forecast(location=weather_location, days=1)
+        payload = _budgeted_call(
+            budget_manager,
+            provider="weatherapi",
+            endpoint="forecast.json",
+            params={"q": weather_location, "days": 1},
+            fetcher=lambda: weather_client.forecast(location=weather_location, days=1),
+        )
         raw_weather_json = base / "weatherapi_raw.json"
         raw_weather_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        enriched = _mark_weather(list(enriched), location=weather_location, available=True)
-        steps.append("weatherapi_fetch")
+        enriched = _apply_weather_payload(list(enriched), payload if isinstance(payload, Mapping) else {}, location=weather_location, sport=sportsdataio_sport)
+        steps.append("weatherapi_intelligence")
         counts["weatherapi_locations"] = 1
     else:
-        enriched = _mark_weather(list(enriched), location=weather_location or "", available=False)
-        warnings.append("WeatherAPI client/location not supplied; marking weather as unavailable")
+        enriched = enrich_rows_with_environment([dict(row, weather_api_status="not_available", weather_location=weather_location or "") for row in enriched], sport=sportsdataio_sport)
+        warnings.append("WeatherAPI client/location not supplied; weather scoring uses only existing row fields")
+
+    api_call_report_json: Path | None = None
+    if budget_manager is not None:
+        api_call_report_json = base / "api_call_report.json"
+        budget_manager.write_report(api_call_report_json)
+        counts["api_calls_made"] = budget_manager.calls_made
+        counts["api_cache_hits"] = budget_manager.cache_hits
+        steps.append("api_budget_report")
 
     enriched_csv = base / "predictor_api_enriched.csv"
     write_csv_rows(enriched, enriched_csv)
@@ -169,6 +239,7 @@ def run_predictor_api_pipeline(
             raw_odds_json=str(raw_odds_json) if raw_odds_json else None,
             odds_csv=str(odds_csv) if odds_csv else None,
             raw_weather_json=str(raw_weather_json) if raw_weather_json else None,
+            api_call_report_json=str(api_call_report_json) if api_call_report_json else None,
             final_report_json=final_report_json,
             final_bets_csv=final_bets_csv,
             watchlist_csv=watchlist_csv,
