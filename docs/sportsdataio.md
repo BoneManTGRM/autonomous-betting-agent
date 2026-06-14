@@ -24,6 +24,47 @@ Ocp-Apim-Subscription-Key: {key}
 
 You can use query-string auth with `--auth-mode query` if needed.
 
+## One-command pipeline
+
+Use the full pipeline when you want SportsDataIO ingestion, result grading, player features, prop enrichment and prop ranking in one run:
+
+```bash
+python tools/run_sportsdataio_pipeline.py \
+  --sport nfl \
+  --games-endpoint ScoresByDate/2026-SEP-10 \
+  --player-stats-endpoint PlayerSeasonStats/2026 \
+  --predictions-csv predictions.csv \
+  --player-props-csv player_props.csv \
+  --output-dir data/sportsdataio_pipeline \
+  --include-watch
+```
+
+The pipeline writes a JSON report plus any outputs created during the run:
+
+```text
+sportsdataio_games_raw.json
+sportsdataio_games_flat.csv
+sportsdataio_games_canonical.csv
+predictions_with_sportsdataio_results.csv
+sportsdataio_player_stats_raw.json
+sportsdataio_player_stats_flat.csv
+sportsdataio_player_features.csv
+player_props_enriched_with_features.csv
+player_props_checked.csv
+player_props_ranked.csv
+sportsdataio_pipeline_report.json
+```
+
+You can also run it without API calls by supplying existing files:
+
+```bash
+python tools/run_sportsdataio_pipeline.py \
+  --existing-canonical-games-csv data/sportsdataio_games_canonical.csv \
+  --existing-player-features-csv data/sportsdataio_player_features.csv \
+  --predictions-csv predictions.csv \
+  --player-props-csv player_props.csv
+```
+
 ## Fetch any endpoint
 
 ```bash
