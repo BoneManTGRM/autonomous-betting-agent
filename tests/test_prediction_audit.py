@@ -48,6 +48,28 @@ class PredictionAuditTests(unittest.TestCase):
         self.assertEqual(report["price_bucket_performance_raw"]["1_20_to_1_29"]["losses"], 1)
         self.assertAlmostEqual(report["price_bucket_performance_raw"]["1_50_to_1_99"]["unit_profit_loss"], 0.75)
 
+    def test_empty_audit_report_has_stable_keys(self) -> None:
+        checked, deduped, report = audit_predictions(pd.DataFrame())
+        self.assertEqual(len(checked), 0)
+        self.assertEqual(len(deduped), 0)
+        for key in (
+            "raw",
+            "deduped",
+            "status_counts",
+            "grade_counts",
+            "risk_flag_counts",
+            "duplicate_rows",
+            "qualified_rows",
+            "rejected_rows",
+            "price_stats",
+            "price_bucket_counts",
+            "price_bucket_performance_raw",
+            "price_bucket_performance_deduped",
+        ):
+            self.assertIn(key, report)
+        self.assertEqual(report["duplicate_rows"], 0)
+        self.assertEqual(report["price_stats"]["priced_rows"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
