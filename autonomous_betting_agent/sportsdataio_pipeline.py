@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import pandas as pd
 
 from .player_prop_features import enrich_props_with_player_features, read_csv_rows as read_feature_csv_rows, write_csv_rows
 from .player_props import apply_player_prop_layer, rank_player_props
+from .profit_goal import ProfitGoalPolicy, review_profit_goal_rows, write_report as write_profit_goal_report
 from .sportsdataio import SportsDataIOClient, payload_to_records, write_csv_records, write_json_payload
 from .sportsdataio_normalize import write_normalized_csv
 from .sportsdataio_player_features import build_player_features, write_player_features
@@ -21,6 +22,7 @@ class PipelineOutputs:
     flat_games_csv: str | None = None
     canonical_games_csv: str | None = None
     predictions_with_results_csv: str | None = None
+    profit_goal_report_json: str | None = None
     raw_player_stats_json: str | None = None
     flat_player_stats_csv: str | None = None
     player_features_csv: str | None = None
@@ -47,12 +49,6 @@ def _write_report(report: PipelineReport, path: Path) -> None:
     path.write_text(json.dumps(asdict(report), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _read_optional_rows(path: str | Path | None) -> list[dict[str, Any]]:
-    if path is None:
-        return []
-    return read_result_csv_rows(path)
-
-
 def _score_player_props(enriched_props_csv: Path, checked_output: Path, ranked_output: Path, *, include_watch: bool) -> tuple[int, int]:
     props = pd.read_csv(enriched_props_csv)
     checked = apply_player_prop_layer(props)
@@ -62,6 +58,13 @@ def _score_player_props(enriched_props_csv: Path, checked_output: Path, ranked_o
     checked.to_csv(checked_output, index=False)
     ranked.to_csv(ranked_output, index=False)
     return len(checked), len(ranked)
+
+
+def _add_goal_counts(counts: dict[str, int], goal_status: str, checks: dict[str, bool | None]) -> None:
+    counts[f"profit_goal_status_{goal_status.lower()}"] = 1
+    for key, value in checks.items():
+        suffix = "unknown" if value is None else str(value).lower()
+        counts[f"profit_goal_check_{key}_{suffix}"] = 1
 
 
 def run_sportsdataio_pipeline(
@@ -76,6 +79,9 @@ def run_sportsdataio_pipeline(
     existing_player_features_csv: str | Path | None = None,
     output_dir: str | Path = "data/sportsdataio_pipeline",
     include_watch: bool = False,
+    run_profit_goal_review: bool = True,
+    profit_goal_min_finished: int = 200,
+    allow_missing_clv: bool = False,
 ) -> PipelineReport:
     """Run the SportsDataIO ingestion/enrichment pipeline.
 
@@ -94,6 +100,7 @@ def run_sportsdataio_pipeline(
     flat_games_csv: Path | None = None
     canonical_games_csv: Path | None = Path(existing_canonical_games_csv) if existing_canonical_games_csv else None
     predictions_with_results_csv: Path | None = None
+    profit_goal_report_json: Path | None = None
     raw_player_stats_json: Path | None = None
     flat_player_stats_csv: Path | None = None
     player_features_csv: Path | None = Path(existing_player_features_csv) if existing_player_features_csv else None
@@ -132,6 +139,23 @@ def run_sportsdataio_pipeline(
             for row in enriched_predictions:
                 key = f"prediction_match_{row.get('sdio_result_match_status', 'unknown')}"
                 counts[key] = counts.get(key, 0) + 1
+
+            if run_profit_goal_review:
+                profit_goal_policy = ProfitGoalPolicy(
+                    min_finished=profit_goal_min_finished,
+                    require_positive_clv=not allow_missing_clv,
+                )
+                profit_report = review_profit_goal_rows(enriched_predictions, policy=profit_goal_policy)
+                profit_goal_report_json = _path(base_dir, "profit_goal_report.json")
+                write_profit_goal_report(profit_report, profit_goal_report_json)
+                steps.append("review_profit_goal")
+                counts["profit_goal_finished_rows"] = profit_report.finished_rows
+                counts["profit_goal_wins"] = profit_report.wins
+                counts["profit_goal_losses"] = profit_report.losses
+                counts["profit_goal_pushes"] = profit_report.pushes
+                _add_goal_counts(counts, profit_report.status, profit_report.goal_checks)
+                if profit_report.status != "GOAL_MET":
+                    warnings.extend(f"profit_goal: {item}" for item in profit_report.required_actions)
 
     if player_stats_endpoint:
         if client is None:
@@ -182,6 +206,7 @@ def run_sportsdataio_pipeline(
             flat_games_csv=str(flat_games_csv) if flat_games_csv else None,
             canonical_games_csv=str(canonical_games_csv) if canonical_games_csv else None,
             predictions_with_results_csv=str(predictions_with_results_csv) if predictions_with_results_csv else None,
+            profit_goal_report_json=str(profit_goal_report_json) if profit_goal_report_json else None,
             raw_player_stats_json=str(raw_player_stats_json) if raw_player_stats_json else None,
             flat_player_stats_csv=str(flat_player_stats_csv) if flat_player_stats_csv else None,
             player_features_csv=str(player_features_csv) if player_features_csv else None,
