@@ -81,12 +81,14 @@ def parse_percent(value: Any) -> float | None:
     except (TypeError, ValueError):
         pass
     text = str(value).strip()
-    if not text:
+    if not text or text.lower() in BLANK_TEXT:
         return None
     pct = "%" in text
     try:
         num = float(text.replace("%", "").replace(",", ""))
     except ValueError:
+        return None
+    if not math.isfinite(num):
         return None
     if pct or num > 1:
         num /= 100.0
@@ -105,9 +107,10 @@ def parse_float(value: Any) -> float | None:
     if not text or text.lower() in BLANK_TEXT:
         return None
     try:
-        return float(text)
+        num = float(text)
     except ValueError:
         return None
+    return num if math.isfinite(num) else None
 
 
 def parse_int(value: Any) -> int | None:
