@@ -71,6 +71,30 @@ class BestBetsTests(unittest.TestCase):
         self.assertEqual(enriched.iloc[0]["aba_best_bet_status"], "REJECT")
         self.assertIn("weather_location_mismatch", enriched.iloc[0]["aba_best_bet_reasons"])
 
+    def test_weatherapi_snapshot_style_location_mismatch_is_rejected(self) -> None:
+        frame = pd.DataFrame([
+            {
+                "Event": "Iva Jović at Emma Raducanu",
+                "Start": "2026-01-01",
+                "Prediction": "Emma Raducanu",
+                "Sport": "tennis",
+                "Market probability": "60%",
+                "ARA model probability": "68%",
+                "Classification": "Strong",
+                "Data quality": 95,
+                "Risk penalty": 5,
+                "Best price": 1.80,
+                "Books": 10,
+                "location_query": "London, England",
+                "location_name": "England",
+                "region": "Oppland",
+                "country": "Norway",
+            }
+        ])
+        enriched = apply_best_bet_layer(frame)
+        self.assertEqual(enriched.iloc[0]["aba_best_bet_status"], "REJECT")
+        self.assertIn("weather_location_mismatch", enriched.iloc[0]["aba_best_bet_reasons"])
+
     def test_missing_model_probability_is_track_only(self) -> None:
         frame = pd.DataFrame([
             {
