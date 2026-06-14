@@ -36,8 +36,8 @@ TEXT = {
     "avg_prob": {"English": "Avg predicted", "Español": "Promedio predicho"},
     "brier": {"English": "Brier score", "Español": "Brier score"},
     "learned": {"English": "What ARA learned", "Español": "Lo que ARA aprendió"},
-    "best_area": {"English": "Best current area", "Español": "Mejor área actual"},
-    "worst_area": {"English": "Weakest current area", "Español": "Área más débil actual"},
+    "best_area": {"English": "Best reliable area", "Español": "Mejor área confiable"},
+    "worst_area": {"English": "Weakest reliable area", "Español": "Área confiable más débil"},
     "buckets": {"English": "Probability buckets", "Español": "Rangos de probabilidad"},
     "sports": {"English": "By sport", "Español": "Por deporte"},
     "reads": {"English": "By read/classification", "Español": "Por lectura/clasificación"},
@@ -49,6 +49,10 @@ TEXT = {
     "loaded": {"English": "Loaded", "Español": "Cargados"},
     "could_not_load": {"English": "Could not load", "Español": "No se pudo cargar"},
     "mark_results": {"English": "Mark some results as won or lost to make ARA learn.", "Español": "Marca algunos resultados como ganados o perdidos para que ARA aprenda."},
+    "reliability_note": {
+        "English": "Improved learning: small samples are now smoothed toward the overall hit rate, so 2-0 records do not overpower larger, more reliable patterns.",
+        "Español": "Aprendizaje mejorado: las muestras pequeñas ahora se suavizan hacia el acierto general, así que un 2-0 no domina patrones más grandes y confiables.",
+    },
 }
 
 EXPECTED_COLUMNS = ["event", "sport", "pick", "probability", "predictor_score", "read", "result", "source", "created_at"]
@@ -205,28 +209,37 @@ def raw_csv_text(df: pd.DataFrame) -> str:
     return output.getvalue()
 
 
-def summarize_group(df: pd.DataFrame, group_col: str, area_type: str) -> pd.DataFrame:
+def summarize_group(df: pd.DataFrame, group_col: str, area_type: str, baseline_hit_rate: float) -> pd.DataFrame:
     rows = []
     grouped = df.copy()
     grouped[group_col] = grouped[group_col].apply(clean_text)
+    prior_weight = 8
     for key, group in grouped.groupby(group_col, dropna=False):
         key = clean_text(key)
+        records = int(len(group))
         actual = float(group["actual"].mean())
         predicted = float(group["probability"].mean())
         brier = float(((group["probability"] - group["actual"]) ** 2).mean())
+        reliability = records / (records + prior_weight)
+        smoothed_hit_rate = ((actual * records) + (baseline_hit_rate * prior_weight)) / (records + prior_weight)
+        smoothed_edge = smoothed_hit_rate - predicted
         rows.append({
             "area": f"{area_type}: {key}",
             "area_type": area_type,
             "group_value": key,
-            "records": int(len(group)),
+            "records": records,
             "avg_predicted": round(predicted, 3),
             "actual_hit_rate": round(actual, 3),
             "actual_minus_predicted": round(actual - predicted, 3),
+            "smoothed_hit_rate": round(smoothed_hit_rate, 3),
+            "smoothed_edge": round(smoothed_edge, 3),
+            "reliability": round(reliability, 3),
             "brier": round(brier, 3),
         })
+    columns = ["area", "area_type", "group_value", "records", "avg_predicted", "actual_hit_rate", "actual_minus_predicted", "smoothed_hit_rate", "smoothed_edge", "reliability", "brier"]
     if not rows:
-        return pd.DataFrame(columns=["area", "area_type", "group_value", "records", "avg_predicted", "actual_hit_rate", "actual_minus_predicted", "brier"])
-    return pd.DataFrame(rows).sort_values(["records", "actual_minus_predicted"], ascending=[False, False])
+        return pd.DataFrame(columns=columns)
+    return pd.DataFrame(rows).sort_values(["records", "smoothed_edge"], ascending=[False, False])
 
 
 def add_probability_bucket(df: pd.DataFrame) -> pd.DataFrame:
@@ -244,20 +257,21 @@ def best_and_worst(summaries: list[pd.DataFrame]) -> tuple[str, str]:
         return "Not enough data", "Not enough data"
     combined = pd.concat(valid, ignore_index=True)
     combined["area"] = combined["area"].apply(clean_text)
-    qualified = combined[combined["records"] >= 2]
+    qualified = combined[combined["records"] >= 5]
     if qualified.empty:
         qualified = combined
-    best = qualified.sort_values(["actual_minus_predicted", "records"], ascending=[False, False]).iloc[0]
-    worst = qualified.sort_values(["actual_minus_predicted", "records"], ascending=[True, False]).iloc[0]
+    best = qualified.sort_values(["smoothed_edge", "reliability", "records"], ascending=[False, False, False]).iloc[0]
+    worst = qualified.sort_values(["smoothed_edge", "reliability", "records"], ascending=[True, False, False]).iloc[0]
     return (
-        f"{best['area']} | {int(best['records'])} records | {best['actual_hit_rate']:.1%} actual",
-        f"{worst['area']} | {int(worst['records'])} records | {worst['actual_hit_rate']:.1%} actual",
+        f"{best['area']} | {int(best['records'])} records | {best['actual_hit_rate']:.1%} actual | {best['smoothed_hit_rate']:.1%} smoothed",
+        f"{worst['area']} | {int(worst['records'])} records | {worst['actual_hit_rate']:.1%} actual | {worst['smoothed_hit_rate']:.1%} smoothed",
     )
 
 
 st.title(t("title"))
 st.caption(t("caption"))
 st.info(t("not_auto"))
+st.caption(t("reliability_note"))
 
 latest_predictions = st.session_state.get("ara_latest_predictions", [])
 latest_source = st.session_state.get("ara_latest_predictions_source", "Predictor")
@@ -356,9 +370,9 @@ else:
     c3.metric(t("avg_prob"), f"{avg_prob:.1%}")
     c4.metric(t("brier"), f"{brier:.3f}")
 
-    bucket_summary = summarize_group(resolved, "probability_bucket", "Probability bucket")
-    sport_summary = summarize_group(resolved, "sport", "Sport")
-    read_summary = summarize_group(resolved, "read", "Read")
+    bucket_summary = summarize_group(resolved, "probability_bucket", "Probability bucket", hit_rate)
+    sport_summary = summarize_group(resolved, "sport", "Sport", hit_rate)
+    read_summary = summarize_group(resolved, "read", "Read", hit_rate)
     best, worst = best_and_worst([bucket_summary, sport_summary, read_summary])
 
     c5, c6 = st.columns(2)
