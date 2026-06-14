@@ -7,6 +7,8 @@ from typing import Any, Mapping
 
 import requests
 
+from .ara_filters import weather_location_mismatch
+
 WEATHERAPI_HOST = "https://api.weatherapi.com/v1"
 MAX_FORECAST_DAYS = 14
 PLACEHOLDER_KEYS = {
@@ -16,6 +18,10 @@ PLACEHOLDER_KEYS = {
     "paste_key_here",
     "replace_me",
 }
+
+
+class WeatherLocationMismatchError(RuntimeError):
+    """Raised when WeatherAPI resolves a query to the wrong returned location."""
 
 
 @dataclass(frozen=True)
@@ -114,7 +120,22 @@ def _select_forecast_day(forecast_days: list[Mapping[str, Any]], target_date: da
     return min(forecast_days, key=distance)
 
 
-def fetch_weather_snapshot(api_key: str, location: str, event_time_iso: str | None = None) -> WeatherSnapshot:
+def _validate_weather_location(snapshot: WeatherSnapshot) -> None:
+    row = snapshot.to_row()
+    if weather_location_mismatch(row):
+        raise WeatherLocationMismatchError(
+            f"WeatherAPI resolved {snapshot.location_query!r} to {snapshot.weather_location!r}. "
+            "Reject this weather row or use a more specific query."
+        )
+
+
+def fetch_weather_snapshot(
+    api_key: str,
+    location: str,
+    event_time_iso: str | None = None,
+    *,
+    strict_location: bool = True,
+) -> WeatherSnapshot:
     target_date = _parse_date(event_time_iso)
     params = {
         "key": get_weatherapi_key(api_key),
@@ -137,7 +158,7 @@ def fetch_weather_snapshot(api_key: str, location: str, event_time_iso: str | No
         forecast_delta = abs((date.fromisoformat(forecast_date) - target_date).days)
     except ValueError:
         forecast_delta = 9999
-    return WeatherSnapshot(
+    snapshot = WeatherSnapshot(
         location_query=location,
         location_name=str(location_payload.get("name", "")),
         region=str(location_payload.get("region", "")),
@@ -157,3 +178,6 @@ def fetch_weather_snapshot(api_key: str, location: str, event_time_iso: str | No
         chance_of_snow=_integer(day.get("daily_chance_of_snow")),
         is_day=_integer(current.get("is_day")),
     )
+    if strict_location:
+        _validate_weather_location(snapshot)
+    return snapshot
