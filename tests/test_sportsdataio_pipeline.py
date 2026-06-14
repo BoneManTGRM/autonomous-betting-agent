@@ -81,6 +81,8 @@ class SportsDataIOPipelineTests(unittest.TestCase):
             self.assertEqual(report.counts["profit_goal_finished_rows"], 1)
             self.assertEqual(report.counts["profit_goal_wins"], 1)
             self.assertEqual(report.counts["player_feature_match_matched"], 1)
+            self.assertIsNotNone(report.quality_gate)
+            self.assertIn(report.quality_gate.status, {"PASS", "WATCH", "FAIL"})
             self.assertTrue(Path(report.outputs.predictions_with_results_csv or "").exists())
             self.assertTrue(Path(report.outputs.profit_goal_report_json or "").exists())
             self.assertTrue(Path(report.outputs.player_props_checked_csv or "").exists())
@@ -93,6 +95,8 @@ class SportsDataIOPipelineTests(unittest.TestCase):
             _write_csv(predictions, [{"event": "NYG at DAL", "prediction": "DAL"}])
             report = run_sportsdataio_pipeline(predictions_csv=predictions, output_dir=base / "out")
             self.assertIn("predictions_csv supplied but no games endpoint or canonical games CSV was provided", report.warnings)
+            self.assertIsNotNone(report.quality_gate)
+            self.assertEqual(report.quality_gate.status, "WATCH")
 
     def test_pipeline_can_use_existing_feature_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -104,6 +108,7 @@ class SportsDataIOPipelineTests(unittest.TestCase):
             report = run_sportsdataio_pipeline(player_props_csv=props, existing_player_features_csv=features, output_dir=base / "out", include_watch=True)
             self.assertIn("use_existing_player_features", report.steps_run)
             self.assertEqual(report.counts["player_feature_match_matched"], 1)
+            self.assertIsNotNone(report.quality_gate)
 
     def test_pipeline_can_skip_profit_goal_review(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -120,6 +125,7 @@ class SportsDataIOPipelineTests(unittest.TestCase):
             self.assertIn("apply_game_results", report.steps_run)
             self.assertNotIn("review_profit_goal", report.steps_run)
             self.assertIsNone(report.outputs.profit_goal_report_json)
+            self.assertIsNotNone(report.quality_gate)
 
 
 if __name__ == "__main__":
