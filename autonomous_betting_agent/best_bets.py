@@ -5,7 +5,7 @@ from typing import Any
 
 import pandas as pd
 
-from .ara_filters import apply_ara_decision_layer, dedupe_ara_records, parse_float, parse_percent
+from .ara_filters import dedupe_ara_records, parse_float, parse_percent, weather_location_mismatch
 from .deep_analysis import apply_deep_analysis, merge_latest_movement
 
 BEST_BET_COLUMNS = [
@@ -46,6 +46,7 @@ WATCH_FLAGS = {
 
 POSITIVE_MOVEMENT = {"STEAM"}
 NEGATIVE_MOVEMENT = {"DRIFT"}
+BLANK_TEXT = {"", "nan", "none", "null", "nat"}
 
 
 @dataclass(frozen=True)
@@ -61,9 +62,9 @@ class BestBetPolicy:
 
 def _split_flags(value: Any) -> list[str]:
     text = str(value or "").strip()
-    if not text:
+    if text.lower() in BLANK_TEXT:
         return []
-    return [item.strip() for item in text.split(";") if item.strip()]
+    return [item.strip() for item in text.split(";") if item.strip() and item.strip().lower() not in BLANK_TEXT]
 
 
 def _num(value: Any) -> float | None:
@@ -126,6 +127,8 @@ def _movement_score(row: pd.Series) -> tuple[float, list[str]]:
 def _best_bet_row(row: pd.Series, policy: BestBetPolicy) -> dict[str, Any]:
     risk_flags = set(_split_flags(row.get("ara_risk_flags")))
     weather_flags = set(_split_flags(row.get("ara_weather_flags")))
+    if weather_location_mismatch(row.to_dict()):
+        weather_flags.add("weather_location_mismatch")
     all_flags = risk_flags | weather_flags
     live_decision = str(row.get("ara_live_decision", "")).upper()
     proxy_decision = str(row.get("ara_proxy_filter_decision", "")).upper()
