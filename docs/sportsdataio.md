@@ -56,6 +56,18 @@ player_props_ranked.csv
 sportsdataio_pipeline_report.json
 ```
 
+The pipeline report includes a quality gate:
+
+```text
+quality_gate.status: PASS, WATCH or FAIL
+quality_gate.score: 0-100
+quality_gate.reasons
+quality_gate.required_actions
+quality_gate.metrics
+```
+
+The quality gate checks prediction result match rate, ambiguous result matches, player-feature readiness, player-prop feature match rate, profit-goal status, ROI/odds/duplicate failures and pipeline warnings. A `PASS` means the data pipeline looks usable for review. It does not mean the betting model is guaranteed profitable.
+
 Profit-goal review is enabled by default when predictions are graded. Useful options:
 
 ```bash
