@@ -9,6 +9,13 @@ import requests
 
 WEATHERAPI_HOST = "https://api.weatherapi.com/v1"
 MAX_FORECAST_DAYS = 14
+PLACEHOLDER_KEYS = {
+    "your_weatherapi_key_here",
+    "weatherapi_key",
+    "your_key_here",
+    "paste_key_here",
+    "replace_me",
+}
 
 
 @dataclass(frozen=True)
@@ -48,9 +55,11 @@ class WeatherSnapshot:
 
 
 def get_weatherapi_key(explicit_key: str | None = None) -> str:
-    key = explicit_key or os.getenv("WEATHERAPI_KEY") or ""
+    key = (explicit_key or os.getenv("WEATHERAPI_KEY") or "").strip()
     if not key:
-        raise RuntimeError("Missing WEATHERAPI_KEY. Paste a key in the app or set an environment variable.")
+        raise RuntimeError("Missing WEATHERAPI_KEY. Paste a real key in the app or set an environment variable.")
+    if key.lower() in PLACEHOLDER_KEYS or key.lower().startswith("your_"):
+        raise RuntimeError("Invalid WEATHERAPI_KEY placeholder. Replace it with a real WeatherAPI key before running weather enrichment.")
     return key
 
 
@@ -88,14 +97,14 @@ def _select_forecast_day(forecast_days: list[Mapping[str, Any]], target_date: da
     exact = [item for item in forecast_days if str(item.get("date", "")) == target_date.isoformat()]
     if exact:
         return exact[0]
-    # WeatherAPI forecast range can be shorter than the requested event window.
-    # Use the closest available date and mark it as non-exact in the snapshot.
+
     def distance(item: Mapping[str, Any]) -> int:
         try:
             item_date = date.fromisoformat(str(item.get("date", "")))
             return abs((item_date - target_date).days)
         except ValueError:
             return 9999
+
     return min(forecast_days, key=distance)
 
 
