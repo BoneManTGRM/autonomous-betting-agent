@@ -15,6 +15,15 @@ PROBABILITY_COLUMNS = (
     "prop_blended_probability",
     "prop_model_probability",
 )
+RAW_PROBABILITY_COLUMNS = (
+    "raw_model_probability",
+    "model_probability",
+    "probability",
+    "confidence_probability",
+    "prop_blended_probability",
+    "prop_model_probability",
+)
+CALIBRATED_PROBABILITY_COLUMNS = ("calibrated_probability",)
 RESULT_COLUMNS = ("result", "outcome", "win_loss", "graded_result", "status")
 SPORT_COLUMNS = ("sport", "league", "competition")
 MARKET_COLUMNS = ("market", "market_key", "prop_type", "bet_type")
@@ -52,6 +61,12 @@ class CalibrationReport:
     average_raw_probability: float | None
     average_calibrated_probability: float | None
     bucket_count: int
+    raw_brier_score: float | None
+    calibrated_brier_score: float | None
+    brier_improvement: float | None
+    raw_expected_calibration_error: float | None
+    calibrated_expected_calibration_error: float | None
+    expected_calibration_error_improvement: float | None
     output_csv: str | None
     notes: list[str]
 
@@ -110,6 +125,62 @@ def parse_result(value: Any) -> str | None:
 
 def raw_probability(row: Mapping[str, Any]) -> float | None:
     return parse_probability(_first(row, PROBABILITY_COLUMNS))
+
+
+def probability_from_columns(row: Mapping[str, Any], columns: tuple[str, ...]) -> float | None:
+    return parse_probability(_first(row, columns))
+
+
+def _binary_result(row: Mapping[str, Any]) -> int | None:
+    result = parse_result(_first(row, RESULT_COLUMNS))
+    if result == "win":
+        return 1
+    if result == "loss":
+        return 0
+    return None
+
+
+def brier_score(rows: list[Mapping[str, Any]], probability_columns: tuple[str, ...] = PROBABILITY_COLUMNS) -> float | None:
+    errors: list[float] = []
+    for row in rows:
+        result = _binary_result(row)
+        probability = probability_from_columns(row, probability_columns)
+        if result is None or probability is None:
+            continue
+        errors.append((probability - result) ** 2)
+    if not errors:
+        return None
+    return round(sum(errors) / len(errors), 6)
+
+
+def expected_calibration_error(rows: list[Mapping[str, Any]], probability_columns: tuple[str, ...] = PROBABILITY_COLUMNS, *, bucket_size: float = 0.05) -> float | None:
+    buckets: dict[str, dict[str, float]] = {}
+    total = 0
+    for row in rows:
+        result = _binary_result(row)
+        probability = probability_from_columns(row, probability_columns)
+        if result is None or probability is None:
+            continue
+        key = _bucket_key(probability, bucket_size)
+        stats = buckets.setdefault(key, {"count": 0.0, "probability_sum": 0.0, "win_sum": 0.0})
+        stats["count"] += 1.0
+        stats["probability_sum"] += probability
+        stats["win_sum"] += float(result)
+        total += 1
+    if total == 0:
+        return None
+    error = 0.0
+    for stats in buckets.values():
+        confidence = stats["probability_sum"] / stats["count"]
+        accuracy = stats["win_sum"] / stats["count"]
+        error += (stats["count"] / total) * abs(confidence - accuracy)
+    return round(error, 6)
+
+
+def _improvement(before: float | None, after: float | None) -> float | None:
+    if before is None or after is None:
+        return None
+    return round(before - after, 6)
 
 
 def _bucket_key(probability: float, bucket_size: float) -> str:
@@ -250,6 +321,10 @@ def apply_calibration(rows: list[Mapping[str, Any]], history_rows: list[Mapping[
             calibrated_values.append(calibrated)
         output.append(out)
 
+    raw_brier = brier_score(output, RAW_PROBABILITY_COLUMNS)
+    calibrated_brier = brier_score(output, CALIBRATED_PROBABILITY_COLUMNS)
+    raw_ece = expected_calibration_error(output, RAW_PROBABILITY_COLUMNS, bucket_size=bucket_size)
+    calibrated_ece = expected_calibration_error(output, CALIBRATED_PROBABILITY_COLUMNS, bucket_size=bucket_size)
     report = CalibrationReport(
         raw_rows=len(rows),
         usable_rows=sum(1 for row in history_rows if raw_probability(row) is not None and parse_result(_first(row, RESULT_COLUMNS)) in {"win", "loss"}),
@@ -258,10 +333,17 @@ def apply_calibration(rows: list[Mapping[str, Any]], history_rows: list[Mapping[
         average_raw_probability=None if not raw_values else round(sum(raw_values) / len(raw_values), 6),
         average_calibrated_probability=None if not calibrated_values else round(sum(calibrated_values) / len(calibrated_values), 6),
         bucket_count=len(global_model.buckets),
+        raw_brier_score=raw_brier,
+        calibrated_brier_score=calibrated_brier,
+        brier_improvement=_improvement(raw_brier, calibrated_brier),
+        raw_expected_calibration_error=raw_ece,
+        calibrated_expected_calibration_error=calibrated_ece,
+        expected_calibration_error_improvement=_improvement(raw_ece, calibrated_ece),
         output_csv=None,
         notes=[
             "Calibration uses historical win/loss outcomes and shrinks bucket rates toward the global win rate.",
             "Scoped sport/market calibration is used only when enough historical samples exist; otherwise global calibration is used.",
+            "Brier score and expected calibration error are reported when rows being calibrated already contain graded results.",
         ],
     )
     return output, report
