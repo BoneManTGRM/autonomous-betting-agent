@@ -43,11 +43,23 @@ def _pick_to_prediction(row: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _normalize_result(result: str) -> str:
+    value = str(result or "").strip().lower()
+    if value in {"won", "win", "w", "correct", "hit"}:
+        return "win"
+    if value in {"lost", "loss", "l", "incorrect", "miss"}:
+        return "loss"
+    if value in {"push", "void", "tie"}:
+        return "push"
+    return value
+
+
 def _profit_for_result(result: str, row: Mapping[str, Any]) -> float | None:
-    if result not in {"win", "loss", "push"}:
+    normalized = _normalize_result(result)
+    if normalized not in {"win", "loss", "push"}:
         return None
     price = parse_price(row.get("best_price") or row.get("entry_odds") or row.get("price"))
-    return unit_profit_loss(result, price)
+    return unit_profit_loss(normalized, price)
 
 
 def reconcile_results(
@@ -65,7 +77,7 @@ def reconcile_results(
     for original, row in zip(unfinished, enriched):
         if row.get("sdio_result_match_status") == "matched":
             matched += 1
-        result = str(row.get("result") or "").strip().lower()
+        result = _normalize_result(str(row.get("result") or ""))
         if result in {"win", "loss", "push"}:
             graded += 1
             update_pick_result(
