@@ -13,6 +13,7 @@ from autonomous_betting_agent.ara_filters import (
     risk_flags_for,
     sport_group,
     weather_flags_for,
+    weather_location_mismatch,
 )
 
 
@@ -78,6 +79,24 @@ class AraFilterTests(unittest.TestCase):
         row = {"Sport": "nba", "weather_tier": "Skipped", "weather_error": float("nan")}
         self.assertNotIn("weather_api_error", risk_flags_for(row))
         self.assertNotIn("weather_api_error", weather_flags_for(row))
+
+    def test_weather_location_mismatch_is_flagged(self) -> None:
+        bad_row = {
+            "Sport": "soccer",
+            "weather_tier": "Low",
+            "weather_location_query": "Osnabrück, Germany",
+            "weather_location": "New Germany, Minnesota, United States of America",
+        }
+        good_row = {
+            "Sport": "soccer",
+            "weather_tier": "Low",
+            "weather_location_query": "Mariehamn, Åland Islands",
+            "weather_location": "Mariehamn, Aland, Finland",
+        }
+        self.assertTrue(weather_location_mismatch(bad_row))
+        self.assertIn("weather_location_mismatch", risk_flags_for(bad_row))
+        self.assertFalse(weather_location_mismatch(good_row))
+        self.assertNotIn("weather_location_mismatch", risk_flags_for(good_row))
 
     def test_empty_frame_is_safe(self) -> None:
         enriched = apply_ara_decision_layer(pd.DataFrame())
