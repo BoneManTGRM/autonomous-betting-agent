@@ -1,0 +1,120 @@
+from __future__ import annotations
+
+import os
+from dataclasses import asdict, dataclass
+from datetime import date, datetime, timezone
+from typing import Any, Mapping
+
+import requests
+
+WEATHERAPI_HOST = "https://api.weatherapi.com/v1"
+
+
+@dataclass(frozen=True)
+class WeatherSnapshot:
+    location_query: str
+    location_name: str
+    region: str
+    country: str
+    local_time: str
+    forecast_date: str
+    condition: str
+    temperature_c: float | None
+    wind_kph: float | None
+    wind_mph: float | None
+    precip_mm: float | None
+    humidity: int | None
+    chance_of_rain: int | None
+    chance_of_snow: int | None
+    is_day: int | None
+
+    def to_row(self) -> dict[str, Any]:
+        row = asdict(self)
+        row["weather_condition"] = self.condition
+        row["weather_temp_c"] = self.temperature_c
+        row["weather_wind_kph"] = self.wind_kph
+        row["weather_wind_mph"] = self.wind_mph
+        row["weather_precip_mm"] = self.precip_mm
+        row["weather_humidity"] = self.humidity
+        row["weather_chance_of_rain"] = self.chance_of_rain
+        row["weather_chance_of_snow"] = self.chance_of_snow
+        return row
+
+
+def get_weatherapi_key(explicit_key: str | None = None) -> str:
+    key = explicit_key or os.getenv("WEATHERAPI_KEY") or ""
+    if not key:
+        raise RuntimeError("Missing WEATHERAPI_KEY. Paste a key in the app or set an environment variable.")
+    return key
+
+
+def _parse_date(value: str | None) -> date:
+    if not value:
+        return datetime.now(timezone.utc).date()
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+    except ValueError:
+        return datetime.now(timezone.utc).date()
+
+
+def _days_until(target: date) -> int:
+    today = datetime.now(timezone.utc).date()
+    return max(1, min(14, (target - today).days + 1))
+
+
+def _number(value: Any) -> float | None:
+    try:
+        return None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _integer(value: Any) -> int | None:
+    try:
+        return None if value is None else int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def fetch_weather_snapshot(api_key: str, location: str, event_time_iso: str | None = None) -> WeatherSnapshot:
+    target_date = _parse_date(event_time_iso)
+    params = {
+        "key": get_weatherapi_key(api_key),
+        "q": location,
+        "days": _days_until(target_date),
+        "aqi": "no",
+        "alerts": "no",
+    }
+    response = requests.get(f"{WEATHERAPI_HOST}/forecast.json", params=params, timeout=20)
+    response.raise_for_status()
+    payload: Mapping[str, Any] = response.json()
+    location_payload = payload.get("location", {})
+    current = payload.get("current", {})
+    forecast_days = payload.get("forecast", {}).get("forecastday", [])
+    chosen_day = None
+    for item in forecast_days:
+        if str(item.get("date", "")) == target_date.isoformat():
+            chosen_day = item
+            break
+    if chosen_day is None and forecast_days:
+        chosen_day = forecast_days[-1]
+
+    day = chosen_day.get("day", {}) if chosen_day else {}
+    condition = (day.get("condition") or current.get("condition") or {}).get("text", "")
+    return WeatherSnapshot(
+        location_query=location,
+        location_name=str(location_payload.get("name", "")),
+        region=str(location_payload.get("region", "")),
+        country=str(location_payload.get("country", "")),
+        local_time=str(location_payload.get("localtime", "")),
+        forecast_date=str(chosen_day.get("date", target_date.isoformat()) if chosen_day else target_date.isoformat()),
+        condition=str(condition),
+        temperature_c=_number(day.get("avgtemp_c") if day else current.get("temp_c")),
+        wind_kph=_number(day.get("maxwind_kph") if day else current.get("wind_kph")),
+        wind_mph=_number(day.get("maxwind_mph") if day else current.get("wind_mph")),
+        precip_mm=_number(day.get("totalprecip_mm") if day else current.get("precip_mm")),
+        humidity=_integer(day.get("avghumidity") if day else current.get("humidity")),
+        chance_of_rain=_integer(day.get("daily_chance_of_rain")),
+        chance_of_snow=_integer(day.get("daily_chance_of_snow")),
+        is_day=_integer(current.get("is_day")),
+    )
