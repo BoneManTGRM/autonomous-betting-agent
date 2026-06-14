@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from autonomous_betting_agent import AutonomousBettingAgent, EventResearchInput, TeamSnapshot
+from autonomous_betting_agent.learning import ProbabilityCalibrator
 from autonomous_betting_agent.output import render_text
 
 
@@ -31,10 +32,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Generate a sports research report.")
     parser.add_argument("event_json", type=Path)
     parser.add_argument("--json-output", type=Path, default=None)
+    parser.add_argument("--learned-state", type=Path, default=None, help="Optional learned_state.json produced by learn_from_results.py")
     args = parser.parse_args()
     try:
         event = _event(json.loads(args.event_json.read_text(encoding="utf-8")))
-        result = AutonomousBettingAgent().analyze(event)
+        calibrator = ProbabilityCalibrator.load(args.learned_state) if args.learned_state else None
+        result = AutonomousBettingAgent(calibrator=calibrator).analyze(event)
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         parser.error(str(exc))
         return 2
