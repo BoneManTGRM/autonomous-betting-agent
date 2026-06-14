@@ -106,6 +106,21 @@ class PlayerPropTests(unittest.TestCase):
         self.assertEqual(scored["prop_status"], "WATCH")
         self.assertIn("small_sample_size", scored["prop_reasons"])
 
+    def test_extreme_probability_and_disagreement_guardrails(self) -> None:
+        row = {
+            "player_name": "Example Longshot",
+            "prop_type": "Home Run",
+            "market_probability": "2%",
+            "model_probability": "35%",
+            "books": 8,
+            "data_quality": 90,
+            "sample_size": 20,
+        }
+        scored = score_player_prop(row)
+        self.assertEqual(scored["prop_status"], "WATCH")
+        self.assertIn("extreme_market_probability", scored["prop_reasons"])
+        self.assertIn("model_market_disagreement_extreme", scored["prop_reasons"])
+
     def test_apply_and_rank_player_props(self) -> None:
         frame = pd.DataFrame([
             {"player_name": "A", "prop_type": "TD", "best_price": 2.20, "model_probability": "55%", "books": 8, "data_quality": 90, "sample_size": 20},
