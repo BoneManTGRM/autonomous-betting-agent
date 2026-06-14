@@ -9,6 +9,7 @@ from dateutil import parser as date_parser
 
 
 WEATHERAPI_BASE_URL = "https://api.weatherapi.com/v1/forecast.json"
+MAX_FORECAST_DELTA_SECONDS = 6 * 60 * 60
 
 # Practical venue/city defaults for odds feeds that return team names but no stadium.
 # More specific team phrases are preferred over generic city/country names.
@@ -227,8 +228,8 @@ def infer_weather_location(home_team: str, away_team: str = "", sport_text: str 
 def fetch_weather(api_key: str, location: str, kickoff_iso: str | None = None) -> WeatherSummary:
     """Fetch current/forecast weather from WeatherAPI.com.
 
-    WeatherAPI free tier supports forecast endpoints. For dates beyond the forecast
-    window, this function falls back to current conditions.
+    If kickoff time is outside the available forecast hours, the function falls
+    back to current conditions instead of using a stale nearest forecast hour.
     """
     params = {
         "key": api_key,
@@ -322,6 +323,8 @@ def pick_forecast_hour(payload: dict[str, Any], kickoff_iso: str | None) -> dict
         if best_delta is None or delta < best_delta:
             best_delta = delta
             best_hour = hour
+    if best_delta is None or best_delta > MAX_FORECAST_DELTA_SECONDS:
+        return None
     return best_hour
 
 
