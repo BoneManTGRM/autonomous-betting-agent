@@ -164,12 +164,32 @@ def implied_probability(row: Mapping[str, Any]) -> float | None:
     return 1.0 / price if price and price > 1.0 else None
 
 
-def weather_flags_for(row: Mapping[str, Any], policy: AraFilterPolicy = AraFilterPolicy()) -> tuple[str, ...]:
+def _truthy(value: Any) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "outdoor"}
+
+
+def weather_error_flags_for(row: Mapping[str, Any]) -> tuple[str, ...]:
+    """Flag failed or stale weather enrichment so bad weather calls cannot pass silently."""
     flags: list[str] = []
+    weather_tier = str(_field(row, ("weather_tier", "weather status", "weather_status")) or "").strip().lower()
+    weather_error = str(_field(row, ("weather_error", "weather error")) or "").strip()
+    weather_relevant = str(_field(row, ("weather_relevant", "weather relevant")) or "").strip().lower()
+    forecast_exact = _field(row, ("weather_forecast_is_exact", "forecast_is_exact"))
+    if weather_tier == "error" or weather_error:
+        flags.append("weather_api_error")
+    if weather_relevant in {"true", "yes", "1"} and weather_tier in {"", "missing", "none", "nan"}:
+        flags.append("weather_missing_for_relevant_event")
+    if forecast_exact is not None and str(forecast_exact).strip().lower() in {"false", "0", "no"}:
+        flags.append("weather_forecast_not_exact")
+    return tuple(flags)
+
+
+def weather_flags_for(row: Mapping[str, Any], policy: AraFilterPolicy = AraFilterPolicy()) -> tuple[str, ...]:
+    flags: list[str] = list(weather_error_flags_for(row))
     group = sport_group(_field(row, ("Sport", "sport", "league", "competition")))
     outdoor_raw = _field(row, ("is_outdoor", "outdoor", "venue_outdoor"))
     outdoor_default = group in {"Baseball", "American football", "Soccer", "Tennis", "AFL/NRL/Rugby"}
-    is_outdoor = outdoor_default if outdoor_raw is None else str(outdoor_raw).strip().lower() in {"1", "true", "yes", "y", "outdoor"}
+    is_outdoor = outdoor_default if outdoor_raw is None else _truthy(outdoor_raw)
     if not is_outdoor:
         return tuple(flags)
 
@@ -178,6 +198,9 @@ def weather_flags_for(row: Mapping[str, Any], policy: AraFilterPolicy = AraFilte
     if wind_mph is None and wind_kph is not None:
         wind_mph = wind_kph * 0.621371
     precip_mm = parse_float(_field(row, ("precip_mm", "weather_precip_mm", "precipitation_mm", "rain_mm")))
+    precip_in = parse_float(_field(row, ("precip_in", "weather_precip_in")))
+    if precip_mm is None and precip_in is not None:
+        precip_mm = precip_in * 25.4
     condition = str(_field(row, ("weather_condition", "condition")) or "").lower()
     condition_tokens = {token.strip(".,;:!?()[]") for token in condition.replace("/", " ").replace("-", " ").split()}
 
@@ -193,11 +216,11 @@ def weather_flags_for(row: Mapping[str, Any], policy: AraFilterPolicy = AraFilte
             flags.append("weather_precip_watch")
     if condition_tokens & {"storm", "storms", "thunder", "thunderstorm", "snow", "ice", "icy", "sleet"}:
         flags.append("weather_condition_severe")
-    return tuple(flags)
+    return tuple(dict.fromkeys(flags))
 
 
 def risk_flags_for(row: Mapping[str, Any], policy: AraFilterPolicy = AraFilterPolicy()) -> tuple[str, ...]:
-    flags: list[str] = []
+    flags: list[str] = list(weather_error_flags_for(row))
     cls = classification(row)
     group = sport_group(_field(row, ("Sport", "sport", "league", "competition")))
     mprob = market_probability(row)
@@ -257,7 +280,7 @@ def risk_flags_for(row: Mapping[str, Any], policy: AraFilterPolicy = AraFilterPo
         flags.append("proxy_edge_under_3pct")
     if model_probability(row) is None:
         flags.append("independent_ara_probability_missing")
-    return tuple(flags)
+    return tuple(dict.fromkeys(flags))
 
 
 def proxy_filter_decision(row: Mapping[str, Any], policy: AraFilterPolicy = AraFilterPolicy()) -> tuple[str, str]:
@@ -265,6 +288,8 @@ def proxy_filter_decision(row: Mapping[str, Any], policy: AraFilterPolicy = AraF
     weather = weather_flags_for(row, policy)
     if "classification_avoid" in flags:
         return "PROXY_AVOID", "Avoid classification."
+    if "weather_api_error" in flags or "weather_missing_for_relevant_event" in flags:
+        return "PROXY_WATCH", "Weather enrichment failed or is missing for a weather-relevant event."
     if "soccer_draw_risk_extreme_30_plus" in flags or "soccer_draw_risk_block_ml_25_plus" in flags:
         return "PROXY_WATCH_NO_ML", "Soccer draw risk blocks moneyline."
     if "baseball_watch_low_edge_50_56" in flags:
@@ -284,15 +309,15 @@ def live_decision(row: Mapping[str, Any], policy: AraFilterPolicy = AraFilterPol
     implied = implied_probability(row)
     model = model_probability(row)
     edge = model - implied if model is not None and implied is not None else None
-    hard = {"classification_avoid", "soccer_draw_risk_extreme_30_plus", "soccer_draw_risk_block_ml_25_plus", "missing_best_price", "missing_data_quality", "data_quality_under_80", "low_book_coverage_under_5", "heavy_favorite_price_under_1_30", "longshot_price_over_3_00", "baseball_watch_low_edge_50_56"}
-    noisy = {"market_overround_high", "price_range_disagreement"}
+    hard = {"classification_avoid", "soccer_draw_risk_extreme_30_plus", "soccer_draw_risk_block_ml_25_plus", "missing_best_price", "missing_data_quality", "data_quality_under_80", "low_book_coverage_under_5", "heavy_favorite_price_under_1_30", "longshot_price_over_3_00", "baseball_watch_low_edge_50_56", "weather_api_error", "weather_missing_for_relevant_event"}
+    noisy = {"market_overround_high", "price_range_disagreement", "weather_forecast_not_exact"}
     weather_hard = {"weather_wind_block", "weather_precip_block", "weather_condition_severe"}
     if "classification_avoid" in flags:
         return "AVOID", 0.0, edge, "Avoid classification blocks live action.", flags, weather
     if any(flag in hard for flag in flags):
         return "WATCH", 0.0, edge, "Blocked by hard risk controls: " + ", ".join(flag for flag in flags if flag in hard), flags, weather
     if any(flag in noisy for flag in flags) and (edge is None or edge < policy.strong_edge):
-        return "WATCH", 0.0, edge, "Market noise requires 8%+ independent edge: " + ", ".join(flag for flag in flags if flag in noisy), flags, weather
+        return "WATCH", 0.0, edge, "Market/weather uncertainty requires 8%+ independent edge: " + ", ".join(flag for flag in flags if flag in noisy), flags, weather
     if any(flag in weather_hard for flag in weather) and model is None:
         return "WATCH", 0.0, edge, "Blocked by weather controls until weather-adjusted probability exists: " + ", ".join(flag for flag in weather if flag in weather_hard), flags, weather
     if model is None or edge is None:
