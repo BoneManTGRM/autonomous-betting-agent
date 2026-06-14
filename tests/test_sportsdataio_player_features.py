@@ -35,8 +35,8 @@ class SportsDataIOPlayerFeatureTests(unittest.TestCase):
         self.assertEqual(feature["display_name"], "Jane Doe")
         self.assertEqual(feature["sport"], "nfl")
         self.assertEqual(feature["rushing_yards"], "800")
-        self.assertEqual(feature["rushing_yards_per_game"], "80.0")
-        self.assertEqual(feature["rushing_touchdowns_per_game"], "0.8")
+        self.assertAlmostEqual(float(feature["rushing_yards_per_game"]), 80.0)
+        self.assertAlmostEqual(float(feature["rushing_touchdowns_per_game"]), 0.8)
         self.assertEqual(feature["feature_ready"], "true")
         self.assertEqual(feature["feature_quality_flags"], "")
 
@@ -45,9 +45,9 @@ class SportsDataIOPlayerFeatureTests(unittest.TestCase):
             {"PlayerID": 9, "Name": "Slugger", "Team": "NYY", "Games": 20, "HomeRuns": 5, "Hits": 30, "RunsBattedIn": 18},
             sport="mlb",
         )
-        self.assertEqual(feature["home_runs_per_game"], "0.25")
-        self.assertEqual(feature["hits_per_game"], "1.5")
-        self.assertEqual(feature["rbis_per_game"], "0.9")
+        self.assertAlmostEqual(float(feature["home_runs_per_game"]), 0.25)
+        self.assertAlmostEqual(float(feature["hits_per_game"]), 1.5)
+        self.assertAlmostEqual(float(feature["rbis_per_game"]), 0.9)
 
     def test_missing_fields_create_quality_flags(self) -> None:
         feature = build_player_feature({"Name": "Unknown", "Games": 0}, sport="nfl")
@@ -62,7 +62,7 @@ class SportsDataIOPlayerFeatureTests(unittest.TestCase):
             {"PlayerID": 2, "Name": "B", "Team": "NYG", "Games": 2, "Points": 12},
         ])
         self.assertEqual(len(features), 2)
-        self.assertEqual(features[1]["points_per_game"], "6.0")
+        self.assertAlmostEqual(float(features[1]["points_per_game"]), 6.0)
 
     def test_feature_fieldnames_include_core_and_rate_columns(self) -> None:
         names = feature_fieldnames([{"extra": "x"}])
@@ -78,7 +78,7 @@ class SportsDataIOPlayerFeatureTests(unittest.TestCase):
             write_player_features(features, path)
             rows = read_csv_rows(path)
             self.assertEqual(rows[0]["display_name"], "Jane Doe")
-            self.assertEqual(rows[0]["points_per_game"], "10.0")
+            self.assertAlmostEqual(float(rows[0]["points_per_game"]), 10.0)
 
 
 if __name__ == "__main__":
