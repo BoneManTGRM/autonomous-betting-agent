@@ -58,6 +58,15 @@ def _bounded(value: float, low: float = 0.0, high: float = 100.0) -> float:
     return max(low, min(high, value))
 
 
+def _normalize_text(value: Any) -> str:
+    return " ".join(str(value or "").strip().lower().replace("-", " ").replace(".", " ").split())
+
+
+def _event_key(value: Any) -> str:
+    text = _normalize_text(value)
+    return text.replace(" vs ", " at ").replace(" v ", " at ").replace(" @ ", " at ")
+
+
 def _grade(score: float) -> str:
     if score >= 82:
         return "A"
@@ -147,7 +156,9 @@ def _row_deep_score(row: pd.Series) -> dict[str, Any]:
             score += 6
             factors.append("edge_3pct_plus")
 
-    books = parse_float(row.get("Books")) or parse_float(row.get("bookmaker_count"))
+    books = parse_float(row.get("Books"))
+    if books is None:
+        books = parse_float(row.get("bookmaker_count"))
     if books is not None:
         score += min(10, max(0, books - 5))
         if books >= 10:
@@ -196,17 +207,30 @@ def apply_deep_analysis(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def merge_latest_movement(predictions: pd.DataFrame, latest_movement: pd.DataFrame) -> pd.DataFrame:
+    """Merge movement into prediction rows without unsafe outcome-only joins."""
     if predictions.empty or latest_movement.empty:
         return predictions.copy()
     left = predictions.copy()
     right = latest_movement.copy()
-    if "event_id" in left.columns and "event_id" in right.columns:
-        prediction_col = "Prediction" if "Prediction" in left.columns else "prediction"
-        outcome_col = "outcome"
-        if prediction_col in left.columns and outcome_col in right.columns:
-            return left.merge(right, left_on=["event_id", prediction_col], right_on=["event_id", outcome_col], how="left", suffixes=("", "_movement"))
-    # Fallback: merge by prediction name only. This is intentionally conservative.
     prediction_col = "Prediction" if "Prediction" in left.columns else "prediction" if "prediction" in left.columns else None
-    if prediction_col and "outcome" in right.columns:
-        return left.merge(right, left_on=prediction_col, right_on="outcome", how="left", suffixes=("", "_movement"))
+    if prediction_col is None or "outcome" not in right.columns:
+        return left
+
+    if "event_id" in left.columns and "event_id" in right.columns:
+        return left.merge(
+            right,
+            left_on=["event_id", prediction_col],
+            right_on=["event_id", "outcome"],
+            how="left",
+            suffixes=("", "_movement"),
+        )
+
+    if "Event" in left.columns and {"away_team", "home_team"}.issubset(right.columns):
+        left["_event_key"] = left["Event"].apply(_event_key)
+        left["_prediction_key"] = left[prediction_col].apply(_normalize_text)
+        right["_event_key"] = (right["away_team"].astype(str) + " at " + right["home_team"].astype(str)).apply(_event_key)
+        right["_prediction_key"] = right["outcome"].apply(_normalize_text)
+        merged = left.merge(right, on=["_event_key", "_prediction_key"], how="left", suffixes=("", "_movement"))
+        return merged.drop(columns=["_event_key", "_prediction_key"])
+
     return left
