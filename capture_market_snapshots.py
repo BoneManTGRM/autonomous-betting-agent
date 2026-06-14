@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 from autonomous_betting_agent.live_odds import scan_market
-from autonomous_betting_agent.market_snapshots import append_snapshot_csv, latest_snapshot_with_movement, summaries_to_snapshot_frame
+from autonomous_betting_agent.market_snapshots import append_snapshot_csv, latest_snapshot_with_movement, summaries_to_snapshot_frame, top_market_movers
 
 
 def main() -> int:
@@ -16,6 +16,7 @@ def main() -> int:
     parser.add_argument("--max-events", type=int, default=50)
     parser.add_argument("--output", type=Path, default=Path("data/market_snapshots.csv"))
     parser.add_argument("--latest-output", type=Path, default=Path("data/latest_market_movement.csv"))
+    parser.add_argument("--movers-output", type=Path, default=Path("data/top_market_movers.csv"))
     args = parser.parse_args()
 
     api_key = args.api_key or os.getenv("THE_ODDS_API_KEY", "")
@@ -26,10 +27,14 @@ def main() -> int:
     snapshot = summaries_to_snapshot_frame(summaries)
     combined = append_snapshot_csv(snapshot, args.output)
     latest = latest_snapshot_with_movement(combined)
+    movers = top_market_movers(combined)
     args.latest_output.parent.mkdir(parents=True, exist_ok=True)
+    args.movers_output.parent.mkdir(parents=True, exist_ok=True)
     latest.to_csv(args.latest_output, index=False)
+    movers.to_csv(args.movers_output, index=False)
     print(f"Saved {len(snapshot)} snapshot rows to {args.output}")
     print(f"Saved latest movement rows to {args.latest_output}")
+    print(f"Saved top mover rows to {args.movers_output}")
     return 0
 
 
