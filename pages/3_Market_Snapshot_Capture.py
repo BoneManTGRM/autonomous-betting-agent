@@ -6,7 +6,7 @@ from pathlib import Path
 import streamlit as st
 
 from autonomous_betting_agent.live_odds import list_sports, scan_market
-from autonomous_betting_agent.market_snapshots import append_snapshot_csv, latest_snapshot_with_movement, summaries_to_snapshot_frame
+from autonomous_betting_agent.market_snapshots import append_snapshot_csv, latest_snapshot_with_movement, summaries_to_snapshot_frame, top_market_movers
 
 st.set_page_config(page_title="Market Snapshot Capture", layout="wide")
 st.title("Market Snapshot Capture")
@@ -43,6 +43,7 @@ regions = st.sidebar.multiselect("Regions", ["us", "us2", "uk", "eu", "au"], def
 max_events = st.sidebar.number_input("Max events", min_value=1, max_value=100, value=50)
 snapshot_path = st.sidebar.text_input("Snapshot CSV path", "data/market_snapshots.csv")
 latest_path = st.sidebar.text_input("Latest movement CSV path", "data/latest_market_movement.csv")
+movers_path = st.sidebar.text_input("Top movers CSV path", "data/top_market_movers.csv")
 
 if not api_key:
     st.warning("Enter The Odds API key or set THE_ODDS_API_KEY.")
@@ -72,9 +73,13 @@ if st.button("Capture snapshot", type="primary"):
             snapshot = summaries_to_snapshot_frame(summaries)
             combined = append_snapshot_csv(snapshot, Path(snapshot_path))
             latest = latest_snapshot_with_movement(combined)
+            movers = top_market_movers(combined)
             latest_output = Path(latest_path)
+            movers_output = Path(movers_path)
             latest_output.parent.mkdir(parents=True, exist_ok=True)
+            movers_output.parent.mkdir(parents=True, exist_ok=True)
             latest.to_csv(latest_output, index=False)
+            movers.to_csv(movers_output, index=False)
         except Exception as exc:
             st.error(f"Capture failed: {explain_error(exc)}")
             st.stop()
@@ -83,7 +88,11 @@ if st.button("Capture snapshot", type="primary"):
     col1, col2, col3 = st.columns(3)
     col1.metric("Snapshot rows", len(snapshot))
     col2.metric("Total stored rows", len(combined))
-    col3.metric("Latest movement rows", len(latest))
+    col3.metric("Top movers", len(movers))
+
+    st.write("Top market movers")
+    st.dataframe(movers, use_container_width=True, hide_index=True)
+    st.download_button("Download top movers CSV", movers.to_csv(index=False), file_name="top_market_movers.csv", mime="text/csv")
 
     st.write("Latest line movement")
     st.dataframe(latest, use_container_width=True, hide_index=True)
