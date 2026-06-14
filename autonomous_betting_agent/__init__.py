@@ -2,9 +2,11 @@
 
 A standalone, research-only sports analytics agent derived from the ARA/TGRM
 architecture. It estimates probabilities, explains evidence, tracks uncertainty,
-and supports backtesting. It does not place wagers.
+learns probability calibration from graded results, and supports backtesting. It
+does not place wagers.
 """
 
+from .learning import GradedPrediction, ProbabilityCalibrator, fit_probability_calibrator, parse_graded_csv
 from .models import EventResearchInput, PredictionResult, TeamSnapshot
 from .researcher import AutonomousBettingAgent
 from .tgrm import TGRMLoop
@@ -12,7 +14,11 @@ from .tgrm import TGRMLoop
 __all__ = [
     "AutonomousBettingAgent",
     "EventResearchInput",
+    "GradedPrediction",
     "PredictionResult",
+    "ProbabilityCalibrator",
     "TeamSnapshot",
     "TGRMLoop",
+    "fit_probability_calibrator",
+    "parse_graded_csv",
 ]
