@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import os
 from dataclasses import dataclass
@@ -164,12 +165,57 @@ def write_json_payload(payload: Any, path: str | Path) -> None:
     output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def payload_row_count(payload: Any) -> int:
+def payload_to_records(payload: Any, *, record_key: str | None = None) -> list[dict[str, Any]]:
+    """Convert common SportsDataIO JSON shapes into a list of flat-ish records.
+
+    If the payload is a list, each dict element becomes a record. If it is a dict
+    containing one or more list values, the selected list is used. Nested lists and
+    dicts are preserved as JSON strings so the output can be written safely to CSV.
+    """
     if isinstance(payload, list):
-        return len(payload)
-    if isinstance(payload, dict):
-        for value in payload.values():
-            if isinstance(value, list):
-                return len(value)
-        return 1
-    return 0
+        items = payload
+    elif isinstance(payload, dict):
+        if record_key:
+            selected = payload.get(record_key)
+            if not isinstance(selected, list):
+                raise SportsDataIOError(f"Payload key '{record_key}' was not a list.")
+            items = selected
+        else:
+            list_values = [(key, value) for key, value in payload.items() if isinstance(value, list)]
+            if list_values:
+                list_values.sort(key=lambda item: len(item[1]), reverse=True)
+                items = list_values[0][1]
+            else:
+                items = [payload]
+    else:
+        return []
+
+    return [_flatten_record(item) for item in items if isinstance(item, dict)]
+
+
+def _flatten_record(record: Mapping[str, Any], prefix: str = "") -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key, value in record.items():
+        clean_key = f"{prefix}{key}" if not prefix else f"{prefix}_{key}"
+        if isinstance(value, Mapping):
+            out.update(_flatten_record(value, clean_key))
+        elif isinstance(value, list):
+            out[clean_key] = json.dumps(value, sort_keys=True)
+        else:
+            out[clean_key] = value
+    return out
+
+
+def write_csv_records(records: list[Mapping[str, Any]], path: str | Path) -> None:
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = sorted({key for record in records for key in record.keys()})
+    with output.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for record in records:
+            writer.writerow({key: record.get(key, "") for key in fieldnames})
+
+
+def payload_row_count(payload: Any) -> int:
+    return len(payload_to_records(payload))
