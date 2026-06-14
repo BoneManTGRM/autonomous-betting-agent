@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import unittest
+
 from autonomous_betting_agent.target_mode import (
     TargetModePolicy,
     estimated_ev,
@@ -25,59 +27,56 @@ def clean_row(**overrides):
     return row
 
 
-def test_implied_probability_and_gap() -> None:
-    assert round(implied_probability(2.0), 4) == 0.5
-    assert implied_probability(1.0) is None
-    assert round(price_probability_gap(2.0, 0.55), 4) == 0.05
+class TargetModeTests(unittest.TestCase):
+    def test_implied_probability_and_gap(self) -> None:
+        self.assertEqual(round(implied_probability(2.0), 4), 0.5)
+        self.assertIsNone(implied_probability(1.0))
+        self.assertEqual(round(price_probability_gap(2.0, 0.55), 4), 0.05)
+
+    def test_estimated_ev(self) -> None:
+        self.assertEqual(round(estimated_ev(0.70, 1.55), 4), 0.085)
+        self.assertIsNone(estimated_ev(0.70, 1.0))
+
+    def test_target_mode_passes_clean_70_candidate(self) -> None:
+        result = evaluate_target_mode(clean_row())
+        self.assertTrue(result.passed)
+        self.assertEqual(result.rejection_reason, "")
+        self.assertGreaterEqual(result.quality_score, 90)
+
+    def test_target_mode_rejects_outside_probability_band(self) -> None:
+        result = evaluate_target_mode(clean_row(final_probability_value=0.735))
+        self.assertFalse(result.passed)
+        self.assertIn("outside 69%-71% band", result.rejection_reason)
+
+    def test_target_mode_rejects_low_market_probability(self) -> None:
+        result = evaluate_target_mode(clean_row(market_probability_value=0.55))
+        self.assertFalse(result.passed)
+        self.assertIn("market probability below floor", result.rejection_reason)
+
+    def test_target_mode_rejects_low_books_and_reliability(self) -> None:
+        result = evaluate_target_mode(clean_row(books=2, reliability_score=80.0))
+        self.assertFalse(result.passed)
+        self.assertIn("not enough books", result.rejection_reason)
+        self.assertIn("reliability below target", result.rejection_reason)
+
+    def test_target_mode_rejects_price_mismatch_and_negative_ev(self) -> None:
+        result = evaluate_target_mode(clean_row(price_probability_gap_value=0.20, estimated_ev_value=-0.03))
+        self.assertFalse(result.passed)
+        self.assertIn("price/probability mismatch", result.rejection_reason)
+        self.assertIn("EV below target", result.rejection_reason)
+
+    def test_target_mode_rejects_duplicate_or_non_h2h_or_not_high(self) -> None:
+        result = evaluate_target_mode(clean_row(duplicate_event_pick=True, market_type="spreads", confidence="medium"))
+        self.assertFalse(result.passed)
+        self.assertIn("duplicate event/pick", result.rejection_reason)
+        self.assertIn("not h2h", result.rejection_reason)
+        self.assertIn("not high confidence", result.rejection_reason)
+
+    def test_policy_can_relax_probability_band(self) -> None:
+        policy = TargetModePolicy(tolerance=0.03)
+        result = evaluate_target_mode(clean_row(final_probability_value=0.72), policy)
+        self.assertTrue(result.passed)
 
 
-def test_estimated_ev() -> None:
-    assert round(estimated_ev(0.70, 1.55), 4) == 0.085
-    assert estimated_ev(0.70, 1.0) is None
-
-
-def test_target_mode_passes_clean_70_candidate() -> None:
-    result = evaluate_target_mode(clean_row())
-    assert result.passed is True
-    assert result.rejection_reason == ""
-    assert result.quality_score >= 90
-
-
-def test_target_mode_rejects_outside_probability_band() -> None:
-    result = evaluate_target_mode(clean_row(final_probability_value=0.735))
-    assert result.passed is False
-    assert "outside 69%-71% band" in result.rejection_reason
-
-
-def test_target_mode_rejects_low_market_probability() -> None:
-    result = evaluate_target_mode(clean_row(market_probability_value=0.55))
-    assert result.passed is False
-    assert "market probability below floor" in result.rejection_reason
-
-
-def test_target_mode_rejects_low_books_and_reliability() -> None:
-    result = evaluate_target_mode(clean_row(books=2, reliability_score=80.0))
-    assert result.passed is False
-    assert "not enough books" in result.rejection_reason
-    assert "reliability below target" in result.rejection_reason
-
-
-def test_target_mode_rejects_price_mismatch_and_negative_ev() -> None:
-    result = evaluate_target_mode(clean_row(price_probability_gap_value=0.20, estimated_ev_value=-0.03))
-    assert result.passed is False
-    assert "price/probability mismatch" in result.rejection_reason
-    assert "EV below target" in result.rejection_reason
-
-
-def test_target_mode_rejects_duplicate_or_non_h2h_or_not_high() -> None:
-    result = evaluate_target_mode(clean_row(duplicate_event_pick=True, market_type="spreads", confidence="medium"))
-    assert result.passed is False
-    assert "duplicate event/pick" in result.rejection_reason
-    assert "not h2h" in result.rejection_reason
-    assert "not high confidence" in result.rejection_reason
-
-
-def test_policy_can_relax_probability_band() -> None:
-    policy = TargetModePolicy(tolerance=0.03)
-    result = evaluate_target_mode(clean_row(final_probability_value=0.72), policy)
-    assert result.passed is True
+if __name__ == "__main__":
+    unittest.main()
