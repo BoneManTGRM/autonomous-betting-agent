@@ -6,7 +6,9 @@ from pathlib import Path
 
 from autonomous_betting_agent.accuracy_calibration import (
     apply_calibration,
+    brier_score,
     calibrate_probability,
+    expected_calibration_error,
     fit_calibration_model,
     parse_probability,
     read_csv_rows,
@@ -45,6 +47,33 @@ class AccuracyCalibrationTests(unittest.TestCase):
         self.assertEqual(calibrated[0]["calibration_scope"], "nfl|h2h")
         self.assertEqual(report.calibrated_rows, 1)
         self.assertEqual(report.usable_rows, 30)
+        self.assertIsNone(report.raw_brier_score)
+        self.assertIsNone(report.calibrated_brier_score)
+
+    def test_apply_calibration_reports_accuracy_metrics_when_results_exist(self) -> None:
+        history = []
+        for _ in range(20):
+            history.append({"model_probability": "0.80", "result": "won"})
+        for _ in range(10):
+            history.append({"model_probability": "0.80", "result": "lost"})
+        predictions = [
+            {"model_probability": "0.80", "result": "won"},
+            {"model_probability": "0.80", "result": "lost"},
+        ]
+        calibrated, report = apply_calibration(predictions, history, min_bucket_samples=5, shrinkage_strength=0)
+        self.assertEqual(len(calibrated), 2)
+        self.assertIsNotNone(report.raw_brier_score)
+        self.assertIsNotNone(report.calibrated_brier_score)
+        self.assertIsNotNone(report.raw_expected_calibration_error)
+        self.assertIsNotNone(report.calibrated_expected_calibration_error)
+
+    def test_brier_and_expected_calibration_error(self) -> None:
+        rows = [
+            {"model_probability": "0.80", "result": "won"},
+            {"model_probability": "0.20", "result": "lost"},
+        ]
+        self.assertAlmostEqual(brier_score(rows) or 0, 0.04)
+        self.assertIsNotNone(expected_calibration_error(rows, bucket_size=0.1))
 
     def test_low_sample_bucket_uses_shrinkage(self) -> None:
         history = [{"model_probability": "0.80", "result": "won"}, {"model_probability": "0.80", "result": "lost"}]
