@@ -8,6 +8,7 @@ from typing import Any, Mapping
 import requests
 
 WEATHERAPI_HOST = "https://api.weatherapi.com/v1"
+MAX_FORECAST_DAYS = 14
 
 
 @dataclass(frozen=True)
@@ -17,7 +18,10 @@ class WeatherSnapshot:
     region: str
     country: str
     local_time: str
+    requested_date: str
     forecast_date: str
+    forecast_is_exact: bool
+    forecast_delta_days: int
     condition: str
     temperature_c: float | None
     wind_kph: float | None
@@ -38,6 +42,8 @@ class WeatherSnapshot:
         row["weather_humidity"] = self.humidity
         row["weather_chance_of_rain"] = self.chance_of_rain
         row["weather_chance_of_snow"] = self.chance_of_snow
+        row["weather_forecast_is_exact"] = self.forecast_is_exact
+        row["weather_forecast_delta_days"] = self.forecast_delta_days
         return row
 
 
@@ -59,7 +65,7 @@ def _parse_date(value: str | None) -> date:
 
 def _days_until(target: date) -> int:
     today = datetime.now(timezone.utc).date()
-    return max(1, min(14, (target - today).days + 1))
+    return max(1, min(MAX_FORECAST_DAYS, (target - today).days + 1))
 
 
 def _number(value: Any) -> float | None:
@@ -74,6 +80,23 @@ def _integer(value: Any) -> int | None:
         return None if value is None else int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _select_forecast_day(forecast_days: list[Mapping[str, Any]], target_date: date) -> Mapping[str, Any] | None:
+    if not forecast_days:
+        return None
+    exact = [item for item in forecast_days if str(item.get("date", "")) == target_date.isoformat()]
+    if exact:
+        return exact[0]
+    # WeatherAPI forecast range can be shorter than the requested event window.
+    # Use the closest available date and mark it as non-exact in the snapshot.
+    def distance(item: Mapping[str, Any]) -> int:
+        try:
+            item_date = date.fromisoformat(str(item.get("date", "")))
+            return abs((item_date - target_date).days)
+        except ValueError:
+            return 9999
+    return min(forecast_days, key=distance)
 
 
 def fetch_weather_snapshot(api_key: str, location: str, event_time_iso: str | None = None) -> WeatherSnapshot:
@@ -91,23 +114,24 @@ def fetch_weather_snapshot(api_key: str, location: str, event_time_iso: str | No
     location_payload = payload.get("location", {})
     current = payload.get("current", {})
     forecast_days = payload.get("forecast", {}).get("forecastday", [])
-    chosen_day = None
-    for item in forecast_days:
-        if str(item.get("date", "")) == target_date.isoformat():
-            chosen_day = item
-            break
-    if chosen_day is None and forecast_days:
-        chosen_day = forecast_days[-1]
-
+    chosen_day = _select_forecast_day(forecast_days, target_date)
     day = chosen_day.get("day", {}) if chosen_day else {}
     condition = (day.get("condition") or current.get("condition") or {}).get("text", "")
+    forecast_date = str(chosen_day.get("date", target_date.isoformat()) if chosen_day else target_date.isoformat())
+    try:
+        forecast_delta = abs((date.fromisoformat(forecast_date) - target_date).days)
+    except ValueError:
+        forecast_delta = 9999
     return WeatherSnapshot(
         location_query=location,
         location_name=str(location_payload.get("name", "")),
         region=str(location_payload.get("region", "")),
         country=str(location_payload.get("country", "")),
         local_time=str(location_payload.get("localtime", "")),
-        forecast_date=str(chosen_day.get("date", target_date.isoformat()) if chosen_day else target_date.isoformat()),
+        requested_date=target_date.isoformat(),
+        forecast_date=forecast_date,
+        forecast_is_exact=forecast_delta == 0,
+        forecast_delta_days=forecast_delta,
         condition=str(condition),
         temperature_c=_number(day.get("avgtemp_c") if day else current.get("temp_c")),
         wind_kph=_number(day.get("maxwind_kph") if day else current.get("wind_kph")),
