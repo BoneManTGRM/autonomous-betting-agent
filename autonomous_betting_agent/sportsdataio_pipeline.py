@@ -13,6 +13,7 @@ from .profit_goal import ProfitGoalPolicy, review_profit_goal_rows, write_report
 from .sportsdataio import SportsDataIOClient, payload_to_records, write_csv_records, write_json_payload
 from .sportsdataio_normalize import write_normalized_csv
 from .sportsdataio_player_features import build_player_features, write_player_features
+from .sportsdataio_quality import PipelineQualityGate, evaluate_pipeline_quality
 from .sportsdataio_results import enrich_predictions_with_results, read_csv_rows as read_result_csv_rows, write_csv_rows as write_result_csv_rows
 
 
@@ -38,6 +39,7 @@ class PipelineReport:
     warnings: list[str]
     counts: dict[str, int]
     outputs: PipelineOutputs
+    quality_gate: PipelineQualityGate | None = None
 
 
 def _path(base_dir: Path, name: str) -> Path:
@@ -196,6 +198,7 @@ def run_sportsdataio_pipeline(
                 key = f"player_feature_match_{row.get('feature_match_status', 'unknown')}"
                 counts[key] = counts.get(key, 0) + 1
 
+    quality_gate = evaluate_pipeline_quality(steps_run=steps, warnings=warnings, counts=counts)
     report_json = _path(base_dir, "sportsdataio_pipeline_report.json")
     report = PipelineReport(
         steps_run=steps,
@@ -215,6 +218,7 @@ def run_sportsdataio_pipeline(
             player_props_ranked_csv=str(player_props_ranked_csv) if player_props_ranked_csv else None,
             report_json=str(report_json),
         ),
+        quality_gate=quality_gate,
     )
     _write_report(report, report_json)
     return report
