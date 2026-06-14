@@ -198,6 +198,24 @@ Use review mode when you also want `WATCH` and track-only rows in the shortlist 
 python generate_best_bets.py "weather_enhanced_predictions.csv" --include-watch
 ```
 
+## Prediction review workflow
+
+Use the review CLI when you want checked rows, deduped checked rows and a JSON report from one CSV:
+
+```bash
+python tools/run_prediction_review.py "weather_enhanced_predictions.csv"
+```
+
+Default outputs:
+
+```text
+data/predictions_checked.csv
+data/predictions_checked_deduped.csv
+data/predictions_review_report.json
+```
+
+The full workflow is documented in `docs/prediction_review_workflow.md`.
+
 ## WeatherAPI safety
 
 Set a real WeatherAPI key with:
@@ -209,6 +227,8 @@ export WEATHERAPI_KEY="your_real_key"
 The code rejects placeholder keys such as `your_weatherapi_key_here`, `weatherapi_key`, `your_key_here`, `paste_key_here` and `replace_me`.
 
 Weather output rows include the original query and returned location so location mismatches can be audited. Wrong returned location means the row should be watched or rejected, not trusted.
+
+Weather fetching now defaults to strict location validation. `fetch_weather_snapshot(..., strict_location=True)` raises `WeatherLocationMismatchError` when WeatherAPI resolves the requested query to the wrong city, region or country. Use `strict_location=False` only for debugging.
 
 ## Selection policy for higher-quality picks
 
