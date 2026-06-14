@@ -19,12 +19,12 @@ IS_ES = language == "Español"
 TEXT = {
     "title": {"English": "Pro Predictor", "Español": "Predictor Profesional"},
     "caption": {
-        "English": "Main all-sports predictor. It ranks current markets, compares sportsbook prices, estimates market probability, saves the latest scan for the Self Learning Engine, and can now apply learning-memory adjustments. Research-only; no guaranteed winners.",
-        "Español": "Predictor principal de todos los deportes. Ordena mercados actuales, compara momios, estima probabilidad implícita, guarda el escaneo para el Motor de Aprendizaje y ahora puede aplicar ajustes de memoria. Solo investigación; no garantiza ganadores.",
+        "English": "Main all-sports predictor. It ranks current markets, compares sportsbook prices, estimates market probability, saves the latest scan for the Self Learning Engine, and applies smoothed learning-memory adjustments. Research-only; no guaranteed winners.",
+        "Español": "Predictor principal de todos los deportes. Ordena mercados actuales, compara momios, estima probabilidad implícita, guarda el escaneo para el Motor de Aprendizaje y aplica ajustes de memoria suavizados. Solo investigación; no garantiza ganadores.",
     },
     "help": {
-        "English": "How to read it: ARA compares sportsbook odds, shows the best available price, estimates market probability, then scores the read. If a learning-memory CSV is loaded, it adjusts the score using past hit rates by probability bucket, sport, and read type.",
-        "Español": "Cómo leerlo: ARA compara momios, muestra el mejor precio disponible, estima la probabilidad del mercado y califica la lectura. Si cargas una memoria de aprendizaje, ajusta el puntaje usando resultados anteriores por rango de probabilidad, deporte y tipo de lectura.",
+        "English": "How to read it: ARA compares sportsbook odds, shows the best available price, estimates market probability, then scores the read. If a learning-memory CSV is loaded, it adjusts the score using smoothed edge, reliability, sport, probability bucket, and read type.",
+        "Español": "Cómo leerlo: ARA compara momios, muestra el mejor precio disponible, estima la probabilidad del mercado y califica la lectura. Si cargas una memoria de aprendizaje, ajusta el puntaje usando edge suavizado, confiabilidad, deporte, rango de probabilidad y tipo de lectura.",
     },
     "token": {"English": "Provider key", "Español": "Clave del proveedor"},
     "target": {"English": "Scan target", "Español": "Tipo de escaneo"},
@@ -42,6 +42,7 @@ TEXT = {
     "memory_upload": {"English": "Upload learning memory CSV", "Español": "Subir CSV de memoria de aprendizaje"},
     "memory_loaded": {"English": "Learning memory loaded", "Español": "Memoria de aprendizaje cargada"},
     "learning_adjustment": {"English": "Learning adjustment", "Español": "Ajuste por aprendizaje"},
+    "warning": {"English": "Do-not-bet warning", "Español": "Advertencia de no apostar"},
     "scan": {"English": "Run Pro Predictor", "Español": "Ejecutar Predictor Profesional"},
     "dashboard": {"English": "Predictor dashboard", "Español": "Panel del predictor"},
     "top": {"English": "Top ranked markets", "Español": "Mejores mercados ordenados"},
@@ -91,7 +92,7 @@ TEXT = {
     "events_before_filters": {"English": "Events returned before filters", "Español": "Eventos devueltos antes de filtros"},
     "rows_after_filters": {"English": "Rows after filters", "Español": "Filas después de filtros"},
     "markets_requested": {"English": "Markets requested: h2h, spreads, totals", "Español": "Mercados solicitados: ganador, spread y total"},
-    "scoring_note": {"English": "Scoring: market probability + data quality + market gap - sport/draw/thin-market/team-match risk + learning-memory adjustment.", "Español": "Puntaje: probabilidad + calidad de datos + ventaja de mercado - riesgo por deporte, empate, mercado débil o mala coincidencia + ajuste de memoria."},
+    "scoring_note": {"English": "Scoring: market probability + data quality + market gap - sport/draw/thin-market/team-match risk + smoothed learning-memory adjustment + do-not-bet warnings.", "Español": "Puntaje: probabilidad + calidad de datos + ventaja de mercado - riesgo por deporte, empate, mercado débil o mala coincidencia + ajuste de memoria suavizado + advertencias de no apostar."},
     "saved_learning": {"English": "Latest scan saved for Self Learning Engine.", "Español": "Escaneo más reciente guardado para el Motor de Aprendizaje."},
 }
 
@@ -260,18 +261,26 @@ def parse_learning_memory(df):
             continue
         avg_predicted = safe_float(item.get("avg_predicted"), 0.0)
         actual_hit_rate = safe_float(item.get("actual_hit_rate"), 0.0)
+        smoothed_hit_rate = safe_float(item.get("smoothed_hit_rate"), actual_hit_rate)
+        reliability = safe_float(item.get("reliability"), records / (records + 8))
         if avg_predicted > 1:
             avg_predicted /= 100.0
         if actual_hit_rate > 1:
             actual_hit_rate /= 100.0
-        edge = safe_float(item.get("actual_minus_predicted"), actual_hit_rate - avg_predicted)
+        if smoothed_hit_rate > 1:
+            smoothed_hit_rate /= 100.0
+        actual_edge = safe_float(item.get("actual_minus_predicted"), actual_hit_rate - avg_predicted)
+        smoothed_edge = safe_float(item.get("smoothed_edge"), smoothed_hit_rate - avg_predicted)
         memory.append({
             "area_type": clean(item.get("area_type", "")),
             "group_value": clean(item.get("group_value", "")),
             "records": records,
             "avg_predicted": avg_predicted,
             "actual_hit_rate": actual_hit_rate,
-            "edge": edge,
+            "smoothed_hit_rate": smoothed_hit_rate,
+            "actual_edge": actual_edge,
+            "smoothed_edge": smoothed_edge,
+            "reliability": max(0.0, min(1.0, reliability)),
         })
     return memory
 
@@ -300,15 +309,32 @@ def learning_adjustment(row, learning_memory):
         elif area_type == "read" and group_value == targets["read"]:
             match = True
         if match:
-            weight = min(item["records"], 20) / 20.0
-            weighted_edge += item["edge"] * weight
+            weight = max(0.05, item.get("reliability", 0.0))
+            weighted_edge += item.get("smoothed_edge", 0.0) * weight
             total_weight += weight
-            reasons.append(f"{item['area_type']}:{item['group_value']} {item['actual_hit_rate']:.0%}/{item['avg_predicted']:.0%}")
+            reasons.append(f"{item['area_type']}:{item['group_value']} smooth {item['smoothed_hit_rate']:.0%}/{item['avg_predicted']:.0%} rel {item['reliability']:.0%}")
     if total_weight <= 0:
         return 0, []
     raw = (weighted_edge / total_weight) * 35.0
     adjustment = int(max(-14, min(14, round(raw))))
     return adjustment, reasons[:3]
+
+
+def do_not_bet_reasons(row):
+    reasons = []
+    if row["books"] < 3:
+        reasons.append("thin market")
+    if row["data_quality"] < 55:
+        reasons.append("low data quality")
+    if row["market_probability"] < 0.50:
+        reasons.append("low confidence")
+    if row.get("draw_probability") is not None and row["draw_probability"] >= 0.25:
+        reasons.append("high draw risk")
+    if row.get("learning_adjustment", 0) <= -6:
+        reasons.append("bad learned category")
+    if row["predictor_score"] < 55:
+        reasons.append("weak final score")
+    return reasons
 
 
 def snapshot(event, match_score, matched, previous, learning_memory):
@@ -361,6 +387,8 @@ def snapshot(event, match_score, matched, previous, learning_memory):
     row["learning_reasons"] = reasons
     row["predictor_score"] = max(0, min(100, row["base_predictor_score"] + adjustment))
     row["classification"] = classify(row)
+    row["do_not_bet_reasons"] = do_not_bet_reasons(row)
+    row["do_not_bet"] = bool(row["do_not_bet_reasons"])
     return row
 
 
@@ -388,7 +416,25 @@ def safe_dataframe(rows, empty_message=None):
 
 
 def visible_row(row):
-    return {t("event"): row["event"], t("sport"): row["sport"], t("start"): row["start"], t("pick"): row["prediction"], t("market_prob"): f"{row['market_probability']:.1%}", t("score"): row["predictor_score"], t("learning_adjustment"): row.get("learning_adjustment", 0), t("classification"): row["classification"], t("quality"): row["data_quality"], t("risk_penalty"): row["risk_penalty"], t("best_price"): round(row["best_price"], 3), t("best_book"): row["best_book"], t("books"): row["books"], t("draw_probability"): "" if row["draw_probability"] is None else f"{row['draw_probability']:.1%}", t("match_score"): f"{row['match_score']:.0%}", t("matched"): row["matched"]}
+    return {
+        t("event"): row["event"],
+        t("sport"): row["sport"],
+        t("start"): row["start"],
+        t("pick"): row["prediction"],
+        t("market_prob"): f"{row['market_probability']:.1%}",
+        t("score"): row["predictor_score"],
+        t("learning_adjustment"): row.get("learning_adjustment", 0),
+        t("warning"): "; ".join(row.get("do_not_bet_reasons", [])),
+        t("classification"): row["classification"],
+        t("quality"): row["data_quality"],
+        t("risk_penalty"): row["risk_penalty"],
+        t("best_price"): round(row["best_price"], 3),
+        t("best_book"): row["best_book"],
+        t("books"): row["books"],
+        t("draw_probability"): "" if row["draw_probability"] is None else f"{row['draw_probability']:.1%}",
+        t("match_score"): f"{row['match_score']:.0%}",
+        t("matched"): row["matched"],
+    }
 
 
 def learning_row(row):
@@ -409,6 +455,8 @@ def display(row, expanded=False):
     event = row["event_object"]
     with st.expander(f"{row['event']} | {row['prediction']} {row['market_probability']:.1%} | {t('score')} {row['predictor_score']}/100 | {row['classification']}", expanded=expanded):
         st.info(f"{headline_line(event.spreads, t('spread'))} | {headline_line(event.totals, t('total'))}")
+        if row.get("do_not_bet_reasons"):
+            st.warning(f"{t('warning')}: " + "; ".join(row["do_not_bet_reasons"]))
         c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric(t("pick"), row["prediction"])
         c2.metric(t("market_prob"), f"{row['market_probability']:.1%}")
@@ -543,19 +591,20 @@ if st.button(t("scan"), type="primary"):
     strong = [row for row in ranked if row["classification"] in ["Strong", "Lectura fuerte"]]
     watch = [row for row in ranked if row["classification"] in ["Watch", "Seguimiento"]]
     avoid = [row for row in sorted(rows, key=lambda row: row["predictor_score"]) if row["classification"] in ["Avoid", "Evitar"]]
+    do_not_bet = [row for row in ranked if row.get("do_not_bet")]
     movers = sorted([row for row in ranked if row["price_move"] is not None], key=lambda row: abs(row["price_move"]), reverse=True)
 
     st.subheader(t("dashboard"))
     c1, c2, c3, c4 = st.columns(4)
     c1.metric(t("markets"), len(rows))
     c2.metric(t("strong"), len(strong))
-    c3.metric(t("skipped"), len(skipped))
+    c3.metric(t("warning"), len(do_not_bet))
     c4.metric(t("top_score"), f"{ranked[0]['predictor_score']}/100")
     st.success(t("saved_learning"))
 
     st.download_button(t("download"), data=csv_text(ranked), file_name="pro_predictor.csv", mime="text/csv")
 
-    tabs = st.tabs([t("top"), t("strong"), t("watch"), t("avoid"), t("movement"), t("all_rows"), t("diagnostics")])
+    tabs = st.tabs([t("top"), t("strong"), t("watch"), t("avoid"), t("warning"), t("movement"), t("all_rows"), t("diagnostics")])
     with tabs[0]:
         for row in ranked[:25]:
             display(row, expanded=row == ranked[0])
@@ -573,13 +622,18 @@ if st.button(t("scan"), type="primary"):
         for row in avoid[:25]:
             display(row)
     with tabs[4]:
+        if not do_not_bet:
+            st.info("No do-not-bet warnings." if not IS_ES else "No hay advertencias de no apostar.")
+        for row in do_not_bet[:25]:
+            display(row)
+    with tabs[5]:
         if not movers:
             st.info(t("no_movement"))
         for row in movers[:25]:
             display(row)
-    with tabs[5]:
-        safe_dataframe([visible_row(row) for row in ranked])
     with tabs[6]:
+        safe_dataframe([visible_row(row) for row in ranked])
+    with tabs[7]:
         st.write(f"{t('feeds_scanned')}: {len(selected_sports)}")
         st.write(f"{t('events_before_filters')}: {len(all_events)}")
         st.write(f"{t('rows_after_filters')}: {len(rows)}")
