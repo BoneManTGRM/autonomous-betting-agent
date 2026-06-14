@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from autonomous_betting_agent.api_budget import APIBudgetManager
 from autonomous_betting_agent.api_clients import OddsAPIClient, OddsAPIConfig, WeatherAPIClient, WeatherAPIConfig
 from autonomous_betting_agent.predictor_api_pipeline import run_predictor_api_pipeline
 from autonomous_betting_agent.sportsdataio import SportsDataIOClient, SportsDataIOConfig
@@ -17,6 +18,8 @@ def main() -> int:
     parser.add_argument("--sportsdataio-api-key", default=None)
     parser.add_argument("--sportsdataio-auth-mode", choices=["header", "query"], default="header")
     parser.add_argument("--odds-sport-key", default=None)
+    parser.add_argument("--sport-search", default=None, help="Use this to auto-resolve Odds API sport key when --odds-sport-key is omitted.")
+    parser.add_argument("--game-search", default=None, help="Game text used to improve sport/event matching.")
     parser.add_argument("--odds-regions", default="us")
     parser.add_argument("--odds-markets", default="h2h,spreads,totals")
     parser.add_argument("--odds-api-key", default=None)
@@ -26,6 +29,10 @@ def main() -> int:
     parser.add_argument("--line-movement-history-csv", type=Path, default=None)
     parser.add_argument("--market-profile-history-csv", type=Path, default=None)
     parser.add_argument("--skip-final-pipeline", action="store_true")
+    parser.add_argument("--max-api-calls", type=int, default=25)
+    parser.add_argument("--api-cache-dir", type=Path, default=Path("data/api_cache"))
+    parser.add_argument("--api-cache-ttl-seconds", type=int, default=900)
+    parser.add_argument("--disable-api-cache", action="store_true")
     args = parser.parse_args()
 
     sdio_client = None
@@ -38,7 +45,7 @@ def main() -> int:
         sdio_client = SportsDataIOClient(sdio_config)
 
     odds_client = None
-    if args.odds_sport_key:
+    if args.odds_sport_key or args.sport_search:
         odds_config = OddsAPIConfig(api_key=args.odds_api_key) if args.odds_api_key else OddsAPIConfig.from_env()
         odds_client = OddsAPIClient(odds_config)
 
@@ -47,6 +54,11 @@ def main() -> int:
         weather_config = WeatherAPIConfig(api_key=args.weatherapi_key) if args.weatherapi_key else WeatherAPIConfig.from_env()
         weather_client = WeatherAPIClient(weather_config)
 
+    budget = None if args.disable_api_cache else APIBudgetManager(
+        cache_dir=args.api_cache_dir,
+        max_api_calls_per_run=args.max_api_calls,
+        ttl_seconds=args.api_cache_ttl_seconds,
+    )
     report = run_predictor_api_pipeline(
         predictions_csv=args.predictions_csv,
         output_dir=args.output_dir,
@@ -59,10 +71,13 @@ def main() -> int:
         odds_markets=args.odds_markets,
         weather_client=weather_client,
         weather_location=args.weather_location,
+        sport_search=args.sport_search,
+        game_search=args.game_search,
         calibration_history_csv=args.calibration_history_csv,
         line_movement_history_csv=args.line_movement_history_csv,
         market_profile_history_csv=args.market_profile_history_csv,
         run_final_pipeline=not args.skip_final_pipeline,
+        budget_manager=budget,
     )
     print(report)
     return 0
