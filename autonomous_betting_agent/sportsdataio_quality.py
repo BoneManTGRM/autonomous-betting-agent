@@ -64,6 +64,7 @@ def evaluate_pipeline_quality(
     warnings: list[str],
     counts: Mapping[str, Any],
     min_prediction_match_rate: float = 0.95,
+    min_odds_match_rate: float = 0.95,
     min_player_feature_match_rate: float = 0.85,
     min_player_feature_ready_rate: float = 0.80,
 ) -> PipelineQualityGate:
@@ -133,6 +134,48 @@ def evaluate_pipeline_quality(
             reason="game result step ran but no prediction rows were counted",
             action="Check the predictions CSV input and header names.",
         )
+
+    odds_rows = _count(counts, "odds_rows")
+    if odds_rows and prediction_rows:
+        odds_matched = _count(counts, "odds_matched_rows")
+        odds_unmatched = _count(counts, "odds_unmatched_rows")
+        odds_missing_entry = _count(counts, "odds_missing_entry_rows")
+        odds_missing_closing = _count(counts, "odds_missing_closing_rows")
+        odds_match_rate = _ratio(odds_matched, prediction_rows)
+        metrics["odds_match_rate"] = odds_match_rate if odds_match_rate is not None else 0.0
+        metrics["odds_rows"] = odds_rows
+        metrics["odds_matched_rows"] = odds_matched
+        metrics["odds_unmatched_rows"] = odds_unmatched
+        metrics["odds_missing_entry_rows"] = odds_missing_entry
+        metrics["odds_missing_closing_rows"] = odds_missing_closing
+        if odds_match_rate is not None and odds_match_rate < min_odds_match_rate:
+            severity = "FAIL" if odds_match_rate < 0.80 else "WATCH"
+            _add_issue(
+                state,
+                reasons,
+                actions,
+                severity=severity,
+                reason=f"odds match rate is {odds_match_rate:.1%}",
+                action="Improve event IDs, market names and selections before using ROI/CLV metrics.",
+            )
+        if odds_missing_entry:
+            _add_issue(
+                state,
+                reasons,
+                actions,
+                severity="FAIL",
+                reason=f"{odds_missing_entry} row(s) missing entry odds",
+                action="Add pick-time odds snapshots before calculating ROI.",
+            )
+        if odds_missing_closing:
+            _add_issue(
+                state,
+                reasons,
+                actions,
+                severity="WATCH",
+                reason=f"{odds_missing_closing} row(s) missing closing odds",
+                action="Add closing odds snapshots before trusting CLV.",
+            )
 
     feature_records = _count(counts, "player_feature_records")
     if feature_records:
