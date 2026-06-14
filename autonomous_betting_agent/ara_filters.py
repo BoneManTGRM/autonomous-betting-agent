@@ -55,6 +55,9 @@ COUNTRY_ALIASES = {
     "scotland": {"scotland", "united kingdom", "uk", "great britain"},
     "wales": {"wales", "united kingdom", "uk", "great britain"},
     "northern ireland": {"northern ireland", "united kingdom", "uk", "great britain"},
+    "united kingdom": {"united kingdom", "uk", "great britain", "england", "scotland", "wales", "northern ireland"},
+    "great britain": {"great britain", "united kingdom", "uk", "england", "scotland", "wales"},
+    "uk": {"united kingdom", "uk", "great britain", "england", "scotland", "wales", "northern ireland"},
     "spain": {"spain"},
     "finland": {"finland"},
     "aland islands": {"aland", "finland"},
@@ -179,6 +182,17 @@ def _expected_country_aliases(query: Any) -> set[str]:
     return set()
 
 
+def _alias_matches_country(alias: str, returned_country: str) -> bool:
+    alias_norm = _norm_text(alias)
+    country_norm = _norm_text(returned_country)
+    if not alias_norm or not country_norm:
+        return False
+    if len(alias_norm) <= 3:
+        country_tokens = set(country_norm.split())
+        return country_norm == alias_norm or alias_norm in country_tokens
+    return country_norm == alias_norm or alias_norm in country_norm
+
+
 def _country_mismatch(query: Any, returned_location: Any) -> bool:
     aliases = _expected_country_aliases(query)
     if not aliases:
@@ -187,7 +201,7 @@ def _country_mismatch(query: Any, returned_location: Any) -> bool:
     if not location_parts:
         return False
     returned_country = location_parts[-1]
-    return not any(alias in returned_country for alias in aliases)
+    return not any(_alias_matches_country(alias, returned_country) for alias in aliases)
 
 
 def _combined_weather_location(row: Mapping[str, Any]) -> str | None:
