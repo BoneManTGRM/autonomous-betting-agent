@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import io
 import os
 import re
@@ -303,12 +304,14 @@ with tab_batch:
 
     if uploaded is not None:
         try:
-            raw = pd.read_csv(uploaded)
+            upload_bytes = uploaded.getvalue()
+            file_hash = hashlib.sha256(upload_bytes).hexdigest()[:16]
+            raw = pd.read_csv(io.BytesIO(upload_bytes))
         except Exception as exc:
             st.error(f"Could not read CSV: {exc}" if not IS_ES else f"No se pudo leer CSV: {exc}")
             st.stop()
 
-        file_key = f"{uploaded.name}:{len(raw)}:{','.join(map(str, raw.columns))}:{int(max_rows)}:{outdoor_only}"
+        file_key = f"{uploaded.name}:{file_hash}:{len(raw)}:{','.join(map(str, raw.columns))}:{int(max_rows)}:{outdoor_only}"
         if st.session_state.get("ara_weather_enhanced_key") != file_key:
             st.session_state.ara_weather_enhanced_csv = pd.DataFrame()
             st.session_state.ara_weather_enhanced_key = file_key
