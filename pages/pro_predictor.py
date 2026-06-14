@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from types import SimpleNamespace
 
+import pandas as pd
 import streamlit as st
 
 from autonomous_betting_agent.live_odds import list_sports, scan_market
@@ -18,12 +19,12 @@ IS_ES = language == "Español"
 TEXT = {
     "title": {"English": "Pro Predictor", "Español": "Predictor Profesional"},
     "caption": {
-        "English": "Main all-sports predictor. It ranks current markets, compares sportsbook prices, estimates market probability, and now saves the latest scan for the Self Learning Engine. Research-only; no guaranteed winners.",
-        "Español": "Predictor principal de todos los deportes. Ordena mercados actuales, compara momios, estima probabilidad implícita y ahora guarda el escaneo más reciente para el Motor de Aprendizaje. Solo investigación; no garantiza ganadores.",
+        "English": "Main all-sports predictor. It ranks current markets, compares sportsbook prices, estimates market probability, saves the latest scan for the Self Learning Engine, and can now apply learning-memory adjustments. Research-only; no guaranteed winners.",
+        "Español": "Predictor principal de todos los deportes. Ordena mercados actuales, compara momios, estima probabilidad implícita, guarda el escaneo para el Motor de Aprendizaje y ahora puede aplicar ajustes de memoria. Solo investigación; no garantiza ganadores.",
     },
     "help": {
-        "English": "How to read it: ARA compares sportsbook odds, shows the best available price, estimates market probability, then scores the read. It is not a guarantee; it is a ranked research signal.",
-        "Español": "Cómo leerlo: ARA compara momios, muestra el mejor precio disponible, estima la probabilidad del mercado y califica la lectura. No es garantía; es una señal de investigación ordenada.",
+        "English": "How to read it: ARA compares sportsbook odds, shows the best available price, estimates market probability, then scores the read. If a learning-memory CSV is loaded, it adjusts the score using past hit rates by probability bucket, sport, and read type.",
+        "Español": "Cómo leerlo: ARA compara momios, muestra el mejor precio disponible, estima la probabilidad del mercado y califica la lectura. Si cargas una memoria de aprendizaje, ajusta el puntaje usando resultados anteriores por rango de probabilidad, deporte y tipo de lectura.",
     },
     "token": {"English": "Provider key", "Español": "Clave del proveedor"},
     "target": {"English": "Scan target", "Español": "Tipo de escaneo"},
@@ -38,6 +39,9 @@ TEXT = {
     "max_events": {"English": "Max events per feed", "Español": "Máximo de eventos por feed"},
     "min_books": {"English": "Minimum books", "Español": "Mínimo de casas"},
     "min_probability": {"English": "Minimum market probability", "Español": "Probabilidad implícita mínima"},
+    "memory_upload": {"English": "Upload learning memory CSV", "Español": "Subir CSV de memoria de aprendizaje"},
+    "memory_loaded": {"English": "Learning memory loaded", "Español": "Memoria de aprendizaje cargada"},
+    "learning_adjustment": {"English": "Learning adjustment", "Español": "Ajuste por aprendizaje"},
     "scan": {"English": "Run Pro Predictor", "Español": "Ejecutar Predictor Profesional"},
     "dashboard": {"English": "Predictor dashboard", "Español": "Panel del predictor"},
     "top": {"English": "Top ranked markets", "Español": "Mejores mercados ordenados"},
@@ -87,7 +91,7 @@ TEXT = {
     "events_before_filters": {"English": "Events returned before filters", "Español": "Eventos devueltos antes de filtros"},
     "rows_after_filters": {"English": "Rows after filters", "Español": "Filas después de filtros"},
     "markets_requested": {"English": "Markets requested: h2h, spreads, totals", "Español": "Mercados solicitados: ganador, spread y total"},
-    "scoring_note": {"English": "Scoring: market probability + data quality + market gap - sport/draw/thin-market/team-match risk.", "Español": "Puntaje: probabilidad + calidad de datos + ventaja de mercado - riesgo por deporte, empate, mercado débil o mala coincidencia."},
+    "scoring_note": {"English": "Scoring: market probability + data quality + market gap - sport/draw/thin-market/team-match risk + learning-memory adjustment.", "Español": "Puntaje: probabilidad + calidad de datos + ventaja de mercado - riesgo por deporte, empate, mercado débil o mala coincidencia + ajuste de memoria."},
     "saved_learning": {"English": "Latest scan saved for Self Learning Engine.", "Español": "Escaneo más reciente guardado para el Motor de Aprendizaje."},
 }
 
@@ -112,6 +116,30 @@ def clean(value):
     value = unicodedata.normalize("NFKD", str(value or ""))
     value = "".join(char for char in value if not unicodedata.combining(char))
     return " ".join(value.lower().replace("-", " ").replace(".", " ").replace("'", "").split())
+
+
+def safe_float(value, default=0.0):
+    try:
+        if pd.isna(value):
+            return default
+        return float(str(value).replace("%", "").strip())
+    except Exception:
+        return default
+
+
+def probability_bucket(probability):
+    probability = max(0.0, min(1.0, float(probability or 0.0)))
+    if probability < 0.40:
+        return "0-40%"
+    if probability < 0.50:
+        return "40-50%"
+    if probability < 0.60:
+        return "50-60%"
+    if probability < 0.70:
+        return "60-70%"
+    if probability < 0.80:
+        return "70-80%"
+    return "80-100%"
 
 
 def alias_terms(value):
@@ -221,7 +249,69 @@ def classify(row):
     return "Seguimiento" if IS_ES else "Watch"
 
 
-def snapshot(event, match_score, matched, previous):
+def parse_learning_memory(df):
+    required = {"area_type", "group_value", "records", "avg_predicted", "actual_hit_rate"}
+    if df is None or df.empty or not required.issubset(set(df.columns)):
+        return []
+    memory = []
+    for _, item in df.iterrows():
+        records = int(safe_float(item.get("records"), 0))
+        if records < 2:
+            continue
+        avg_predicted = safe_float(item.get("avg_predicted"), 0.0)
+        actual_hit_rate = safe_float(item.get("actual_hit_rate"), 0.0)
+        if avg_predicted > 1:
+            avg_predicted /= 100.0
+        if actual_hit_rate > 1:
+            actual_hit_rate /= 100.0
+        edge = safe_float(item.get("actual_minus_predicted"), actual_hit_rate - avg_predicted)
+        memory.append({
+            "area_type": clean(item.get("area_type", "")),
+            "group_value": clean(item.get("group_value", "")),
+            "records": records,
+            "avg_predicted": avg_predicted,
+            "actual_hit_rate": actual_hit_rate,
+            "edge": edge,
+        })
+    return memory
+
+
+def learning_adjustment(row, learning_memory):
+    if not learning_memory:
+        return 0, []
+    targets = {
+        "probability bucket": clean(probability_bucket(row["market_probability"])),
+        "sport": clean(row["sport"]),
+        "read": clean(row.get("base_classification", row.get("classification", ""))),
+    }
+    total_weight = 0.0
+    weighted_edge = 0.0
+    reasons = []
+    for item in learning_memory:
+        area_type = item["area_type"]
+        group_value = item["group_value"]
+        if not area_type or not group_value:
+            continue
+        match = False
+        if area_type == "probability bucket" and group_value == targets["probability bucket"]:
+            match = True
+        elif area_type == "sport" and (group_value == targets["sport"] or group_value in targets["sport"] or targets["sport"] in group_value):
+            match = True
+        elif area_type == "read" and group_value == targets["read"]:
+            match = True
+        if match:
+            weight = min(item["records"], 20) / 20.0
+            weighted_edge += item["edge"] * weight
+            total_weight += weight
+            reasons.append(f"{item['area_type']}:{item['group_value']} {item['actual_hit_rate']:.0%}/{item['avg_predicted']:.0%}")
+    if total_weight <= 0:
+        return 0, []
+    raw = (weighted_edge / total_weight) * 35.0
+    adjustment = int(max(-14, min(14, round(raw))))
+    return adjustment, reasons[:3]
+
+
+def snapshot(event, match_score, matched, previous, learning_memory):
     pick = top_non_draw(event)
     second = event.outcomes[1] if len(event.outcomes) > 1 else None
     draw = next((o.normalized_probability for o in event.outcomes if clean(o.name) == "draw"), None)
@@ -238,7 +328,7 @@ def snapshot(event, match_score, matched, previous):
         risk_penalty += 10
     if match_score < 0.85:
         risk_penalty += 12
-    predictor_score = max(0, min(100, round(data_quality + pick.normalized_probability * 35 + gap * 50 - risk_penalty)))
+    base_score = max(0, min(100, round(data_quality + pick.normalized_probability * 35 + gap * 50 - risk_penalty)))
     key = f"{event.event_id}:{pick.name}"
     old = previous.get(key, {})
     price_move = None if "best_price" not in old else best_price - old["best_price"]
@@ -250,7 +340,8 @@ def snapshot(event, match_score, matched, previous):
         "start": event.commence_time,
         "prediction": pick.name,
         "market_probability": pick.normalized_probability,
-        "predictor_score": predictor_score,
+        "predictor_score": base_score,
+        "base_predictor_score": base_score,
         "data_quality": data_quality,
         "risk_penalty": risk_penalty,
         "best_price": best_price,
@@ -264,6 +355,11 @@ def snapshot(event, match_score, matched, previous):
         "matched": matched,
         "event_object": event,
     }
+    row["base_classification"] = classify(row)
+    adjustment, reasons = learning_adjustment(row, learning_memory)
+    row["learning_adjustment"] = adjustment
+    row["learning_reasons"] = reasons
+    row["predictor_score"] = max(0, min(100, row["base_predictor_score"] + adjustment))
     row["classification"] = classify(row)
     return row
 
@@ -292,7 +388,7 @@ def safe_dataframe(rows, empty_message=None):
 
 
 def visible_row(row):
-    return {t("event"): row["event"], t("sport"): row["sport"], t("start"): row["start"], t("pick"): row["prediction"], t("market_prob"): f"{row['market_probability']:.1%}", t("score"): row["predictor_score"], t("classification"): row["classification"], t("quality"): row["data_quality"], t("risk_penalty"): row["risk_penalty"], t("best_price"): round(row["best_price"], 3), t("best_book"): row["best_book"], t("books"): row["books"], t("draw_probability"): "" if row["draw_probability"] is None else f"{row['draw_probability']:.1%}", t("match_score"): f"{row['match_score']:.0%}", t("matched"): row["matched"]}
+    return {t("event"): row["event"], t("sport"): row["sport"], t("start"): row["start"], t("pick"): row["prediction"], t("market_prob"): f"{row['market_probability']:.1%}", t("score"): row["predictor_score"], t("learning_adjustment"): row.get("learning_adjustment", 0), t("classification"): row["classification"], t("quality"): row["data_quality"], t("risk_penalty"): row["risk_penalty"], t("best_price"): round(row["best_price"], 3), t("best_book"): row["best_book"], t("books"): row["books"], t("draw_probability"): "" if row["draw_probability"] is None else f"{row['draw_probability']:.1%}", t("match_score"): f"{row['match_score']:.0%}", t("matched"): row["matched"]}
 
 
 def learning_row(row):
@@ -313,13 +409,16 @@ def display(row, expanded=False):
     event = row["event_object"]
     with st.expander(f"{row['event']} | {row['prediction']} {row['market_probability']:.1%} | {t('score')} {row['predictor_score']}/100 | {row['classification']}", expanded=expanded):
         st.info(f"{headline_line(event.spreads, t('spread'))} | {headline_line(event.totals, t('total'))}")
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric(t("pick"), row["prediction"])
         c2.metric(t("market_prob"), f"{row['market_probability']:.1%}")
         c3.metric(t("score"), f"{row['predictor_score']}/100")
-        c4.metric(t("risk"), row["classification"])
+        c4.metric(t("learning_adjustment"), f"{row.get('learning_adjustment', 0):+d}")
+        c5.metric(t("risk"), row["classification"])
         st.write(f"{t('start')}: {row['start']}")
         st.write(f"{t('quality')}: {row['data_quality']}/100 | {t('risk_penalty')}: {row['risk_penalty']} | {t('books')}: {row['books']}")
+        if row.get("learning_reasons"):
+            st.write(f"{t('learning_adjustment')}: {row.get('learning_adjustment', 0):+d} — " + "; ".join(row["learning_reasons"]))
         if row["price_move"] is not None:
             st.write(f"{t('session_movement')}: {t('best_price')} {row['price_move']:+.3f}, {t('market_prob')} {row['probability_move']:+.1%}")
         if row["matched"]:
@@ -364,6 +463,18 @@ with st.expander(t("controls")):
     min_books = st.number_input(t("min_books"), min_value=1, max_value=25, value=1, step=1)
     min_probability = st.slider(t("min_probability"), min_value=0.0, max_value=1.0, value=0.0, step=0.01)
 
+learning_memory = st.session_state.get("ara_scoring_learning_memory", [])
+memory_file = st.file_uploader(t("memory_upload"), type=["csv"])
+if memory_file is not None:
+    try:
+        learning_memory = parse_learning_memory(pd.read_csv(memory_file))
+        st.session_state.ara_scoring_learning_memory = learning_memory
+        st.success(f"{t('memory_loaded')}: {len(learning_memory)}")
+    except Exception as exc:
+        st.warning(f"Could not load learning memory: {exc}")
+elif learning_memory:
+    st.success(f"{t('memory_loaded')}: {len(learning_memory)}")
+
 try:
     sports = list_sports(api_key, include_all=False)
 except Exception as exc:
@@ -400,7 +511,7 @@ if st.button(t("scan"), type="primary"):
     rows = []
     for event in all_events:
         score, matched = strict_match(team_filter, event)
-        rows.append(snapshot(event, score, matched, previous))
+        rows.append(snapshot(event, score, matched, previous, learning_memory))
 
     rows = [row for row in rows if row["books"] >= int(min_books) and row["market_probability"] >= float(min_probability)]
     if team_filter.strip():
@@ -472,6 +583,7 @@ if st.button(t("scan"), type="primary"):
         st.write(f"{t('feeds_scanned')}: {len(selected_sports)}")
         st.write(f"{t('events_before_filters')}: {len(all_events)}")
         st.write(f"{t('rows_after_filters')}: {len(rows)}")
+        st.write(f"{t('memory_loaded')}: {len(learning_memory)}")
         st.write(t("markets_requested"))
         st.write(t("scoring_note"))
         if skipped:
