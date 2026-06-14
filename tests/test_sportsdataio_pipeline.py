@@ -52,12 +52,12 @@ def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
 
 
 class SportsDataIOPipelineTests(unittest.TestCase):
-    def test_pipeline_runs_fetch_results_features_and_props(self) -> None:
+    def test_pipeline_runs_fetch_results_features_props_and_profit_review(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             base = Path(temp_dir)
             predictions = base / "predictions.csv"
             props = base / "props.csv"
-            _write_csv(predictions, [{"sdio_game_id": "10", "prediction": "DAL", "best_price": "1.5"}])
+            _write_csv(predictions, [{"sdio_game_id": "10", "prediction": "DAL", "best_price": "1.5", "closing_odds": "1.45"}])
             _write_csv(props, [{"sdio_player_id": "7", "player_name": "Jane Doe", "prop_type": "rushing yards", "line": "70", "selection": "over", "best_price": "1.8", "books": "8"}])
 
             report = run_sportsdataio_pipeline(
@@ -69,15 +69,20 @@ class SportsDataIOPipelineTests(unittest.TestCase):
                 player_props_csv=props,
                 output_dir=base / "out",
                 include_watch=True,
+                profit_goal_min_finished=1,
             )
 
             self.assertIn("fetch_games", report.steps_run)
             self.assertIn("apply_game_results", report.steps_run)
+            self.assertIn("review_profit_goal", report.steps_run)
             self.assertIn("build_player_features", report.steps_run)
             self.assertIn("enrich_and_score_player_props", report.steps_run)
             self.assertEqual(report.counts["prediction_match_matched"], 1)
+            self.assertEqual(report.counts["profit_goal_finished_rows"], 1)
+            self.assertEqual(report.counts["profit_goal_wins"], 1)
             self.assertEqual(report.counts["player_feature_match_matched"], 1)
             self.assertTrue(Path(report.outputs.predictions_with_results_csv or "").exists())
+            self.assertTrue(Path(report.outputs.profit_goal_report_json or "").exists())
             self.assertTrue(Path(report.outputs.player_props_checked_csv or "").exists())
             self.assertTrue(Path(report.outputs.report_json or "").exists())
 
@@ -99,6 +104,22 @@ class SportsDataIOPipelineTests(unittest.TestCase):
             report = run_sportsdataio_pipeline(player_props_csv=props, existing_player_features_csv=features, output_dir=base / "out", include_watch=True)
             self.assertIn("use_existing_player_features", report.steps_run)
             self.assertEqual(report.counts["player_feature_match_matched"], 1)
+
+    def test_pipeline_can_skip_profit_goal_review(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            predictions = base / "predictions.csv"
+            _write_csv(predictions, [{"sdio_game_id": "10", "prediction": "DAL", "best_price": "1.5"}])
+            report = run_sportsdataio_pipeline(
+                client=FakeClient(),
+                games_endpoint="ScoresByDate/2026-SEP-10",
+                predictions_csv=predictions,
+                output_dir=base / "out",
+                run_profit_goal_review=False,
+            )
+            self.assertIn("apply_game_results", report.steps_run)
+            self.assertNotIn("review_profit_goal", report.steps_run)
+            self.assertIsNone(report.outputs.profit_goal_report_json)
 
 
 if __name__ == "__main__":
