@@ -6,6 +6,7 @@ import pandas as pd
 
 from autonomous_betting_agent.mobile_report import compact_report_frame, prepare_mobile_report, rejection_summary
 from autonomous_betting_agent.odds_breakdown import build_odds_breakdown
+from autonomous_betting_agent.odds_input_normalizer import normalize_odds_input
 
 
 class MobileReportTests(unittest.TestCase):
@@ -54,6 +55,19 @@ class MobileReportTests(unittest.TestCase):
         self.assertGreaterEqual(len(prepared["actionable"]), 1)
         self.assertFalse(props.empty)
         self.assertFalse(diag.empty)
+
+    def test_normalizer_finds_alternate_odds_columns(self) -> None:
+        source = pd.DataFrame([
+            {"game": "A at B", "pick": "B", "final_probability_value": "72%", "american_odds": -150, "confidence": "HIGH", "bookmaker_count": 5, "api_coverage": 1.0},
+            {"game": "C at D", "pick": "C", "final_probability_value": "65%", "implied_probability_from_price": "55%", "confidence": "HIGH", "bookmaker_count": 4},
+        ])
+        normalized = normalize_odds_input(source)
+        self.assertIn("event", normalized.columns)
+        self.assertIn("prediction", normalized.columns)
+        self.assertIn("best_price", normalized.columns)
+        main, _, _ = build_odds_breakdown(normalized)
+        self.assertTrue((main["decimal_price"].astype(str).str.strip() != "").all())
+        self.assertGreaterEqual(int(main["decision"].isin(["candidate", "strong_candidate"]).sum()), 1)
 
 
 if __name__ == "__main__":
