@@ -14,13 +14,21 @@ MOBILE_LABELS = {
     'decision': 'Pick Status',
     'decision_reason': 'Why',
     'confidence_tier': 'Confidence Tier',
+    'model_probability': 'Model Probability',
+    'market_probability': 'Market Probability',
+    'odds_probability_used': 'Probability Used',
+    'probability_source': 'Probability Source',
     'final_probability': 'Model Probability',
     'final_probability_value': 'Model Probability Raw',
     'best_price': 'Best Odds',
     'decimal_price': 'Decimal Odds',
     'american_odds': 'American Odds',
     'implied_probability': 'Break-even %',
+    'model_minus_implied': 'Model Edge',
     'estimated_ev_decimal': 'Estimated EV',
+    'computed_ev_decimal': 'Computed EV',
+    'odds_quality_score': 'Odds Quality',
+    'estimated_score': 'Estimated Score',
     'profit_units': 'Units',
     'roi_percent': 'ROI %',
     'clean_grading_status': 'Grade Status',
@@ -35,21 +43,25 @@ PRIORITY_COLUMNS = (
     'decision',
     'decision_reason',
     'confidence_tier',
+    'model_probability',
     'final_probability',
+    'market_probability',
+    'odds_probability_used',
+    'probability_source',
     'best_price',
     'decimal_price',
     'american_odds',
     'implied_probability',
+    'model_minus_implied',
     'estimated_ev_decimal',
+    'computed_ev_decimal',
+    'odds_quality_score',
+    'estimated_score',
     'clean_grading_status',
     'audit_inclusion',
 )
 
 ACTIONABLE_TIERS = {'A+ High Confidence', 'A Strong', 'B Lean'}
-
-
-def _has_column(frame: pd.DataFrame, name: str) -> bool:
-    return name in frame.columns
 
 
 def _series_text(frame: pd.DataFrame, name: str) -> pd.Series:
@@ -78,7 +90,7 @@ def compact_report_frame(frame: pd.DataFrame) -> pd.DataFrame:
     columns = [col for col in PRIORITY_COLUMNS if col in frame.columns]
     compact = frame[columns].copy()
     if 'decision' in compact.columns:
-        compact['decision'] = compact['decision'].replace({'watch_only': 'Watch Only', 'skip': 'No Bet', 'candidate': 'Candidate', 'strong_candidate': 'Strong Candidate'})
+        compact['decision'] = compact['decision'].replace({'watch_only': 'Watch Only', 'skip': 'No Bet', 'candidate': 'Candidate', 'strong_candidate': 'Strong Candidate', 'odds_only': 'Odds Only'})
     if 'decision_reason' in compact.columns:
         compact['decision_reason'] = compact['decision_reason'].replace({'Not strong enough for the shortlist.': 'No Bet: quality/odds did not clear the shortlist.'})
     for col in ('implied_probability',):
@@ -108,8 +120,11 @@ def rejection_summary(frame: pd.DataFrame) -> pd.DataFrame:
     low_quality = quality.notna() & (quality < 70)
     if int(low_quality.sum()):
         rows.append({'Issue': 'Quality score below 70', 'Count': int(low_quality.sum())})
-    ev = _series_text(frame, 'estimated_ev_decimal')
-    missing_ev = ev.map(_empty_like)
+    ev_columns = ('estimated_ev_decimal', 'computed_ev_decimal', 'estimated_ev_value')
+    ev_available = pd.Series([False] * len(frame), index=frame.index)
+    for column in ev_columns:
+        ev_available = ev_available | _series_text(frame, column).map(lambda value: not _empty_like(value))
+    missing_ev = ~ev_available
     if int(missing_ev.sum()):
         rows.append({'Issue': 'EV unavailable', 'Count': int(missing_ev.sum())})
     review_needed = _series_text(frame, 'clean_grading_status').map(clean_text).eq('review needed') | _series_text(frame, 'clean_grading_status').map(clean_text).eq('review_needed')
@@ -153,9 +168,9 @@ def render_pick_cards(frame: pd.DataFrame, *, max_cards: int = 8) -> None:
         tier = _fmt_value(_row_value(row, 'confidence_tier'))
         decision = _fmt_value(_row_value(row, 'decision'))
         reason = _fmt_value(_row_value(row, 'decision_reason', 'target_70_rejection_reason'))
-        probability = _fmt_pct(_row_value(row, 'final_probability_value', 'final_probability'))
+        probability = _fmt_pct(_row_value(row, 'final_probability_value', 'final_probability', 'model_probability'))
         odds = _fmt_value(_row_value(row, 'decimal_price', 'best_price'))
-        ev = _fmt_value(_row_value(row, 'estimated_ev_decimal', 'estimated_ev_value'))
+        ev = _fmt_value(_row_value(row, 'estimated_ev_decimal', 'computed_ev_decimal', 'estimated_ev_value'))
         st.markdown(f'**{event}**')
         st.caption(f'Pick: {pick} | Tier: {tier} | Status: {decision}')
         st.write(f'Model probability: {probability or "Missing"} | Odds: {odds} | EV: {ev}')
