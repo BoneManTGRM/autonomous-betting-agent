@@ -7,6 +7,8 @@ import pandas as pd
 import streamlit as st
 
 import autonomous_betting_agent  # noqa: F401  # installs global sidebar/report translator
+from autonomous_betting_agent.audit import audit_dashboard_metrics, enrich_prediction_frame
+from autonomous_betting_agent.mobile_report import ACTIONABLE_TIERS, compact_report_frame, rejection_summary, render_pick_cards
 from autonomous_betting_agent.odds_breakdown import build_odds_breakdown
 
 st.set_page_config(page_title="What Are the Odds", layout="wide")
@@ -26,6 +28,8 @@ TEXT = {
     "input_rows": "Filas de entrada" if IS_ES else "Input rows",
     "main_rows": "Filas del reporte" if IS_ES else "Main report rows",
     "candidates": "Candidatos" if IS_ES else "Candidates",
+    "actionable": "Accionables" if IS_ES else "Actionable",
+    "missing_odds": "Cuotas faltantes" if IS_ES else "Missing odds",
     "scores": "Marcadores" if IS_ES else "Scores",
     "props": "Props CSV" if IS_ES else "CSV props",
     "quality": "Calidad mínima" if IS_ES else "Minimum quality",
@@ -41,6 +45,11 @@ TEXT = {
     "download_props": "Descargar marcadores/props" if IS_ES else "Download scores/props",
     "no_candidates": "No hay candidatos después de filtros." if IS_ES else "No candidates after filters.",
     "odds_only": "Algunas filas son odds_only: se leyeron, pero no tienen probabilidad del modelo." if IS_ES else "Some rows are odds_only: they were read, but no model probability was found.",
+    "missing_odds_warning": "Faltan cuotas en parte o todo el reporte. ROI, EV y break-even no son confiables para esas filas." if IS_ES else "Odds are missing for part or all of this report. ROI, EV, and break-even are not reliable for those rows.",
+    "best_first": "Mejores picks primero" if IS_ES else "Best picks first",
+    "why_rejected": "Por qué fueron rechazados / solo vigilar" if IS_ES else "Why rows were rejected / Watch Only",
+    "compact": "Tabla compacta móvil" if IS_ES else "Compact mobile table",
+    "technical": "Reporte técnico completo" if IS_ES else "Full technical report",
 }
 
 
@@ -52,6 +61,15 @@ def to_float(value: Any) -> float | None:
         return float(text)
     except ValueError:
         return None
+
+
+def pct(value: Any) -> str:
+    if value in (None, ""):
+        return ""
+    try:
+        return f"{float(value) * 100:.1f}%"
+    except (TypeError, ValueError):
+        return ""
 
 
 def read_inputs() -> tuple[str, pd.DataFrame | None]:
@@ -116,6 +134,16 @@ def column_health(diag: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame([{"field": field, "detected_column": row.get(field, "missing"), "status": "ok" if str(row.get(field, "missing")) not in {"missing", ""} else "missing"} for field in fields])
 
 
+def analyzed_view(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, Any], int]:
+    enriched = enrich_prediction_frame(df) if not df.empty else pd.DataFrame()
+    issues = rejection_summary(enriched)
+    compact = compact_report_frame(enriched)
+    actionable = enriched[enriched["confidence_tier"].isin(ACTIONABLE_TIERS)] if "confidence_tier" in enriched.columns else pd.DataFrame()
+    metrics = audit_dashboard_metrics(enriched)
+    missing_odds = int(issues.loc[issues["Issue"] == "Missing odds / price", "Count"].sum()) if not issues.empty else 0
+    return enriched, issues, compact, actionable, metrics, missing_odds
+
+
 st.title(TEXT["title"])
 st.caption(TEXT["caption"])
 source, raw_df = read_inputs()
@@ -151,32 +179,49 @@ score_count = int((props_df.get("prop_type", pd.Series(dtype=str)).astype(str) =
 csv_prop_count = int(props_df.get("source", pd.Series(dtype=str)).astype(str).str.contains("csv", case=False, na=False).sum()) if not props_df.empty else 0
 odds_only_count = int(main_df.get("decision", pd.Series(dtype=str)).astype(str).eq("odds_only").sum()) if not main_df.empty else 0
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric(TEXT["main_rows"], len(main_df))
-c2.metric(TEXT["candidates"], candidate_count)
-c3.metric(TEXT["scores"], score_count)
-c4.metric(TEXT["props"], csv_prop_count)
-if odds_only_count:
-    st.info(TEXT["odds_only"])
-
 min_quality = st.slider(TEXT["quality"], 0, 100, 0, 5, key="odds_min_quality")
 candidates_only = st.checkbox(TEXT["candidate_only"], value=False, key="odds_candidates_only")
 query = st.text_input(TEXT["search"], value="", key="odds_search")
 filtered = filter_main(main_df, min_quality, candidates_only, query)
+enriched, issues, compact, actionable, metrics, missing_odds = analyzed_view(filtered)
+
+c1, c2, c3, c4 = st.columns(4)
+c1.metric(TEXT["main_rows"], len(filtered))
+c2.metric(TEXT["candidates"], candidate_count)
+c3.metric(TEXT["actionable"], len(actionable))
+c4.metric(TEXT["missing_odds"], missing_odds)
+
+if odds_only_count:
+    st.info(TEXT["odds_only"])
+if missing_odds:
+    st.warning(TEXT["missing_odds_warning"])
+
+with st.expander("Extra counts" if not IS_ES else "Conteos extra", expanded=False):
+    ec1, ec2, ec3, ec4 = st.columns(4)
+    ec1.metric(TEXT["scores"], score_count)
+    ec2.metric(TEXT["props"], csv_prop_count)
+    ec3.metric("Official graded", metrics.get("official_graded", 0))
+    ec4.metric("ROI", "" if metrics.get("roi_percent") is None else f"{metrics['roi_percent']:.2f}%")
 
 tabs = st.tabs([TEXT["summary"], TEXT["best"], TEXT["main"], TEXT["extras"], TEXT["diag"]])
 with tabs[0]:
-    cols = ["event", "sport", "prediction", "model_probability", "market_probability", "odds_probability_used", "probability_source", "best_price", "computed_ev_decimal", "odds_quality_score", "decision", "estimated_score"]
-    st.dataframe(filtered[[col for col in cols if col in filtered.columns]], use_container_width=True, hide_index=True)
+    st.subheader(TEXT["best_first"])
+    render_pick_cards(actionable)
+    st.subheader(TEXT["why_rejected"])
+    st.dataframe(issues, use_container_width=True, hide_index=True)
+    with st.expander(TEXT["compact"], expanded=True):
+        st.dataframe(compact, use_container_width=True, hide_index=True)
 with tabs[1]:
     best = best_value(main_df)
     if best.empty:
         st.info(TEXT["no_candidates"])
     else:
-        st.dataframe(best, use_container_width=True, hide_index=True)
+        st.dataframe(compact_report_frame(enrich_prediction_frame(best)), use_container_width=True, hide_index=True)
 with tabs[2]:
-    st.dataframe(filtered, use_container_width=True, hide_index=True)
-    st.download_button(TEXT["download_main"], data=main_df.to_csv(index=False), file_name="what_are_the_odds_breakdown.csv", mime="text/csv", key="odds_main_download")
+    st.dataframe(compact, use_container_width=True, hide_index=True)
+    with st.expander(TEXT["technical"], expanded=False):
+        st.dataframe(enriched, use_container_width=True, hide_index=True)
+    st.download_button(TEXT["download_main"], data=enriched.to_csv(index=False), file_name="what_are_the_odds_breakdown.csv", mime="text/csv", key="odds_main_download")
 with tabs[3]:
     if props_df.empty:
         st.info("No score or prop rows found." if not IS_ES else "No se encontraron filas de marcador o props.")
