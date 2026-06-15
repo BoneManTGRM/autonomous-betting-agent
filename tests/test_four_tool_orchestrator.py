@@ -56,7 +56,13 @@ class FourToolOrchestratorTests(unittest.TestCase):
 
     def test_finished_rows_route_to_learning_memory(self):
         frame = pd.DataFrame([
-            {'event': f'E{i}', 'prediction': 'B', 'result_status': 'win' if i % 2 else 'loss'}
+            {
+                'event': f'E{i}',
+                'prediction': 'B',
+                'model_probability': 0.62,
+                'decimal_price': 1.91,
+                'result_status': 'win' if i % 2 else 'loss',
+            }
             for i in range(6)
         ])
         health = page_health(frame, page='learning_memory')
