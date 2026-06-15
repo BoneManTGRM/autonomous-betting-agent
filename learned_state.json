@@ -1,19 +1,19 @@
 {
-  "accuracy_after": 0.8,
-  "accuracy_before": 0.8,
-  "brier_after": 0.16000043093774077,
-  "brier_before": 0.17,
-  "events_trained": 10,
-  "intercept": 0.4244707411699645,
-  "log_loss_after": 0.5004037680144072,
-  "log_loss_before": 0.5261345160161731,
+  "accuracy_after": 0.75,
+  "accuracy_before": 0.75,
+  "brier_after": 0.18469441352159746,
+  "brier_before": 0.18815,
+  "events_trained": 12,
+  "intercept": 0.0033201431229584618,
+  "log_loss_after": 0.5550512891360829,
+  "log_loss_before": 0.5642071126067056,
   "notes": [
     "Learns probability calibration from graded historical predictions.",
     "This does not prove betting profitability; use untouched forward tests before making performance claims.",
-    "Mode=replace. Existing rows used=0. Uploaded usable rows=10. Duplicates removed=0. Trained on 10 rows.",
-    "Used fallback confidence probability for 10 rows because probability/odds were missing."
+    "Mode=merge. Existing rows used=10. Uploaded usable rows=12. Duplicates removed=10. Trained on 12 rows.",
+    "Used fallback confidence probability for 12 rows because probability/odds were missing."
   ],
-  "slope": 1.1303295302769623,
-  "source": "High confidence(1).csv",
-  "trained_at_utc": "2026-06-15T20:14:26+00:00"
+  "slope": 1.336147476451706,
+  "source": "High_confidence_2_checked_new_finished_updated.csv",
+  "trained_at_utc": "2026-06-15T22:20:01+00:00"
 }
