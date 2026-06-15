@@ -1,12 +1,39 @@
 from __future__ import annotations
 
+import builtins
 import csv
 import json
 import math
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
+
+
+def get_secret(*names: str) -> str:
+    """Read a Streamlit secret or environment variable by one of several names."""
+    try:
+        import streamlit as st
+    except Exception:
+        st = None  # type: ignore[assignment]
+    for name in names:
+        if not name:
+            continue
+        if st is not None:
+            try:
+                value = str(st.secrets.get(name, "")).strip()
+                if value:
+                    return value
+            except Exception:
+                pass
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
+builtins.get_secret = get_secret
 
 EPSILON = 1e-6
 
