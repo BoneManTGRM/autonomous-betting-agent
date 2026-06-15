@@ -44,9 +44,11 @@ def clv_for_row(row: Mapping[str, Any]) -> dict[str, Any]:
         clv_probability = None
         positive = None
     else:
-        clv_decimal = closing - locked
-        clv_probability = locked_imp - closing_imp
-        positive = clv_probability > 0
+        # For a back/win bet, locking a higher decimal price than the closing price is positive CLV.
+        # Example: locked 2.00, closed 1.80 means the market moved toward the pick.
+        clv_decimal = locked - closing
+        clv_probability = closing_imp - locked_imp
+        positive = clv_decimal > 0 and clv_probability > 0
         status = 'positive_clv' if positive else 'negative_or_flat_clv'
     return {
         'locked_decimal_price': locked,
