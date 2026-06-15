@@ -13,6 +13,6 @@
     "Merged 110 existing rows with 0 uploaded rows; removed 0 duplicates; trained on 110 rows."
   ],
   "slope": 1.1111665067328516,
-  "source": "2026-06-15T16-19_export_3_marked_win_loss.csv",
-  "trained_at_utc": "2026-06-15T18:38:48+00:00"
+  "source": "High confidence.csv",
+  "trained_at_utc": "2026-06-15T18:41:49+00:00"
 }
