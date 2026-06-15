@@ -643,7 +643,7 @@ min_events = settings[0].number_input(t("min_events"), min_value=5, max_value=50
 max_rows = settings[1].number_input(t("max_rows"), min_value=100, max_value=10000, value=2500, step=100)
 min_segment_records = settings[2].number_input(t("min_pattern_rows"), min_value=2, max_value=50, value=3, step=1)
 max_segments = settings[3].number_input(t("max_patterns"), min_value=20, max_value=1000, value=160, step=20)
-save_to_github = st.toggle(t("save_github"), value=bool(get_secret("GITHUB_TOKEN", "GH_TOKEN")))
+save_to_github = st.toggle(t("save_github"), value=False)
 
 if save_to_github and not get_secret("GITHUB_TOKEN", "GH_TOKEN"):
     st.warning(t("missing_token"))
