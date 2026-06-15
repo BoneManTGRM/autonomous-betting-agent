@@ -8,9 +8,10 @@ import streamlit as st
 
 from autonomous_betting_agent.bet_sizing import build_bet_sizing_frame
 from autonomous_betting_agent.buyer_report import buyer_demo_markdown
-from autonomous_betting_agent.freshness import build_freshness_frame, freshness_score, freshness_summary
+from autonomous_betting_agent.freshness import build_freshness_frame, freshness_score
 from autonomous_betting_agent.local_users import current_user_from_session
 from autonomous_betting_agent.pick_quality import build_pick_quality_frame
+from autonomous_betting_agent.prediction_snapshot import build_prediction_snapshots, snapshot_summary
 from autonomous_betting_agent.proof_ledger import ledger_summary, load_ledger, sport_breakdown, verify_hash_chain
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -32,26 +33,32 @@ memory_summary['training_mode'] = memory_bank.get('training_mode', 'N/A') if isi
 
 summary = ledger_summary(ledger)
 verification = verify_hash_chain(ledger)
-quality = build_pick_quality_frame(ledger, patterns) if not ledger.empty else pd.DataFrame()
-sizing = build_bet_sizing_frame(quality, score_quality=False) if not quality.empty else pd.DataFrame()
-freshness = build_freshness_frame(ledger, memory_bank=memory_bank)
+snapshots = build_prediction_snapshots(ledger, user_id=profile.user_id) if not ledger.empty else pd.DataFrame()
+locks = snapshot_summary(snapshots)
+quality = build_pick_quality_frame(snapshots, patterns) if not snapshots.empty else pd.DataFrame()
+sizing = build_bet_sizing_frame(quality, score_quality=False, require_official_lock=True) if not quality.empty else pd.DataFrame()
+freshness = build_freshness_frame(snapshots, memory_bank=memory_bank)
 
-hero = st.columns(5)
+hero = st.columns(6)
 hero[0].metric('Proof Picks', summary['total_picks'])
 hero[1].metric('Win Rate', '' if summary['win_rate'] is None else f"{summary['win_rate']:.1%}")
 hero[2].metric('ROI', 'N/A' if summary['roi_percent'] is None else f"{summary['roi_percent']:.2f}%")
-hero[3].metric('Hash Chain', 'Valid' if verification.valid else 'Warning')
-hero[4].metric('Freshness', f'{freshness_score(freshness)}/100')
+hero[3].metric('Official Locked', locks['official_locked'])
+hero[4].metric('Hash Chain', 'Valid' if verification.valid else 'Warning')
+hero[5].metric('Freshness', f'{freshness_score(freshness)}/100')
 
 st.subheader('Product Summary')
 st.write('Audited sports intelligence platform with prediction scoring, odds lock snapshots, local multi-user profiles, tamper-evident proof ledgers, security checks, learning memory, smart stake sizing, and buyer-ready reporting.')
+
+if locks['not_official']:
+    st.warning(f"{locks['not_official']} proof rows are not official locked. They should not be sold as official ROI proof until odds/probability are locked.")
 
 st.subheader('Best Current Proof')
 if ledger.empty:
     st.warning('No proof-ledger rows yet. Add official locked picks for a stronger demo.')
 else:
     if not quality.empty:
-        cols = [col for col in ['event', 'sport', 'prediction', 'pick_quality_score', 'pick_quality_grade', 'recommended_units', 'result_status', 'profit_units'] if col in sizing.columns]
+        cols = [col for col in ['event', 'sport', 'prediction', 'pick_quality_score', 'pick_quality_grade', 'recommended_units', 'lock_status', 'lock_reason', 'result_status', 'profit_units'] if col in sizing.columns]
         st.dataframe(sizing[cols].head(20) if cols else sizing.head(20), use_container_width=True, hide_index=True)
     st.subheader('Sport Strengths')
     st.dataframe(sport_breakdown(ledger), use_container_width=True, hide_index=True)
