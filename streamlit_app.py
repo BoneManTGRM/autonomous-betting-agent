@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
 from streamlit.delta_generator import DeltaGenerator
+
+from autonomous_betting_agent.memory_read_patch import install_memory_read_merge
 
 _REAL_FILE_UPLOADER = st.file_uploader
 _REAL_ST_NUMBER_INPUT = st.number_input
@@ -10,6 +14,8 @@ _REAL_ST_TOGGLE = st.toggle
 _REAL_DG_NUMBER_INPUT = DeltaGenerator.number_input
 _REAL_DG_SLIDER = DeltaGenerator.slider
 _REAL_DG_TOGGLE = DeltaGenerator.toggle
+
+REPO_MEMORY_PATH = Path(__file__).resolve().parent / "data" / "ara_learning_memory.csv"
 
 DEFAULT_NUMBER_INPUT_VALUES = {
     "max feeds": 120,
@@ -89,6 +95,7 @@ def defaulted_dg_toggle(self, label, *args, **kwargs):
     return _REAL_DG_TOGGLE(self, label, *args, **_apply_toggle_default(label, kwargs))
 
 
+install_memory_read_merge(REPO_MEMORY_PATH)
 st.file_uploader = mobile_safe_file_uploader
 st.number_input = defaulted_st_number_input
 st.slider = defaulted_st_slider
