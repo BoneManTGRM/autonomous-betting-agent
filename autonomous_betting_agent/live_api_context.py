@@ -46,12 +46,12 @@ def _similarity(left: Any, right: Any) -> float:
 
 def sportsdataio_sport_from_odds(sport_key: str, sport_title: str = "") -> str | None:
     text = _clean(f"{sport_key} {sport_title}")
+    if "wnba" in text:
+        return "wnba"
     if "nfl" in text or "americanfootball nfl" in text:
         return "nfl"
     if "nba" in text or "basketball nba" in text:
         return "nba"
-    if "wnba" in text:
-        return "wnba"
     if "mlb" in text or "baseball mlb" in text:
         return "mlb"
     if "nhl" in text or "icehockey nhl" in text:
@@ -88,7 +88,6 @@ def _team_aliases(record: Mapping[str, Any]) -> set[str]:
         "TeamKey",
         "School",
         "ShortName",
-        "WikipediaLogoUrl",
     )
     for name in simple_names:
         value = _first(record, (name,))
