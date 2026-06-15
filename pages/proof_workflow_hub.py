@@ -13,7 +13,7 @@ WORKFLOW_STEPS = [
     {'step': 1, 'page': 'Export Templates', 'purpose': 'Create future CSVs with the correct columns.', 'when_to_use': 'Before generating new prediction exports.'},
     {'step': 2, 'page': 'Scanner Pro', 'purpose': 'One consolidated live scanner for all supported sports, leagues, books, and markets.', 'when_to_use': 'When you want fresh live odds/market discovery.'},
     {'step': 3, 'page': 'Pro Predictor', 'purpose': 'Main all-sports prediction engine. This replaces separate single-sport predictors such as NBA-only pages.', 'when_to_use': 'When you want final scored predictions.'},
-    {'step': 4, 'page': 'Market Finder Pro', 'purpose': 'One consolidated market/value finder for scanner rows, predictor rows, odds exports, props, CLV, and segments.', 'when_to_use': 'When you want to find playable value or lock-ready candidates.'},
+    {'step': 4, 'page': 'What Are the Odds', 'purpose': 'One consolidated market/value finder for scanner rows, predictor rows, odds exports, props, CLV, losses, walk-forward checks, and segments.', 'when_to_use': 'When you want to find playable value or lock-ready candidates.'},
     {'step': 5, 'page': 'Data Intake Gate', 'purpose': 'Check whether a CSV is ready for learning, statistics, proof, ROI, line movement, or tracking.', 'when_to_use': 'First stop for any outside CSV.'},
     {'step': 6, 'page': 'CSV Doctor', 'purpose': 'Diagnose exact column mapping and missing fields.', 'when_to_use': 'When a CSV does not behave as expected.'},
     {'step': 7, 'page': 'Quality Control Center', 'purpose': 'Check duplicates, conflicts, grading, line movement, bankroll path, and version coverage.', 'when_to_use': 'Before trusting or presenting a dataset.'},
@@ -73,7 +73,7 @@ st.subheader('Recommended next page')
 if report['blockers']:
     st.error('Go to CSV Doctor first. The file has blockers that should be fixed before using the rest of the app.')
 elif 'Odds lock readiness' in ready_gates and 'Official proof readiness' not in ready_gates:
-    st.success('Go to Market Finder Pro, Quality Control Center, Agent Decision Engine, Odds Lock, Learning Memory, then Max Agent Intelligence.')
+    st.success('Go to What Are the Odds, Quality Control Center, Agent Decision Engine, Odds Lock, Learning Memory, then Max Agent Intelligence.')
 elif 'Statistical validation' in ready_gates and 'Official proof readiness' not in ready_gates:
     st.success('Go to Learning Memory, Max Agent Intelligence, Statistical Validation, Proof Readiness, and Readiness Scorecard.')
 elif 'Official proof readiness' in ready_gates:
