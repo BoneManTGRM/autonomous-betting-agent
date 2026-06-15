@@ -4,13 +4,13 @@ from typing import Any
 
 import pandas as pd
 
-from .audit import parse_float
 from .row_normalizer import normalize_frame, safe_text
 
 REQUIRED_FOR_SCANNER_HANDOFF = ['event', 'sport', 'market_type', 'prediction', 'decimal_price', 'bookmaker']
 REQUIRED_FOR_PREDICTOR_HANDOFF = ['event', 'sport', 'market_type', 'prediction', 'model_probability', 'decimal_price', 'event_start_utc']
 REQUIRED_FOR_VALUE_HANDOFF = ['event', 'prediction', 'model_probability', 'decimal_price', 'agent_decision']
-REQUIRED_FOR_LEARNING_HANDOFF = ['event', 'prediction', 'result_status']
+REQUIRED_FOR_LEARNING_HANDOFF = ['event', 'prediction', 'model_probability', 'result_status']
+PROBABILITY_COLUMNS = ['model_probability', 'model_probability_clean', 'probability', 'predicted_probability', 'confidence_probability']
 
 
 def _present_rate(frame: pd.DataFrame, columns: list[str]) -> float:
@@ -32,6 +32,13 @@ def _count(frame: pd.DataFrame, column: str, value: str) -> int:
     return int(frame[column].astype(str).str.lower().eq(value.lower()).sum())
 
 
+def _bool_count(frame: pd.DataFrame, column: str) -> int:
+    if frame is None or frame.empty or column not in frame.columns:
+        return 0
+    values = frame[column].astype(str).str.lower().str.strip()
+    return int(values.isin(['true', '1', 'yes', 'y']).sum())
+
+
 def _numeric_mean(frame: pd.DataFrame, column: str) -> float | None:
     if frame is None or frame.empty or column not in frame.columns:
         return None
@@ -51,6 +58,36 @@ def _resolved_count(frame: pd.DataFrame) -> int:
     return 0
 
 
+def _probability_count(frame: pd.DataFrame) -> int:
+    if frame is None or frame.empty:
+        return 0
+    usable = pd.Series(False, index=frame.index)
+    for column in PROBABILITY_COLUMNS:
+        if column not in frame.columns:
+            continue
+        values = pd.to_numeric(frame[column], errors='coerce')
+        values = values.where(values <= 1.0, values / 100.0)
+        usable = usable | values.between(0.000001, 0.999999, inclusive='both').fillna(False)
+    return int(usable.sum())
+
+
+def _resolved_with_probability_count(frame: pd.DataFrame) -> int:
+    if frame is None or frame.empty:
+        return 0
+    resolved_mask = pd.Series(False, index=frame.index)
+    for column in ['result_status', 'result', 'outcome']:
+        if column in frame.columns:
+            values = frame[column].astype(str).str.lower().str.strip()
+            resolved_mask = resolved_mask | values.isin(['win', 'won', 'loss', 'lost', '1', '0', '1.0', '0.0'])
+    prob_mask = pd.Series(False, index=frame.index)
+    for column in PROBABILITY_COLUMNS:
+        if column in frame.columns:
+            values = pd.to_numeric(frame[column], errors='coerce')
+            values = values.where(values <= 1.0, values / 100.0)
+            prob_mask = prob_mask | values.between(0.000001, 0.999999, inclusive='both').fillna(False)
+    return int((resolved_mask & prob_mask).sum())
+
+
 def _missing_columns(frame: pd.DataFrame, required: list[str]) -> list[str]:
     if frame is None or frame.empty:
         return list(required)
@@ -68,10 +105,12 @@ def page_health(frame: pd.DataFrame | list[dict[str, Any]], *, page: str) -> dic
     value_coverage = _present_rate(normalized, REQUIRED_FOR_VALUE_HANDOFF)
     learning_coverage = _present_rate(normalized, REQUIRED_FOR_LEARNING_HANDOFF)
     resolved = _resolved_count(normalized)
+    probabilities = _probability_count(normalized)
+    resolved_with_probability = _resolved_with_probability_count(normalized)
     avg_agent_score = _numeric_mean(normalized, 'agent_score')
     avg_scanner_strength = _numeric_mean(normalized, 'scanner_strength_score')
     playable = _count(normalized, 'agent_decision', 'play_strong') + _count(normalized, 'agent_decision', 'play_small')
-    lock_ready = _count(normalized, 'lock_ready', 'True') + _count(normalized, 'lock_ready', 'true')
+    lock_ready = _bool_count(normalized, 'lock_ready')
 
     if rows == 0:
         status = 'empty'
@@ -91,8 +130,18 @@ def page_health(frame: pd.DataFrame | list[dict[str, Any]], *, page: str) -> dic
         next_action = 'lock_future_plays_or_train_finished_results' if status == 'ready_for_lock_or_learning' else 'add_probabilities_prices_and_decisions'
     elif page_key == 'learning_memory':
         blockers = _missing_columns(normalized, REQUIRED_FOR_LEARNING_HANDOFF)
-        status = 'ready_to_train' if resolved >= 5 else 'needs_finished_results'
-        next_action = 'train_and_save_memory' if status == 'ready_to_train' else 'add_more_win_loss_results'
+        if resolved_with_probability >= 25:
+            status = 'ready_to_train_strongly'
+            next_action = 'train_and_save_memory'
+        elif resolved_with_probability >= 5:
+            status = 'ready_to_train_with_sample_warning'
+            next_action = 'train_but_collect_more_results'
+        elif resolved >= 5:
+            status = 'has_results_but_needs_probabilities'
+            next_action = 'add_probabilities_or_prices_before_training'
+        else:
+            status = 'needs_finished_results'
+            next_action = 'add_more_win_loss_results'
     else:
         blockers = []
         status = 'unknown_page'
@@ -105,7 +154,7 @@ def page_health(frame: pd.DataFrame | list[dict[str, Any]], *, page: str) -> dic
         score += predictor_coverage * 20.0
         score += value_coverage * 20.0
         score += min(10.0, playable * 2.0)
-        score += min(5.0, resolved)
+        score += min(5.0, resolved_with_probability)
     return {
         'page': page,
         'rows': rows,
@@ -119,6 +168,8 @@ def page_health(frame: pd.DataFrame | list[dict[str, Any]], *, page: str) -> dic
         'playable_rows': playable,
         'lock_ready_rows': lock_ready,
         'resolved_rows': resolved,
+        'probability_rows': probabilities,
+        'resolved_probability_rows': resolved_with_probability,
         'avg_agent_score': avg_agent_score,
         'avg_scanner_strength': avg_scanner_strength,
         'blockers': blockers,
@@ -137,7 +188,7 @@ def four_tool_recommendation(frame: pd.DataFrame | list[dict[str, Any]]) -> str:
     normalized = normalize_frame(raw) if raw is not None and not raw.empty else pd.DataFrame()
     if normalized.empty:
         return 'start_with_scanner_pro_or_upload_csv'
-    if _resolved_count(normalized) >= 5:
+    if _resolved_with_probability_count(normalized) >= 5:
         return 'learning_memory'
     if 'agent_decision' in normalized.columns and (_count(normalized, 'agent_decision', 'play_strong') + _count(normalized, 'agent_decision', 'play_small')) > 0:
         return 'what_are_the_odds_or_odds_lock'
