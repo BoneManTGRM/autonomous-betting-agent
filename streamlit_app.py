@@ -2,18 +2,21 @@ from __future__ import annotations
 
 import streamlit as st
 
-root_memory_upload = st.file_uploader(
-    "Emergency ARA memory CSV upload",
-    type=["csv"],
-    accept_multiple_files=False,
-    key="root_ara_memory_csv_upload_v1",
-    help="Use this if the normal upload button lower on the page does not open. This fills the ARA memory paste fallback automatically.",
-)
-if root_memory_upload is not None:
-    try:
-        st.session_state["ara_memory_csv_paste"] = root_memory_upload.getvalue().decode("utf-8", errors="replace")
-        st.success("ARA memory CSV loaded into the paste fallback below.")
-    except Exception as exc:
-        st.warning(f"Could not read emergency upload: {exc}")
+_REAL_FILE_UPLOADER = st.file_uploader
+
+
+def mobile_safe_file_uploader(label, *args, **kwargs):
+    label_text = str(label).lower()
+    if "memory" in label_text or "ara" in label_text:
+        kwargs["type"] = None
+        kwargs["accept_multiple_files"] = False
+        if kwargs.get("key") == "ara_memory_csv_upload":
+            kwargs["key"] = "ara_memory_mobile_safe_upload_v7"
+        kwargs["help"] = "Mobile-safe uploader. Accepts any file type; choose your CSV file."
+    return _REAL_FILE_UPLOADER(label, *args, **kwargs)
+
+
+st.file_uploader = mobile_safe_file_uploader
+st.caption("Upload fix build: mobile-safe-uploader-v7")
 
 import pages.pro_predictor  # noqa: F401,E402
