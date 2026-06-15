@@ -45,6 +45,14 @@ except Exception:
     # partially installed environment.
     pass
 
+try:
+    from autonomous_betting_agent.audit import enrich_prediction_frame, install_live_api_audit_context
+    from autonomous_betting_agent.live_api_context import LiveAPIContextBuilder
+
+    install_live_api_audit_context(LiveAPIContextBuilder)
+except Exception:
+    enrich_prediction_frame = None  # type: ignore[assignment]
+
 
 def _called_from_page(page_name: str) -> bool:
     try:
@@ -94,7 +102,10 @@ def _install_page_helpers() -> None:
     def capture(data: Any) -> None:
         if _called_from_pro_predictor() and _looks_like_predictor_report(data):
             try:
-                st.session_state["_aba_pro_predictor_latest_report"] = data.copy()
+                captured = data.copy()
+                if enrich_prediction_frame is not None:
+                    captured = enrich_prediction_frame(captured)
+                st.session_state["_aba_pro_predictor_latest_report"] = captured
             except Exception:
                 pass
 
