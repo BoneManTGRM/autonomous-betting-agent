@@ -4,6 +4,8 @@ import io
 import pandas as pd
 import streamlit as st
 
+import autonomous_betting_agent  # noqa: F401  # installs global sidebar translator
+
 st.set_page_config(page_title="Accuracy Tracker", layout="wide")
 
 language = st.selectbox("Language / Idioma", ["English", "Español"], index=0)
