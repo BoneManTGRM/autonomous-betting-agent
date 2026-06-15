@@ -18,9 +18,8 @@ from .tracking import PredictionLedgerRow, SelectionDecision, SelectionPolicy, T
 
 
 def _install_streamlit_helpers() -> None:
-    """Install one global Streamlit language, sidebar, report, and Pro Predictor odds helper."""
+    """Install one global Streamlit language, sidebar, table, and CSV translator."""
     try:
-        import inspect
         import io
         import pandas as pd
         import streamlit as st
@@ -34,6 +33,7 @@ def _install_streamlit_helpers() -> None:
 
     tools: tuple[tuple[str, str, str], ...] = (
         ("Pro Predictor", "Predictor Pro", "pages/pro_predictor.py"),
+        ("What Are the Odds", "Qué dicen las cuotas", "pages/what_are_the_odds.py"),
         ("Learning Memory", "Memoria de Aprendizaje", "pages/learn_memory.py"),
         ("Pro Intelligence Scanner", "Escáner Pro de Inteligencia", "pages/pro_intelligence_scanner.py"),
         ("Weather Intelligence", "Inteligencia de Clima", "pages/weather_intelligence.py"),
@@ -47,14 +47,14 @@ def _install_streamlit_helpers() -> None:
         ("Self Learning Engine", "Motor de Aprendizaje", "pages/self_learning_engine.py"),
     )
     notes_en = (
-        "Primary tools: Pro Predictor, Learning Memory, Pro Intelligence Scanner, Weather Intelligence.",
-        "The odds CSV breakdown now lives inside Pro Predictor.",
+        "Primary tools: Pro Predictor, What Are the Odds, Learning Memory, Pro Intelligence Scanner, Weather Intelligence.",
+        "What Are the Odds reads Pro Predictor reports or uploaded CSVs for fair odds, no-vig edge, EV, score estimates, and props.",
         "Likely overlap: Live Market Scanner is a simpler version of Pro Intelligence Scanner.",
         "Likely overlap: Self Learning Engine is older than Learning Memory.",
     )
     notes_es = (
-        "Herramientas principales: Predictor Pro, Memoria de Aprendizaje, Escáner Pro de Inteligencia, Inteligencia de Clima.",
-        "El desglose de cuotas por CSV ahora está dentro de Predictor Pro.",
+        "Herramientas principales: Predictor Pro, Qué dicen las cuotas, Memoria de Aprendizaje, Escáner Pro de Inteligencia, Inteligencia de Clima.",
+        "Qué dicen las cuotas lee reportes de Predictor Pro o CSVs subidos para cuotas justas, ventaja sin margen, EV, marcador estimado y props.",
         "Posible duplicado: Escáner de Mercado en Vivo es una versión más simple del Escáner Pro de Inteligencia.",
         "Posible duplicado: Motor de Aprendizaje es anterior a Memoria de Aprendizaje.",
     )
@@ -77,14 +77,25 @@ def _install_streamlit_helpers() -> None:
         "probability": "probabilidad",
         "model_probability": "probabilidad_modelo",
         "implied_probability": "probabilidad_implicita",
+        "no_vig_implied_probability": "probabilidad_sin_margen",
+        "market_hold": "margen_casa",
+        "model_minus_implied": "modelo_menos_implicita",
+        "model_minus_no_vig": "modelo_menos_sin_margen",
+        "fair_decimal_price": "cuota_justa_decimal",
+        "fair_american_price": "cuota_justa_americana",
+        "computed_ev_decimal": "ev_calculado_decimal",
+        "odds_quality_score": "puntaje_calidad_cuotas",
+        "decision": "decision",
+        "decision_reason": "razon_decision",
         "market_probability": "probabilidad_mercado",
         "final_probability": "probabilidad_final",
         "final_probability_value": "valor_probabilidad_final",
         "confidence": "confianza",
         "reliability_score": "puntaje_confiabilidad",
         "best_price": "mejor_cuota",
+        "decimal_price": "cuota_decimal",
         "books": "casas",
-        "estimated_ev": "ev_estimado",
+        "estimated_ev": "ev_estimado_original",
         "estimated_ev_decimal": "ev_estimado_decimal",
         "estimated_score": "marcador_estimado",
         "score_source": "fuente_marcador",
@@ -93,6 +104,7 @@ def _install_streamlit_helpers() -> None:
         "prop_estimate": "estimacion_prop",
         "source": "fuente",
         "note": "nota",
+        "warning": "advertencia",
         "target_70_mode": "modo_objetivo_70",
         "target_70_rejection_reason": "razon_rechazo_objetivo_70",
         "target_70_quality_score": "puntaje_calidad_objetivo_70",
@@ -142,6 +154,12 @@ def _install_streamlit_helpers() -> None:
         "model_estimate": "estimacion_modelo",
         "csv_market_or_field": "mercado_o_campo_csv",
         "csv_field": "campo_csv",
+        "strong_candidate": "candidato_fuerte",
+        "candidate": "candidato",
+        "watch_only": "solo_vigilar",
+        "skip": "omitir",
+        "raw_implied_edge": "ventaja_implicita_bruta",
+        "no_vig_edge": "ventaja_sin_margen",
         "raise_trust": "subir_confianza",
         "lower_trust": "bajar_confianza",
         "watch": "vigilar",
@@ -241,23 +259,6 @@ def _install_streamlit_helpers() -> None:
             for note in (notes_es if lang == "Español" else notes_en):
                 st.caption(note)
 
-    def called_from_pro_predictor() -> bool:
-        try:
-            return any(str(frame.filename).replace("\\", "/").endswith("pages/pro_predictor.py") for frame in inspect.stack())
-        except Exception:
-            return False
-
-    def render_odds_breakdown_once() -> None:
-        if st.session_state.get("_aba_pro_predictor_odds_breakdown_rendered"):
-            return
-        st.session_state["_aba_pro_predictor_odds_breakdown_rendered"] = True
-        try:
-            from .odds_breakdown import render_odds_breakdown_section
-
-            render_odds_breakdown_section("pro_predictor")
-        except Exception as exc:
-            real_info(f"What Are the Odds section could not load: {exc}")
-
     real_set_page_config = st.set_page_config
     real_st_selectbox = st.selectbox
     real_dg_selectbox = DeltaGenerator.selectbox
@@ -267,8 +268,6 @@ def _install_streamlit_helpers() -> None:
     real_dg_table = DeltaGenerator.table
     real_st_download_button = st.download_button
     real_dg_download_button = DeltaGenerator.download_button
-    real_info = st.info
-    real_code = st.code
 
     def patched_set_page_config(*args: Any, **kwargs: Any) -> Any:
         return real_set_page_config(*args, **kwargs)
@@ -335,26 +334,11 @@ def _install_streamlit_helpers() -> None:
         args, kwargs = _translate_download_payload(args, kwargs)
         return real_dg_download_button(self, label, *args, **kwargs)
 
-    def patched_info(body: Any, *args: Any, **kwargs: Any) -> Any:
-        result = real_info(body, *args, **kwargs)
-        text = str(body)
-        if called_from_pro_predictor() and ("Enter API keys" in text or "Ingresa las claves" in text):
-            render_odds_breakdown_once()
-        return result
-
-    def patched_code(body: Any, *args: Any, **kwargs: Any) -> Any:
-        result = real_code(body, *args, **kwargs)
-        if called_from_pro_predictor():
-            render_odds_breakdown_once()
-        return result
-
     st.set_page_config = patched_set_page_config
     st.selectbox = patched_st_selectbox
     st.dataframe = patched_st_dataframe
     st.table = patched_st_table
     st.download_button = patched_st_download_button
-    st.info = patched_info
-    st.code = patched_code
     DeltaGenerator.selectbox = patched_dg_selectbox
     DeltaGenerator.dataframe = patched_dg_dataframe
     DeltaGenerator.table = patched_dg_table
