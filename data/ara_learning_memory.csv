@@ -2,10 +2,10 @@ area,area_type,group_value,records,avg_predicted,actual_hit_rate,actual_minus_pr
 Sport: FIFA World Cup,sport,FIFA World Cup,8,0.607875,0.375,-0.232875,0.491437,-0.116437,0.487689,0.257772,sport,0.082421,lower_trust
 Sport: Primera División - Chile,sport,Primera División - Chile,7,0.513,0.285714,-0.227286,0.406933,-0.106067,0.538088,0.17792,sport,0.069185,lower_trust
 Probability bucket: 0-40%,probability_bucket,0-40%,5,0.3328,0.0,-0.3328,0.2048,-0.128,0.540502,0.120808,probability_bucket,0.068052,lower_trust
-Probability bucket: 60-70%,probability_bucket,60-70%,18,0.634889,0.555556,-0.079333,0.579966,-0.054923,0.612164,0.256689,probability_bucket,0.065809,lower_trust
 Sport: NPB,sport,NPB,6,0.5625,0.333333,-0.229167,0.464286,-0.098214,0.408911,0.300322,sport,0.058329,lower_trust
-Books: 11+,books_bucket,11+,83,0.572422,0.542169,-0.030253,0.544828,-0.027593,0.805692,0.222066,books_bucket,0.055187,watch
 Sport: MLB,sport,MLB,15,0.544533,0.466667,-0.077867,0.493751,-0.050783,0.586134,0.25397,sport,0.053715,lower_trust
+Probability bucket: 60-70%,probability_bucket,60-70%,19,0.637525,0.578947,-0.058577,0.596304,-0.041221,0.627895,0.248403,probability_bucket,0.051298,lower_trust
+Books: 11+,books_bucket,11+,84,0.573762,0.547619,-0.026142,0.549892,-0.023869,0.806972,0.220604,books_bucket,0.047738,watch
 Primera División - Chile / 40-50%,sport_probability_bucket,Primera División - Chile|40-50%,3,0.444333,0.0,-0.444333,0.323152,-0.121182,0.405847,0.198094,sport_probability_bucket,0.046999,lower_trust
 MiLB / 50-60%,sport_probability_bucket,MiLB|50-60%,13,0.537462,0.615385,0.077923,0.5857,0.048238,0.565464,0.252365,sport_probability_bucket,0.046408,raise_trust
 Probability bucket: 70-80%,probability_bucket,70-80%,12,0.749583,0.666667,-0.082917,0.699833,-0.04975,0.568344,0.235071,probability_bucket,0.045437,lower_trust
