@@ -15,13 +15,17 @@ LANG = 'es' if st.sidebar.selectbox('Language / Idioma', ['English', 'Español']
 TEXT = {
     'en': {
         'title': 'Scanner Pro',
-        'caption': 'One consolidated scanner for all supported sports, leagues, markets, books, and live odds feeds.',
-        'info': 'Use Scanner Pro for live market discovery. Use Pro Predictor for final prediction scoring, What Are the Odds for market/value review, and Learning Memory for durable training.',
+        'caption': 'One consolidated scanner for supported sports, leagues, markets, books, and live odds feeds.',
+        'info': 'Use Scanner Pro for live market discovery. Use Pro Predictor for final scoring, What Are the Odds for market review, and Learning Memory for training.',
         'api_key': 'Odds API key',
         'missing_key': 'Missing Odds API key. Add THE_ODDS_API_KEY or ODDS_API_KEY in Streamlit secrets.',
+        'api_error': 'Could not load the sports list. Check the API key, quota, or API access. You can still scan with manual sport keys below.',
+        'manual_keys': 'Manual sport keys',
+        'manual_help': 'Comma-separated examples: basketball_nba, baseball_mlb, soccer_epl, tennis_atp',
         'scan_scope': 'Scan scope',
         'all_sports': 'All active sports',
         'one_sport': 'One sport/league',
+        'manual_sports': 'Manual sport keys only',
         'sport_search': 'Sport search',
         'max_sports': 'Max sports to scan',
         'max_events': 'Max events per sport',
@@ -38,24 +42,29 @@ TEXT = {
         'spreads': 'Spreads',
         'totals': 'Totals',
         'download': 'Download Scanner Pro CSV',
-        'no_rows': 'No rows returned. Try fewer filters or another sport/region.',
+        'no_rows': 'No rows returned. Try fewer filters, another region, or a valid manual sport key.',
         'stored': 'Scanner rows saved in session for What Are the Odds and Learning Memory review.',
+        'skipped': 'Skipped sports / API errors',
     },
     'es': {
         'title': 'Scanner Pro',
-        'caption': 'Escáner único para todos los deportes, ligas, mercados, casas de apuestas y cuotas en vivo compatibles.',
-        'info': 'Usa Scanner Pro para descubrir mercados en vivo. Usa Pro Predictor para la calificación final de predicciones, What Are the Odds para revisar mercado/valor y Memoria de Aprendizaje para entrenamiento duradero.',
+        'caption': 'Escáner único para deportes, ligas, mercados, casas de apuestas y cuotas en vivo compatibles.',
+        'info': 'Usa Scanner Pro para descubrir mercados en vivo. Usa Pro Predictor para calificación final, What Are the Odds para revisar mercado y Memoria de Aprendizaje para entrenar.',
         'api_key': 'Clave de Odds API',
-        'missing_key': 'Falta la clave de Odds API. Agrega THE_ODDS_API_KEY u ODDS_API_KEY en los secretos de Streamlit.',
+        'missing_key': 'Falta la clave de Odds API. Agrega THE_ODDS_API_KEY u ODDS_API_KEY en secretos de Streamlit.',
+        'api_error': 'No se pudo cargar la lista de deportes. Revisa la clave, cuota o acceso de API. Todavía puedes escanear con claves manuales abajo.',
+        'manual_keys': 'Claves manuales de deporte',
+        'manual_help': 'Ejemplos separados por comas: basketball_nba, baseball_mlb, soccer_epl, tennis_atp',
         'scan_scope': 'Alcance del escaneo',
         'all_sports': 'Todos los deportes activos',
         'one_sport': 'Un deporte/liga',
+        'manual_sports': 'Solo claves manuales',
         'sport_search': 'Buscar deporte',
         'max_sports': 'Máximo de deportes a escanear',
         'max_events': 'Máximo de eventos por deporte',
         'regions': 'Regiones de casas de apuestas',
         'markets': 'Mercados',
-        'min_books': 'Mínimo de casas de apuestas',
+        'min_books': 'Mínimo de casas',
         'run': 'Ejecutar Scanner Pro',
         'rows': 'Filas',
         'sports': 'Deportes',
@@ -66,10 +75,13 @@ TEXT = {
         'spreads': 'Spreads',
         'totals': 'Totales',
         'download': 'Descargar CSV de Scanner Pro',
-        'no_rows': 'No se encontraron filas. Prueba con menos filtros u otro deporte/región.',
-        'stored': 'Las filas del escáner se guardaron en la sesión para revisión en What Are the Odds y Memoria de Aprendizaje.',
+        'no_rows': 'No se encontraron filas. Prueba menos filtros, otra región o una clave manual válida.',
+        'stored': 'Las filas se guardaron en sesión para What Are the Odds y Memoria de Aprendizaje.',
+        'skipped': 'Deportes omitidos / errores API',
     },
 }
+
+DEFAULT_SPORT_KEYS = ['basketball_nba', 'baseball_mlb', 'soccer_epl', 'tennis_atp']
 
 
 def t(key: str) -> str:
@@ -88,6 +100,15 @@ def get_secret(*names: str) -> str:
         if value:
             return value
     return ''
+
+
+def parse_manual_keys(value: str) -> list[str]:
+    keys: list[str] = []
+    for item in value.replace('\n', ',').split(','):
+        key = item.strip()
+        if key and key not in keys:
+            keys.append(key)
+    return keys
 
 
 def h2h_rows(summary: Any) -> list[dict[str, Any]]:
@@ -180,29 +201,42 @@ if not api_key:
     st.error(t('missing_key'))
     st.stop()
 
-scope = st.radio(t('scan_scope'), [t('all_sports'), t('one_sport')], horizontal=True)
+scope = st.radio(t('scan_scope'), [t('all_sports'), t('one_sport'), t('manual_sports')], horizontal=True)
 regions = st.multiselect(t('regions'), ['us', 'eu', 'uk', 'au'], default=['us'])
 markets = st.multiselect(t('markets'), ['h2h', 'spreads', 'totals'], default=['h2h'])
 max_events = st.number_input(t('max_events'), min_value=1, max_value=100, value=20, step=5)
 min_books = st.number_input(t('min_books'), min_value=1, max_value=20, value=1, step=1)
+manual_keys = parse_manual_keys(st.text_input(t('manual_keys'), value='', help=t('manual_help')))
 
-sports = list_sports(api_key, include_all=False)
-sports_df = pd.DataFrame([asdict(item) for item in sports])
+sports_df = pd.DataFrame(columns=['key', 'title', 'group', 'active'])
+try:
+    sports_df = pd.DataFrame([asdict(item) for item in list_sports(api_key, include_all=False)])
+except Exception as exc:
+    st.warning(f"{t('api_error')} Error: {str(exc)[:220]}")
+
 search = st.text_input(t('sport_search'), value='')
-if search.strip():
+if not sports_df.empty and search.strip():
     mask = sports_df.astype(str).agg(' '.join, axis=1).str.lower().str.contains(search.strip().lower(), regex=False, na=False)
     sports_df = sports_df[mask]
 
 if scope == t('all_sports'):
-    max_sports = st.number_input(t('max_sports'), min_value=1, max_value=100, value=min(20, max(1, len(sports_df))), step=1)
-    sports_to_scan = sports_df['key'].head(int(max_sports)).tolist() if 'key' in sports_df else []
-else:
-    options = sports_df['key'].tolist() if 'key' in sports_df else []
-    selected = st.multiselect(t('one_sport'), options, default=options[:1])
+    if sports_df.empty:
+        sports_to_scan = manual_keys or DEFAULT_SPORT_KEYS[:2]
+    else:
+        max_sports = st.number_input(t('max_sports'), min_value=1, max_value=100, value=min(20, max(1, len(sports_df))), step=1)
+        sports_to_scan = sports_df['key'].head(int(max_sports)).tolist() if 'key' in sports_df else []
+elif scope == t('one_sport'):
+    options = sports_df['key'].tolist() if 'key' in sports_df and not sports_df.empty else DEFAULT_SPORT_KEYS
+    selected = st.multiselect(t('one_sport'), options=sorted(set(options + manual_keys)), default=(manual_keys or options[:1])[:3])
     sports_to_scan = selected
+else:
+    sports_to_scan = manual_keys or DEFAULT_SPORT_KEYS[:1]
 
 with st.expander(t('sports'), expanded=False):
-    st.dataframe(sports_df, use_container_width=True, hide_index=True)
+    if sports_df.empty:
+        st.dataframe(pd.DataFrame({'key': DEFAULT_SPORT_KEYS, 'source': ['fallback_manual_option'] * len(DEFAULT_SPORT_KEYS)}), use_container_width=True, hide_index=True)
+    else:
+        st.dataframe(sports_df, use_container_width=True, hide_index=True)
 
 if st.button(t('run'), type='primary', use_container_width=True):
     result = scan_to_frame(api_key, sports_to_scan, ','.join(regions), ','.join(markets), int(max_events), int(min_books))
@@ -217,6 +251,7 @@ if result.empty:
     st.warning(t('no_rows'))
     skipped = pd.DataFrame(st.session_state.get('scanner_pro_skipped', []))
     if not skipped.empty:
+        st.subheader(t('skipped'))
         st.dataframe(skipped, use_container_width=True, hide_index=True)
     st.stop()
 
