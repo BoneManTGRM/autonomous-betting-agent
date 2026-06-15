@@ -49,7 +49,7 @@ def conservative_kelly_fraction(probability_value: float | None, decimal_price: 
     return min(0.02, full_kelly * 0.25)
 
 
-def smart_stake_for_row(row: Mapping[str, Any], *, max_units: float = 2.0) -> dict[str, Any]:
+def smart_stake_for_row(row: Mapping[str, Any], *, max_units: float = 2.0, require_official_lock: bool = True) -> dict[str, Any]:
     prob = probability(_first(row, 'model_probability', 'final_probability', 'final_probability_value', 'probability'))
     price = parse_float(_first(row, 'decimal_price', 'best_price', 'odds'))
     quality = parse_float(_first(row, 'pick_quality_score'))
@@ -61,7 +61,9 @@ def smart_stake_for_row(row: Mapping[str, Any], *, max_units: float = 2.0) -> di
     reasons: list[str] = []
     if prob is None or price is None:
         return {'kelly_fraction': 0.0, 'recommended_units': 0.0, 'stake_bucket': 'No Bet', 'stake_reason': 'Missing probability or odds.'}
-    if lock_status and lock_status != 'official_locked':
+    if require_official_lock and lock_status != 'official_locked':
+        return {'kelly_fraction': 0.0, 'recommended_units': 0.0, 'stake_bucket': 'No Bet', 'stake_reason': 'Official odds lock required before stake sizing.'}
+    if not require_official_lock and lock_status and lock_status != 'official_locked':
         return {'kelly_fraction': 0.0, 'recommended_units': 0.0, 'stake_bucket': 'No Bet', 'stake_reason': 'Not official locked.'}
     if review_status in {'review_needed', 'review needed'}:
         return {'kelly_fraction': 0.0, 'recommended_units': 0.0, 'stake_bucket': 'No Bet', 'stake_reason': 'Manual review needed.'}
@@ -110,20 +112,23 @@ def smart_stake_for_row(row: Mapping[str, Any], *, max_units: float = 2.0) -> di
     return {'kelly_fraction': round(kelly, 6), 'recommended_units': units, 'stake_bucket': bucket, 'stake_reason': ' '.join(reasons)}
 
 
-def build_bet_sizing_frame(frame: pd.DataFrame, *, max_units: float = 2.0, score_quality: bool = True) -> pd.DataFrame:
+def build_bet_sizing_frame(frame: pd.DataFrame, *, max_units: float = 2.0, score_quality: bool = True, require_official_lock: bool = True) -> pd.DataFrame:
     if frame is None or frame.empty:
         return pd.DataFrame()
     source = build_pick_quality_frame(frame) if score_quality and 'pick_quality_score' not in frame.columns else frame.copy()
     rows: list[dict[str, Any]] = []
     for raw in source.to_dict(orient='records'):
         item = dict(raw)
-        item.update(smart_stake_for_row(raw, max_units=max_units))
+        item.update(smart_stake_for_row(raw, max_units=max_units, require_official_lock=require_official_lock))
         rows.append(item)
-    return pd.DataFrame(rows).sort_values(['recommended_units', 'pick_quality_score' if 'pick_quality_score' in source.columns else source.columns[0]], ascending=[False, False])
+    sort_cols = ['recommended_units']
+    if 'pick_quality_score' in source.columns:
+        sort_cols.append('pick_quality_score')
+    return pd.DataFrame(rows).sort_values(sort_cols, ascending=[False] * len(sort_cols))
 
 
-def bet_sizing_summary(frame: pd.DataFrame) -> dict[str, Any]:
-    sized = build_bet_sizing_frame(frame)
+def bet_sizing_summary(frame: pd.DataFrame, *, require_official_lock: bool = True) -> dict[str, Any]:
+    sized = build_bet_sizing_frame(frame, require_official_lock=require_official_lock)
     if sized.empty:
         return {'rows': 0, 'total_units': 0.0, 'strong': 0, 'standard': 0, 'small': 0, 'no_bet': 0}
     buckets = sized.get('stake_bucket', pd.Series(dtype=str)).value_counts().to_dict()
