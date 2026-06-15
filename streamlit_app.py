@@ -18,16 +18,16 @@ _REAL_DG_TOGGLE = DeltaGenerator.toggle
 REPO_MEMORY_PATH = Path(__file__).resolve().parent / "data" / "ara_permanent_learning_memory.csv"
 
 DEFAULT_NUMBER_INPUT_VALUES = {
-    "max feeds": 120,
-    "max events per feed": 75,
-    "minimum books": 2,
-    "70-mode minimum books": 2,
-    "70-mode minimum reliability": 80.0,
-    "70-mode minimum api coverage": 0.50,
+    "max feeds": 50,
+    "max events per feed": 35,
+    "minimum books": 4,
+    "70-mode minimum books": 4,
+    "70-mode minimum reliability": 90.0,
+    "70-mode minimum api coverage": 0.66,
 }
 
 DEFAULT_SLIDER_VALUES = {
-    "minimum reliability": 70.0,
+    "minimum reliability": 90.0,
 }
 
 DEFAULT_TOGGLE_VALUES = {
