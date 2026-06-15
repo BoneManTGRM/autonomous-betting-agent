@@ -17,9 +17,10 @@ from .tgrm import TGRMLoop
 from .tracking import PredictionLedgerRow, SelectionDecision, SelectionPolicy, TrackingReport, choose_decision, summarize_tracking
 
 
-def _install_bilingual_sidebar() -> None:
-    """Install one global Streamlit language, sidebar, table, and CSV translator."""
+def _install_streamlit_helpers() -> None:
+    """Install one global Streamlit language, sidebar, report, and Pro Predictor odds helper."""
     try:
+        import inspect
         import io
         import pandas as pd
         import streamlit as st
@@ -27,13 +28,12 @@ def _install_bilingual_sidebar() -> None:
     except Exception:
         return
 
-    if getattr(st, "_aba_bilingual_sidebar_installed", False):
+    if getattr(st, "_aba_streamlit_helpers_installed", False):
         return
-    st._aba_bilingual_sidebar_installed = True
+    st._aba_streamlit_helpers_installed = True
 
     tools: tuple[tuple[str, str, str], ...] = (
         ("Pro Predictor", "Predictor Pro", "pages/pro_predictor.py"),
-        ("What Are the Odds", "Qué dicen las cuotas", "pages/what_are_the_odds.py"),
         ("Learning Memory", "Memoria de Aprendizaje", "pages/learn_memory.py"),
         ("Pro Intelligence Scanner", "Escáner Pro de Inteligencia", "pages/pro_intelligence_scanner.py"),
         ("Weather Intelligence", "Inteligencia de Clima", "pages/weather_intelligence.py"),
@@ -47,16 +47,16 @@ def _install_bilingual_sidebar() -> None:
         ("Self Learning Engine", "Motor de Aprendizaje", "pages/self_learning_engine.py"),
     )
     notes_en = (
-        "Primary tools: Pro Predictor, What Are the Odds, Learning Memory, Pro Intelligence Scanner, Weather Intelligence.",
+        "Primary tools: Pro Predictor, Learning Memory, Pro Intelligence Scanner, Weather Intelligence.",
+        "The odds CSV breakdown now lives inside Pro Predictor.",
         "Likely overlap: Live Market Scanner is a simpler version of Pro Intelligence Scanner.",
         "Likely overlap: Self Learning Engine is older than Learning Memory.",
-        "Specialized tools: US, Mexico, College, Combat, and NBA pages are focused finders, not full replacements for Pro Predictor.",
     )
     notes_es = (
-        "Herramientas principales: Predictor Pro, Qué dicen las cuotas, Memoria de Aprendizaje, Escáner Pro de Inteligencia, Inteligencia de Clima.",
+        "Herramientas principales: Predictor Pro, Memoria de Aprendizaje, Escáner Pro de Inteligencia, Inteligencia de Clima.",
+        "El desglose de cuotas por CSV ahora está dentro de Predictor Pro.",
         "Posible duplicado: Escáner de Mercado en Vivo es una versión más simple del Escáner Pro de Inteligencia.",
         "Posible duplicado: Motor de Aprendizaje es anterior a Memoria de Aprendizaje.",
-        "Herramientas especializadas: las páginas USA, México, Universitario, Combate y NBA son buscadores enfocados, no reemplazos completos del Predictor Pro.",
     )
 
     es_columns = {
@@ -67,7 +67,6 @@ def _install_bilingual_sidebar() -> None:
         "league": "liga",
         "start": "inicio",
         "event_date": "fecha_evento",
-        "latest_event_date_filter": "filtro_fecha_maxima",
         "market_type": "tipo_mercado",
         "market": "mercado",
         "prediction": "pronostico",
@@ -75,33 +74,17 @@ def _install_bilingual_sidebar() -> None:
         "favorite": "favorito",
         "outcome": "resultado",
         "result": "resultado",
-        "winner": "ganador",
-        "actual_winner": "ganador_real",
         "probability": "probabilidad",
         "model_probability": "probabilidad_modelo",
         "implied_probability": "probabilidad_implicita",
         "market_probability": "probabilidad_mercado",
-        "market_probability_value": "valor_probabilidad_mercado",
         "final_probability": "probabilidad_final",
         "final_probability_value": "valor_probabilidad_final",
-        "calibrated_probability": "probabilidad_calibrada",
-        "predicted_probability": "probabilidad_pronosticada",
-        "avg_predicted": "promedio_pronosticado",
-        "actual_hit_rate": "tasa_acierto_real",
-        "actual_win_rate": "tasa_victoria_real",
-        "hit_rate": "tasa_acierto",
-        "brier_score": "puntaje_brier",
+        "confidence": "confianza",
+        "reliability_score": "puntaje_confiabilidad",
         "best_price": "mejor_cuota",
-        "avg_price": "cuota_promedio",
-        "average_price": "cuota_promedio",
-        "odds": "cuotas",
-        "price": "cuota",
         "books": "casas",
-        "bookmakers": "casas",
-        "best_book": "mejor_casa",
-        "best_bookmaker": "mejor_casa",
         "estimated_ev": "ev_estimado",
-        "estimated_ev_value": "valor_ev_estimado",
         "estimated_ev_decimal": "ev_estimado_decimal",
         "estimated_score": "marcador_estimado",
         "score_source": "fuente_marcador",
@@ -110,23 +93,13 @@ def _install_bilingual_sidebar() -> None:
         "prop_estimate": "estimacion_prop",
         "source": "fuente",
         "note": "nota",
-        "confidence": "confianza",
-        "read": "lectura",
-        "classification": "clasificacion",
-        "quality": "calidad",
-        "reliability": "confiabilidad",
-        "reliability_score": "puntaje_confiabilidad",
         "target_70_mode": "modo_objetivo_70",
-        "target_70_quality_score": "puntaje_calidad_objetivo_70",
         "target_70_rejection_reason": "razon_rechazo_objetivo_70",
-        "target_probability_band_low": "banda_objetivo_baja",
-        "target_probability_band_high": "banda_objetivo_alta",
+        "target_70_quality_score": "puntaje_calidad_objetivo_70",
         "api_coverage_score": "puntaje_cobertura_api",
         "api_coverage_percent": "porcentaje_cobertura_api",
         "api_sources_used": "apis_usadas",
         "api_sources_missing": "apis_faltantes",
-        "configured_api_sources": "apis_configuradas",
-        "all_configured_apis_used": "todas_las_apis_configuradas_usadas",
         "sportsdataio_status": "estado_sportsdataio",
         "weatherapi_status": "estado_weatherapi",
         "weather_location": "ubicacion_clima",
@@ -145,38 +118,27 @@ def _install_bilingual_sidebar() -> None:
         "ciudad_area": "ciudad_area",
         "pais_sede": "pais_sede",
         "fuente_sede": "fuente_sede",
-        "area_type": "tipo_area",
-        "group_value": "valor_grupo",
         "records": "registros",
-        "actual_minus_predicted": "real_menos_pronosticado",
+        "actual_hit_rate": "tasa_acierto_real",
+        "avg_predicted": "promedio_pronosticado",
         "smoothed_hit_rate": "tasa_suavizada",
         "smoothed_edge": "ventaja_suavizada",
-        "memory_type": "tipo_memoria",
-        "importance": "importancia",
-        "action": "accion",
     }
     es_values = {
         "HIGH": "ALTA",
         "MEDIUM": "MEDIA",
         "LOW": "BAJA",
-        "High": "Alta",
-        "Medium": "Media",
-        "Low": "Baja",
         "True": "Verdadero",
         "False": "Falso",
-        "true": "verdadero",
-        "false": "falso",
         "yes": "sí",
         "no": "no",
         "won": "ganó",
         "lost": "perdió",
         "unknown": "pendiente",
-        "pending": "pendiente",
         "used": "usado",
         "not_supported_sport": "deporte_no_compatible",
         "not_configured": "no_configurado",
         "not_available_from_feed": "no_disponible_en_feed",
-        "no_location": "sin_ubicacion",
         "model_estimate": "estimacion_modelo",
         "csv_market_or_field": "mercado_o_campo_csv",
         "csv_field": "campo_csv",
@@ -197,7 +159,6 @@ def _install_bilingual_sidebar() -> None:
         "duplicate event/pick": "evento/pronóstico duplicado",
         "not h2h": "no es h2h",
         "not high confidence": "no es confianza alta",
-        "Official sportsbook props are used when the CSV contains those markets.": "Los props oficiales de casa de apuesta se usan cuando el CSV contiene esos mercados.",
         "Estimated from probability, sport type, and any total/spread fields found.": "Estimado con probabilidad, tipo de deporte y cualquier total/spread encontrado.",
         "No official round prop found": "No se encontró prop oficial de round",
         "Home-run market/field was detected in the CSV.": "Se detectó mercado/campo de home run en el CSV.",
@@ -234,8 +195,7 @@ def _install_bilingual_sidebar() -> None:
     def translate_value(value: Any) -> Any:
         if language_value() != "Español" or value is None:
             return value
-        text = str(value)
-        text = es_values.get(text, text)
+        text = es_values.get(str(value), str(value))
         for source, target in es_phrases.items():
             text = text.replace(source, target)
         return text
@@ -281,6 +241,23 @@ def _install_bilingual_sidebar() -> None:
             for note in (notes_es if lang == "Español" else notes_en):
                 st.caption(note)
 
+    def called_from_pro_predictor() -> bool:
+        try:
+            return any(str(frame.filename).replace("\\", "/").endswith("pages/pro_predictor.py") for frame in inspect.stack())
+        except Exception:
+            return False
+
+    def render_odds_breakdown_once() -> None:
+        if st.session_state.get("_aba_pro_predictor_odds_breakdown_rendered"):
+            return
+        st.session_state["_aba_pro_predictor_odds_breakdown_rendered"] = True
+        try:
+            from .odds_breakdown import render_odds_breakdown_section
+
+            render_odds_breakdown_section("pro_predictor")
+        except Exception as exc:
+            real_info(f"What Are the Odds section could not load: {exc}")
+
     real_set_page_config = st.set_page_config
     real_st_selectbox = st.selectbox
     real_dg_selectbox = DeltaGenerator.selectbox
@@ -290,6 +267,8 @@ def _install_bilingual_sidebar() -> None:
     real_dg_table = DeltaGenerator.table
     real_st_download_button = st.download_button
     real_dg_download_button = DeltaGenerator.download_button
+    real_info = st.info
+    real_code = st.code
 
     def patched_set_page_config(*args: Any, **kwargs: Any) -> Any:
         return real_set_page_config(*args, **kwargs)
@@ -356,18 +335,33 @@ def _install_bilingual_sidebar() -> None:
         args, kwargs = _translate_download_payload(args, kwargs)
         return real_dg_download_button(self, label, *args, **kwargs)
 
+    def patched_info(body: Any, *args: Any, **kwargs: Any) -> Any:
+        result = real_info(body, *args, **kwargs)
+        text = str(body)
+        if called_from_pro_predictor() and ("Enter API keys" in text or "Ingresa las claves" in text):
+            render_odds_breakdown_once()
+        return result
+
+    def patched_code(body: Any, *args: Any, **kwargs: Any) -> Any:
+        result = real_code(body, *args, **kwargs)
+        if called_from_pro_predictor():
+            render_odds_breakdown_once()
+        return result
+
     st.set_page_config = patched_set_page_config
     st.selectbox = patched_st_selectbox
     st.dataframe = patched_st_dataframe
     st.table = patched_st_table
     st.download_button = patched_st_download_button
+    st.info = patched_info
+    st.code = patched_code
     DeltaGenerator.selectbox = patched_dg_selectbox
     DeltaGenerator.dataframe = patched_dg_dataframe
     DeltaGenerator.table = patched_dg_table
     DeltaGenerator.download_button = patched_dg_download_button
 
 
-_install_bilingual_sidebar()
+_install_streamlit_helpers()
 
 __all__ = [
     "AutonomousBettingAgent",
