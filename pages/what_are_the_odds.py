@@ -1,17 +1,11 @@
 from __future__ import annotations
 
 from io import StringIO
-from typing import Any
 
 import pandas as pd
 import streamlit as st
 
-from autonomous_betting_agent.agent_decision_engine import (
-    agent_decision_summary,
-    build_agent_decisions,
-    lock_ready_candidates,
-    playable_candidates,
-)
+from autonomous_betting_agent.agent_decision_engine import agent_decision_summary, build_agent_decisions, lock_ready_candidates, playable_candidates
 from autonomous_betting_agent.api_snapshot_memory import build_api_snapshots, snapshot_memory_summary
 from autonomous_betting_agent.clv_intelligence import build_clv_intelligence, clv_by_segment, clv_summary
 from autonomous_betting_agent.mobile_report import compact_report_frame
@@ -19,6 +13,7 @@ from autonomous_betting_agent.odds_breakdown import build_odds_breakdown
 from autonomous_betting_agent.performance_segments import build_segment_frame, top_segments
 from autonomous_betting_agent.post_loss_autopsy import autopsy_summary, build_loss_autopsies, future_rules
 from autonomous_betting_agent.row_normalizer import normalize_frame
+from autonomous_betting_agent.scanner_strength import score_scanner_frame, scanner_strength_summary
 from autonomous_betting_agent.sport_specific_models import build_sport_specific_decisions, sport_model_summary
 from autonomous_betting_agent.walk_forward_lab import walk_forward_summary, walk_forward_validate
 
@@ -28,15 +23,16 @@ LANG = 'es' if st.sidebar.selectbox('Language / Idioma', ['English', 'Español']
 TEXT = {
     'en': {
         'title': 'What Are the Odds',
-        'caption': 'The pro market finder. It reads Scanner Pro, Pro Predictor, odds exports, props, results, CLV, segments, losses, and walk-forward validation in one place.',
-        'info': 'Use this as the single market/value finder page. It replaces old market finder pages and keeps the stronger name.',
-        'workflow': 'Clean path: Scanner Pro → Pro Predictor → What Are the Odds → Odds Lock → Learning Memory → Max Agent Intelligence.',
+        'caption': 'The pro market/value command board. It combines Scanner Pro strength, Pro Predictor probabilities, agent decisions, CLV, loss review, walk-forward validation, and sport routing.',
+        'info': 'Use this as the single market/value finder. Best Board is the main operating board before Odds Lock.',
+        'workflow': 'Clean path: Scanner Pro → Pro Predictor → What Are the Odds → Odds Lock → Learning Memory.',
         'upload': 'Upload CSV file(s)',
         'paste': 'Or paste CSV text',
         'use_session': 'Use latest Scanner Pro / Pro Predictor session rows',
-        'waiting': 'Upload CSVs, paste CSV text, or use latest Scanner Pro / Pro Predictor session rows.',
+        'waiting': 'Upload CSVs, paste CSV text, or use latest session rows.',
         'min_edge': 'Minimum model-vs-market edge',
         'strong_edge': 'Strong edge threshold',
+        'min_strength': 'Minimum scanner strength',
         'min_train_rows': 'Walk-forward minimum training rows',
         'source': 'Source',
         'rows': 'Rows',
@@ -44,14 +40,13 @@ TEXT = {
         'lock_ready': 'Lock ready',
         'watch': 'Watch only',
         'review': 'Review needed',
-        'snapshots': 'Snapshots',
-        'losses': 'Losses reviewed',
+        'avg_strength': 'Avg scan strength',
+        'premium': 'Premium scans',
         'clv_ready': 'CLV ready',
-        'beat_close': 'Beat-close rate',
-        'walk_forward': 'Walk-forward rows',
+        'best_board': 'Best Board',
         'all_decisions': 'All decisions',
-        'best_board': 'Best board',
         'lock_candidates': 'Lock-ready',
+        'scanner_rank': 'Scanner rank',
         'odds_breakdown': 'Odds breakdown',
         'segments': 'Segments',
         'clv': 'CLV',
@@ -59,35 +54,21 @@ TEXT = {
         'walk_lab': 'Walk-forward',
         'sport_models': 'Sport models',
         'exports': 'Exports',
-        'top_segments': 'Top segments',
-        'all_segments': 'All segments',
-        'props_scores': 'Props / Scores',
-        'clv_by_sport': 'CLV by sport',
-        'future_rules': 'Future rules',
-        'download_decisions': 'Download all decisions',
-        'download_best': 'Download best board',
-        'download_lock_ready': 'Download lock-ready candidates',
-        'download_breakdown': 'Download odds breakdown',
-        'download_segments': 'Download segments',
-        'download_clv': 'Download CLV intelligence',
-        'download_losses': 'Download loss autopsies',
-        'download_walk': 'Download walk-forward validation',
-        'download_sports': 'Download sport-specific decisions',
-        'download_snapshots': 'Download API snapshots',
         'no_best': 'No playable candidates after filters.',
         'session_saved': 'Rows saved in session for Odds Lock, Learning Memory, and Max Agent Intelligence review.',
     },
     'es': {
         'title': 'What Are the Odds',
-        'caption': 'Buscador pro de mercados. Lee Scanner Pro, Pro Predictor, exportaciones de cuotas, props, resultados, CLV, segmentos, pérdidas y validación walk-forward en una sola página.',
-        'info': 'Usa esta como la única página para buscar mercado/valor. Reemplaza las páginas antiguas de búsqueda de mercados y conserva el nombre más fuerte.',
-        'workflow': 'Ruta limpia: Scanner Pro → Pro Predictor → What Are the Odds → Odds Lock → Memoria de Aprendizaje → Max Agent Intelligence.',
+        'caption': 'Tablero pro de mercado/valor. Combina fuerza de Scanner Pro, probabilidades de Predictor Pro, decisiones del agente, CLV, revisión de pérdidas, validación walk-forward y rutas por deporte.',
+        'info': 'Usa esta como la única página para buscar mercado/valor. Best Board es el tablero principal antes de Odds Lock.',
+        'workflow': 'Ruta limpia: Scanner Pro → Predictor Pro → What Are the Odds → Odds Lock → Memoria de Aprendizaje.',
         'upload': 'Subir archivo(s) CSV',
         'paste': 'O pegar texto CSV',
-        'use_session': 'Usar filas recientes de Scanner Pro / Pro Predictor',
-        'waiting': 'Sube CSVs, pega texto CSV o usa las filas recientes de Scanner Pro / Pro Predictor.',
+        'use_session': 'Usar filas recientes de Scanner Pro / Predictor Pro',
+        'waiting': 'Sube CSVs, pega texto CSV o usa las filas recientes de la sesión.',
         'min_edge': 'Ventaja mínima modelo-vs-mercado',
         'strong_edge': 'Umbral de ventaja fuerte',
+        'min_strength': 'Fuerza mínima del escáner',
         'min_train_rows': 'Mínimo de filas de entrenamiento walk-forward',
         'source': 'Fuente',
         'rows': 'Filas',
@@ -95,14 +76,13 @@ TEXT = {
         'lock_ready': 'Listas para bloquear',
         'watch': 'Solo vigilar',
         'review': 'Revisar',
-        'snapshots': 'Snapshots',
-        'losses': 'Pérdidas revisadas',
+        'avg_strength': 'Fuerza promedio',
+        'premium': 'Escaneos premium',
         'clv_ready': 'CLV listo',
-        'beat_close': 'Tasa de superar el cierre',
-        'walk_forward': 'Filas walk-forward',
+        'best_board': 'Best Board',
         'all_decisions': 'Todas las decisiones',
-        'best_board': 'Mejor tablero',
         'lock_candidates': 'Listas para bloquear',
+        'scanner_rank': 'Ranking del escáner',
         'odds_breakdown': 'Desglose de cuotas',
         'segments': 'Segmentos',
         'clv': 'CLV',
@@ -110,31 +90,16 @@ TEXT = {
         'walk_lab': 'Walk-forward',
         'sport_models': 'Modelos por deporte',
         'exports': 'Exportaciones',
-        'top_segments': 'Mejores segmentos',
-        'all_segments': 'Todos los segmentos',
-        'props_scores': 'Props / Marcadores',
-        'clv_by_sport': 'CLV por deporte',
-        'future_rules': 'Reglas futuras',
-        'download_decisions': 'Descargar todas las decisiones',
-        'download_best': 'Descargar mejor tablero',
-        'download_lock_ready': 'Descargar candidatos listos para bloquear',
-        'download_breakdown': 'Descargar desglose de cuotas',
-        'download_segments': 'Descargar segmentos',
-        'download_clv': 'Descargar inteligencia CLV',
-        'download_losses': 'Descargar autopsias de pérdidas',
-        'download_walk': 'Descargar validación walk-forward',
-        'download_sports': 'Descargar decisiones por deporte',
-        'download_snapshots': 'Descargar snapshots API',
         'no_best': 'No hay candidatos jugables después de los filtros.',
-        'session_saved': 'Las filas se guardaron en la sesión para revisión en Odds Lock, Memoria de Aprendizaje y Max Agent Intelligence.',
+        'session_saved': 'Las filas se guardaron en sesión para Odds Lock, Memoria de Aprendizaje y Max Agent Intelligence.',
     },
 }
 
 PRIORITY_COLUMNS = [
     'event', 'sport', 'market_type', 'prediction', 'model_probability_clean', 'market_implied_probability',
     'model_market_edge', 'model_market_edge_percent', 'decimal_price', 'best_price', 'bookmaker',
-    'agent_decision', 'agent_score', 'recommended_stake_units', 'event_timing_status', 'lock_ready',
-    'already_locked', 'line_value_signal', 'decision_reasons', 'decision_signals',
+    'agent_decision', 'agent_score', 'scanner_strength_score', 'scanner_strength_tier', 'scanner_recommendation',
+    'recommended_stake_units', 'event_timing_status', 'lock_ready', 'line_value_signal', 'decision_reasons',
 ]
 
 
@@ -142,15 +107,28 @@ def t(key: str) -> str:
     return TEXT[LANG].get(key, TEXT['en'].get(key, key))
 
 
+def session_rows() -> tuple[str, list[dict]]:
+    sources = [
+        ('pro_predictor_latest_rows', 'Pro Predictor'),
+        ('scanner_pro_latest_rows', 'Scanner Pro'),
+        ('what_are_the_odds_latest_rows', 'What Are the Odds'),
+        ('ara_latest_predictions', 'Latest session'),
+    ]
+    for key, label in sources:
+        rows = st.session_state.get(key) or []
+        if rows:
+            return label, rows
+    return '', []
+
+
 def read_inputs() -> tuple[str, pd.DataFrame]:
-    use_session = st.checkbox(t('use_session'), value=bool(st.session_state.get('scanner_pro_latest_rows') or st.session_state.get('ara_latest_predictions')))
+    label, rows = session_rows()
+    use_session = st.checkbox(t('use_session'), value=bool(rows))
     frames: list[pd.DataFrame] = []
     names: list[str] = []
-    if use_session:
-        session_rows = st.session_state.get('scanner_pro_latest_rows') or st.session_state.get('ara_latest_predictions') or []
-        if session_rows:
-            frames.append(pd.DataFrame(session_rows))
-            names.append('session_rows')
+    if use_session and rows:
+        frames.append(pd.DataFrame(rows))
+        names.append(label or 'session_rows')
     uploads = st.file_uploader(t('upload'), type=['csv'], accept_multiple_files=True)
     pasted = st.text_area(t('paste'), height=120)
     if uploads:
@@ -182,17 +160,25 @@ def compact_columns(frame: pd.DataFrame) -> pd.DataFrame:
     return frame[columns] if columns else frame
 
 
-def best_board(decisions: pd.DataFrame) -> pd.DataFrame:
+def max_board(decisions: pd.DataFrame, min_strength: float) -> pd.DataFrame:
     if decisions.empty or 'agent_decision' not in decisions.columns:
         return pd.DataFrame()
     out = decisions[decisions['agent_decision'].astype(str).isin(['play_strong', 'play_small'])].copy()
+    if 'scanner_strength_score' in out.columns:
+        out = out[pd.to_numeric(out['scanner_strength_score'], errors='coerce').fillna(0) >= float(min_strength)]
     if out.empty:
         return out
-    sort_cols = [col for col in ['lock_ready', 'agent_score', 'model_market_edge'] if col in out.columns]
-    ascending = [False if col == 'lock_ready' else False for col in sort_cols]
+    for col in ['lock_ready', 'agent_score', 'scanner_strength_score', 'model_market_edge', 'model_probability_clean']:
+        if col not in out.columns:
+            continue
+        if col == 'lock_ready':
+            out[col] = out[col].astype(bool)
+        else:
+            out[col] = pd.to_numeric(out[col], errors='coerce').fillna(0)
+    sort_cols = [col for col in ['lock_ready', 'agent_score', 'scanner_strength_score', 'model_market_edge', 'model_probability_clean'] if col in out.columns]
     if sort_cols:
-        out = out.sort_values(sort_cols, ascending=ascending)
-    return compact_columns(out).head(50)
+        out = out.sort_values(sort_cols, ascending=False)
+    return compact_columns(out).head(75)
 
 
 st.title(t('title'))
@@ -206,14 +192,18 @@ if raw.empty:
 
 min_edge = st.slider(t('min_edge'), min_value=0.0, max_value=0.20, value=0.035, step=0.005)
 strong_edge = st.slider(t('strong_edge'), min_value=0.0, max_value=0.30, value=0.075, step=0.005)
+min_strength = st.slider(t('min_strength'), min_value=0.0, max_value=100.0, value=35.0, step=1.0)
 min_train_rows = st.number_input(t('min_train_rows'), min_value=1, max_value=500, value=10, step=1)
 
 normalized = normalize_frame(raw)
-decisions = build_agent_decisions(normalized, min_edge=float(min_edge), strong_edge=float(strong_edge))
-plays = playable_candidates(normalized, min_edge=float(min_edge), strong_edge=float(strong_edge))
-lock_ready = lock_ready_candidates(normalized, min_edge=float(min_edge), strong_edge=float(strong_edge))
-summary = agent_decision_summary(normalized, min_edge=float(min_edge), strong_edge=float(strong_edge))
-best = best_board(decisions)
+scored_input = score_scanner_frame(normalized)
+decisions = build_agent_decisions(scored_input, min_edge=float(min_edge), strong_edge=float(strong_edge))
+decisions = score_scanner_frame(decisions)
+plays = playable_candidates(decisions, min_edge=float(min_edge), strong_edge=float(strong_edge))
+lock_ready = lock_ready_candidates(decisions, min_edge=float(min_edge), strong_edge=float(strong_edge))
+summary = agent_decision_summary(decisions, min_edge=float(min_edge), strong_edge=float(strong_edge))
+strength = scanner_strength_summary(decisions)
+best = max_board(decisions, min_strength=float(min_strength))
 segments = build_segment_frame(normalized)
 top = top_segments(normalized, min_resolved=1, limit=30)
 clv = build_clv_intelligence(normalized)
@@ -240,76 +230,63 @@ st.session_state['ara_latest_predictions_saved_at'] = pd.Timestamp.utcnow().isof
 
 st.success(t('session_saved'))
 st.caption(f"{t('source')}: {source}")
-cols = st.columns(9)
+cols = st.columns(10)
 cols[0].metric(t('rows'), len(normalized))
 cols[1].metric(t('playable'), summary['play_strong'] + summary['play_small'])
 cols[2].metric(t('lock_ready'), len(lock_ready))
 cols[3].metric(t('watch'), summary['watch_only'])
 cols[4].metric(t('review'), summary['review_needed'])
-cols[5].metric(t('snapshots'), snapshot_stats['rows'])
-cols[6].metric(t('losses'), loss_stats['losses_reviewed'])
+cols[5].metric(t('avg_strength'), 'N/A' if strength['avg_score'] is None else strength['avg_score'])
+cols[6].metric(t('premium'), strength['premium_scan'])
 cols[7].metric(t('clv_ready'), clv_stats['ready'])
-cols[8].metric(t('walk_forward'), walk_stats['tested_rows'])
+cols[8].metric('WF rows', walk_stats['tested_rows'])
+cols[9].metric('Brier WF', 'N/A' if walk_stats['avg_brier_walk_forward'] is None else walk_stats['avg_brier_walk_forward'])
 
-bcols = st.columns(2)
-bcols[0].metric(t('beat_close'), 'N/A' if clv_stats['beat_close_rate'] is None else f"{clv_stats['beat_close_rate']:.1%}")
-bcols[1].metric('Brier WF', 'N/A' if walk_stats['avg_brier_walk_forward'] is None else walk_stats['avg_brier_walk_forward'])
-
-tabs = st.tabs([
-    t('best_board'),
-    t('all_decisions'),
-    t('lock_candidates'),
-    t('odds_breakdown'),
-    t('segments'),
-    t('clv'),
-    t('loss_autopsy'),
-    t('walk_lab'),
-    t('sport_models'),
-    t('exports'),
-])
+tabs = st.tabs([t('best_board'), t('all_decisions'), t('lock_candidates'), t('scanner_rank'), t('odds_breakdown'), t('segments'), t('clv'), t('loss_autopsy'), t('walk_lab'), t('sport_models'), t('exports')])
 with tabs[0]:
     if best.empty:
         st.info(t('no_best'))
     else:
         st.dataframe(best, use_container_width=True, hide_index=True)
 with tabs[1]:
-    st.dataframe(compact_columns(decisions).head(500), use_container_width=True, hide_index=True)
+    st.dataframe(compact_columns(decisions).head(800), use_container_width=True, hide_index=True)
 with tabs[2]:
-    st.dataframe(compact_columns(lock_ready).head(300), use_container_width=True, hide_index=True)
+    st.dataframe(compact_columns(lock_ready).head(400), use_container_width=True, hide_index=True)
 with tabs[3]:
+    scanner_cols = [col for col in ['event', 'sport', 'market_type', 'prediction', 'decimal_price', 'bookmaker', 'bookmaker_count', 'scanner_strength_score', 'scanner_strength_tier', 'scanner_recommendation', 'scanner_reasons'] if col in decisions.columns]
+    st.dataframe(decisions[scanner_cols].head(400) if scanner_cols else decisions.head(400), use_container_width=True, hide_index=True)
+with tabs[4]:
     st.dataframe(compact_report_frame(odds_main).head(500) if not odds_main.empty else odds_main, use_container_width=True, hide_index=True)
     if not odds_props.empty:
-        st.subheader(t('props_scores'))
+        st.subheader('Props / Scores' if LANG == 'en' else 'Props / Marcadores')
         st.dataframe(odds_props.head(300), use_container_width=True, hide_index=True)
-with tabs[4]:
-    st.subheader(t('top_segments'))
-    st.dataframe(top, use_container_width=True, hide_index=True)
-    st.subheader(t('all_segments'))
-    st.dataframe(segments, use_container_width=True, hide_index=True)
 with tabs[5]:
+    st.subheader('Top segments' if LANG == 'en' else 'Mejores segmentos')
+    st.dataframe(top, use_container_width=True, hide_index=True)
+    st.subheader('All segments' if LANG == 'en' else 'Todos los segmentos')
+    st.dataframe(segments, use_container_width=True, hide_index=True)
+with tabs[6]:
     st.json(clv_stats)
     st.dataframe(clv.head(500), use_container_width=True, hide_index=True)
-    st.subheader(t('clv_by_sport'))
+    st.subheader('CLV by sport' if LANG == 'en' else 'CLV por deporte')
     st.dataframe(clv_sport, use_container_width=True, hide_index=True)
-with tabs[6]:
+with tabs[7]:
     st.json(loss_stats)
     st.dataframe(losses.head(300), use_container_width=True, hide_index=True)
-    st.subheader(t('future_rules'))
+    st.subheader('Future rules' if LANG == 'en' else 'Reglas futuras')
     st.dataframe(rules, use_container_width=True, hide_index=True)
-with tabs[7]:
+with tabs[8]:
     st.json(walk_stats)
     st.dataframe(walk.head(500), use_container_width=True, hide_index=True)
-with tabs[8]:
+with tabs[9]:
     st.dataframe(sport_stats, use_container_width=True, hide_index=True)
     st.dataframe(sport_decisions.head(500), use_container_width=True, hide_index=True)
-with tabs[9]:
-    st.download_button(t('download_decisions'), decisions.to_csv(index=False), file_name='what_are_the_odds_decisions.csv', mime='text/csv')
-    st.download_button(t('download_best'), best.to_csv(index=False), file_name='what_are_the_odds_best_board.csv', mime='text/csv')
-    st.download_button(t('download_lock_ready'), lock_ready.to_csv(index=False), file_name='what_are_the_odds_lock_ready.csv', mime='text/csv')
-    st.download_button(t('download_breakdown'), odds_main.to_csv(index=False), file_name='what_are_the_odds_breakdown.csv', mime='text/csv')
-    st.download_button(t('download_segments'), segments.to_csv(index=False), file_name='what_are_the_odds_segments.csv', mime='text/csv')
-    st.download_button(t('download_clv'), clv.to_csv(index=False), file_name='what_are_the_odds_clv.csv', mime='text/csv')
-    st.download_button(t('download_losses'), losses.to_csv(index=False), file_name='what_are_the_odds_loss_autopsy.csv', mime='text/csv')
-    st.download_button(t('download_walk'), walk.to_csv(index=False), file_name='what_are_the_odds_walk_forward.csv', mime='text/csv')
-    st.download_button(t('download_sports'), sport_decisions.to_csv(index=False), file_name='what_are_the_odds_sport_decisions.csv', mime='text/csv')
-    st.download_button(t('download_snapshots'), snapshots.to_csv(index=False), file_name='what_are_the_odds_api_snapshots.csv', mime='text/csv')
+with tabs[10]:
+    st.download_button('Download all decisions' if LANG == 'en' else 'Descargar todas las decisiones', decisions.to_csv(index=False), file_name='what_are_the_odds_decisions.csv', mime='text/csv')
+    st.download_button('Download best board' if LANG == 'en' else 'Descargar Best Board', best.to_csv(index=False), file_name='what_are_the_odds_best_board.csv', mime='text/csv')
+    st.download_button('Download lock-ready' if LANG == 'en' else 'Descargar listas para bloquear', lock_ready.to_csv(index=False), file_name='what_are_the_odds_lock_ready.csv', mime='text/csv')
+    st.download_button('Download scanner rank' if LANG == 'en' else 'Descargar ranking del escáner', decisions.to_csv(index=False), file_name='what_are_the_odds_scanner_rank.csv', mime='text/csv')
+    st.download_button('Download CLV' if LANG == 'en' else 'Descargar CLV', clv.to_csv(index=False), file_name='what_are_the_odds_clv.csv', mime='text/csv')
+    st.download_button('Download loss autopsy' if LANG == 'en' else 'Descargar autopsia de pérdidas', losses.to_csv(index=False), file_name='what_are_the_odds_loss_autopsy.csv', mime='text/csv')
+    st.download_button('Download walk-forward' if LANG == 'en' else 'Descargar walk-forward', walk.to_csv(index=False), file_name='what_are_the_odds_walk_forward.csv', mime='text/csv')
+    st.download_button('Download API snapshots' if LANG == 'en' else 'Descargar snapshots API', snapshots.to_csv(index=False), file_name='what_are_the_odds_api_snapshots.csv', mime='text/csv')
