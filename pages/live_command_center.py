@@ -14,6 +14,7 @@ from autonomous_betting_agent.local_users import current_user_from_session
 from autonomous_betting_agent.pick_quality import build_pick_quality_frame, pick_quality_summary
 from autonomous_betting_agent.prediction_snapshot import build_prediction_snapshots, snapshot_summary
 from autonomous_betting_agent.proof_ledger import ledger_summary, load_ledger, verify_hash_chain
+from autonomous_betting_agent.row_normalizer import normalize_frame
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MEMORY_BANK_PATH = REPO_ROOT / 'data' / 'learning_memory_bank.json'
@@ -32,20 +33,25 @@ patterns = memory_bank.get('patterns', []) if isinstance(memory_bank, dict) else
 
 upload = st.file_uploader('Optional: upload today’s prediction CSV', type=['csv'])
 if upload is not None:
-    active = pd.read_csv(upload)
+    raw_active = pd.read_csv(upload)
     source_label = upload.name
 elif not ledger.empty:
-    active = ledger.copy()
+    raw_active = ledger.copy()
     source_label = 'Proof ledger'
 else:
-    active = pd.DataFrame()
+    raw_active = pd.DataFrame()
     source_label = 'No active data'
 
 st.info(f'Active local user: {profile.display_name} ({profile.user_id}) | Source: {source_label}')
 
-if active.empty:
+if raw_active.empty:
     st.warning('No active prediction data found. Upload a CSV or add proof-ledger rows first.')
     st.stop()
+
+active = normalize_frame(raw_active)
+with st.expander('Normalized input preview', expanded=False):
+    st.caption('This is the standardized data the Command Center uses after mapping aliases like pick, prediction, odds, best_price, outcome, and result.')
+    st.dataframe(active.head(50), use_container_width=True, hide_index=True)
 
 snapshots = build_prediction_snapshots(active, user_id=profile.user_id)
 quality_input = snapshots.copy()
