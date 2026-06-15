@@ -5,6 +5,7 @@ import os
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
 from difflib import SequenceMatcher
+from io import StringIO
 from typing import Any
 
 import pandas as pd
@@ -139,6 +140,48 @@ def top_non_draw(event: Any) -> Any | None:
 
 def pct(value: float | None) -> str:
     return "" if value is None else f"{value * 100:.1f}%"
+
+
+def parse_number(value: Any) -> float | None:
+    text = str(value or "").strip().replace(",", "").replace("%", "")
+    if not text or text.lower() in {"none", "null", "nan", "unknown"}:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def memory_signal_from_frame(frame: pd.DataFrame | None, manual_roi_percent: float) -> tuple[float, str, int]:
+    manual_signal = manual_roi_percent / 100.0
+    if frame is None or frame.empty:
+        return manual_signal, "manual_memory_roi", 0
+    candidates = (
+        "bucket_roi",
+        "profile_roi",
+        "market_profile_roi",
+        "historical_roi",
+        "ara_memory_adjustment",
+        "memory_adjustment",
+        "learning_adjustment",
+        "roi",
+    )
+    lowered = {str(col).lower().replace(" ", "_").replace("-", "_"): col for col in frame.columns}
+    for candidate in candidates:
+        original = lowered.get(candidate)
+        if original is None:
+            continue
+        values: list[float] = []
+        for item in frame[original].dropna().tolist():
+            parsed = parse_number(item)
+            if parsed is None:
+                continue
+            if abs(parsed) > 1.0:
+                parsed /= 100.0
+            values.append(parsed)
+        if values:
+            return round(sum(values) / len(values), 6), f"uploaded_memory:{original}", len(frame)
+    return manual_signal, "uploaded_memory_no_signal_column_using_manual", len(frame)
 
 
 def next_sunday(today: date | None = None) -> date:
@@ -295,13 +338,40 @@ with st.expander(t("manual_preview"), expanded=False):
     weather_score = p3.number_input(t("weather_score"), min_value=0.0, max_value=100.0, value=95.0, step=1.0)
     memory_roi = p3.number_input(t("memory_roi"), min_value=-100.0, max_value=100.0, value=0.0, step=0.5)
 
-memory_file = st.file_uploader(t("memory_upload"), type=["csv"])
+memory_df: pd.DataFrame | None = None
+memory_file = st.file_uploader(
+    t("memory_upload"),
+    type=["csv"],
+    accept_multiple_files=False,
+    key="ara_memory_csv_upload",
+    help="Optional. On iPhone, if the upload picker does not open, use the paste fallback below.",
+)
+with st.expander("ARA memory paste fallback" if LANG == "en" else "Respaldo: pegar memoria ARA", expanded=False):
+    memory_csv_text = st.text_area(
+        "Paste learning memory CSV here" if LANG == "en" else "Pega aquí el CSV de memoria",
+        value="",
+        height=140,
+        key="ara_memory_csv_paste",
+        placeholder="bucket_roi,profile_win_rate\n0.03,0.58",
+    )
 if memory_file is not None:
     try:
         memory_df = pd.read_csv(memory_file)
-        st.success(f"{len(memory_df)} memory rows loaded")
+        st.success(f"{len(memory_df)} memory rows loaded from upload")
     except Exception as exc:
-        st.warning(f"Could not load memory CSV: {exc}")
+        st.warning(f"Could not load uploaded memory CSV: {exc}")
+elif memory_csv_text.strip():
+    try:
+        memory_df = pd.read_csv(StringIO(memory_csv_text.strip()))
+        st.success(f"{len(memory_df)} memory rows loaded from pasted CSV")
+    except Exception as exc:
+        st.warning(f"Could not load pasted memory CSV: {exc}")
+else:
+    st.caption("ARA memory upload is optional. The predictor can run without it." if LANG == "en" else "La memoria ARA es opcional. El predictor puede correr sin ella.")
+
+memory_signal, memory_source, memory_rows = memory_signal_from_frame(memory_df, float(memory_roi))
+if memory_rows:
+    st.caption(f"ARA memory source: {memory_source}; rows: {memory_rows}; signal: {memory_signal:.4f}")
 
 config = UIConfig(
     language=LANG,
@@ -355,7 +425,7 @@ if st.button(t("run"), type="primary", use_container_width=True):
             "stats_probability": stats_probability / 100.0,
             "injury_risk_score": injury_score,
             "weather_risk_score": weather_score,
-            "bucket_roi": memory_roi / 100.0,
+            "bucket_roi": memory_signal,
         }
         fused = fuse_row(preview_row)
         st.subheader(t("output"))
@@ -402,7 +472,7 @@ if st.button(t("run"), type="primary", use_container_width=True):
             api_context.update(api_coverage_fields(api_context, odds_configured=bool(odds_key), sports_configured=bool(sports_key), weather_configured=bool(weather_key)))
             fusion_input = {
                 "market_probability": market_probability,
-                "bucket_roi": memory_roi / 100.0,
+                "bucket_roi": memory_signal,
             }
             for context_key in ("stats_probability", "injury_risk_score", "weather_risk_score", "weather_flag", "bucket_roi", "historical_roi", "historical_win_rate"):
                 if api_context.get(context_key) not in (None, ""):
@@ -438,6 +508,9 @@ if st.button(t("run"), type="primary", use_container_width=True):
                 "injury_adjustment": pct(fused.injury_adjustment),
                 "weather_adjustment": pct(fused.weather_adjustment),
                 "ara_memory_adjustment": pct(fused.ara_memory_adjustment),
+                "ara_memory_source": memory_source,
+                "ara_memory_rows": memory_rows,
+                "ara_memory_signal": memory_signal,
                 "final_probability": pct(fused.final_probability),
                 "estimated_ev_value": ev_value,
                 "estimated_ev_decimal": "" if ev_value is None else round(ev_value, 4),
