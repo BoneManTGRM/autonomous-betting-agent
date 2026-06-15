@@ -9,9 +9,9 @@ from typing import Any, Iterable, Mapping
 
 import pandas as pd
 
-from .audit import clean_text, enrich_prediction_frame, parse_float
+from .audit import enrich_prediction_frame
 from .local_users import DEFAULT_USER_ID, ensure_user_dirs, sanitize_user_id, user_dir
-from .security import secure_csv_download
+from .security import escape_csv_formula_value, redact_secret_text
 
 LEDGER_SCHEMA_VERSION = 'proof-ledger-v1'
 LEDGER_COLUMNS = [
@@ -71,7 +71,10 @@ def _safe_text(value: Any) -> str:
             return ''
     except Exception:
         pass
-    return str(value)
+    text = str(value)
+    text = str(redact_secret_text(text))
+    text = str(escape_csv_formula_value(text))
+    return text
 
 
 def _canonical_payload(row: Mapping[str, Any]) -> str:
@@ -100,7 +103,7 @@ def _first(row: Mapping[str, Any], names: Iterable[str]) -> Any:
     for name in names:
         value = lowered.get(str(name).lower().replace(' ', '_').replace('-', '_'))
         if value not in (None, ''):
-            return value
+            return _safe_text(value)
     return ''
 
 
@@ -161,7 +164,7 @@ def build_ledger_rows(predictions: pd.DataFrame, *, user_id: str = DEFAULT_USER_
             'stake_units': _first(raw, ('stake_units', 'stake')),
             'profit_units': _first(raw, ('profit_units',)),
             'roi_percent': _first(raw, ('roi_percent',)),
-            'previous_hash': prev,
+            'previous_hash': _safe_text(prev),
             'row_hash': '',
         }
         row['prediction_id'] = prediction_id_for_row(row)
@@ -180,7 +183,7 @@ def append_predictions_to_ledger(predictions: pd.DataFrame, *, user_id: str = DE
         new_rows = new_rows[~new_rows['prediction_id'].astype(str).isin(seen)].copy()
     combined = pd.concat([existing, new_rows], ignore_index=True, sort=False) if not existing.empty else new_rows
     path = ledger_path(clean_user_id)
-    path.write_text(secure_csv_download(combined), encoding='utf-8')
+    path.write_text(combined.to_csv(index=False), encoding='utf-8')
     return combined
 
 
@@ -204,7 +207,6 @@ def ledger_summary(frame: pd.DataFrame) -> dict[str, Any]:
     if frame is None or frame.empty:
         return {'total_picks': 0, 'wins': 0, 'losses': 0, 'voids': 0, 'pending': 0, 'review_needed': 0, 'win_rate': None, 'units': 0.0, 'roi_percent': None, 'a_plus': 0, 'avg_decimal_price': None}
     status = frame.get('result_status', pd.Series(dtype=str)).fillna('').astype(str).str.lower()
-    official = frame[status.isin(['win', 'loss'])].copy()
     wins = int((status == 'win').sum())
     losses = int((status == 'loss').sum())
     voids = int((status == 'void').sum())
