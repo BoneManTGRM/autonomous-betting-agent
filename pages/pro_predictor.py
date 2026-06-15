@@ -22,70 +22,39 @@ from autonomous_betting_agent.target_mode import (
     price_probability_gap,
 )
 
+APP_VERSION = "direct-upload-fix-v9"
+
 st.set_page_config(page_title="Pro Predictor", layout="wide")
 
-LANGUAGES = {"English": "en", "Español": "es"}
-TEXT = {
-    "title": {"en": "Pro Predictor", "es": "Predictor Profesional"},
-    "caption": {
-        "en": "Multi-source all-sports predictor. It uses sportsbook odds as the base signal, then applies real per-event context from SportsDataIO, WeatherAPI, and ARA learning memory when available.",
-        "es": "Predictor multifuente para todos los deportes. Usa cuotas como señal base y contexto real por evento de SportsDataIO, WeatherAPI y memoria ARA cuando está disponible.",
-    },
-    "help": {
-        "en": "How to read it: market odds create the base probability. SportsDataIO, WeatherAPI, and learning memory can move the probability only when real source data was actually used. Output rows show source_used/status fields.",
-        "es": "Cómo leerlo: las cuotas crean la probabilidad base. SportsDataIO, WeatherAPI y memoria solo ajustan la probabilidad cuando se usaron datos reales. Las filas muestran campos source_used/status.",
-    },
-    "api_sources": {"en": "API sources", "es": "Fuentes API"},
-    "odds_key": {"en": "Odds API key", "es": "Clave de Odds API"},
-    "sports_key": {"en": "SportsDataIO key", "es": "Clave de SportsDataIO"},
-    "weather_key": {"en": "WeatherAPI key", "es": "Clave de WeatherAPI"},
-    "loaded": {"en": "Loaded from secrets", "es": "Cargada desde secretos"},
-    "missing": {"en": "Missing", "es": "Falta"},
-    "enabled": {"en": "Enabled", "es": "Activo"},
-    "game_setup": {"en": "Game setup", "es": "Configuración del partido"},
-    "game": {"en": "Game", "es": "Partido"},
-    "scan_target": {"en": "Scan target", "es": "Objetivo de escaneo"},
-    "all_sports": {"en": "All sports", "es": "Todos los deportes"},
-    "one_league": {"en": "One league/sport", "es": "Una liga/deporte"},
-    "one_team": {"en": "One team/player", "es": "Un equipo/jugador"},
-    "sport_search": {"en": "Sport/feed search", "es": "Buscar deporte/feed"},
-    "team_filter": {"en": "Team/player filter", "es": "Filtro de equipo/jugador"},
-    "regions": {"en": "Bookmaker regions", "es": "Regiones de casas"},
-    "markets": {"en": "Markets", "es": "Mercados"},
-    "controls": {"en": "Predictor controls", "es": "Controles del predictor"},
-    "max_feeds": {"en": "Max feeds", "es": "Máximo de feeds"},
-    "max_events": {"en": "Max events per feed", "es": "Máximo de eventos por feed"},
-    "min_books": {"en": "Minimum books", "es": "Mínimo de casas"},
-    "min_reliability": {"en": "Minimum reliability", "es": "Confiabilidad mínima"},
-    "latest_event_date": {"en": "Latest event date", "es": "Fecha máxima del evento"},
-    "target_70_mode": {"en": "70% ±1 Target Mode", "es": "Modo objetivo 70% ±1"},
-    "target_probability": {"en": "Target win probability", "es": "Probabilidad objetivo"},
-    "target_tolerance": {"en": "Tolerance ±", "es": "Tolerancia ±"},
-    "target_min_books": {"en": "70-mode minimum books", "es": "Mínimo de casas modo 70"},
-    "target_min_reliability": {"en": "70-mode minimum reliability", "es": "Confiabilidad mínima modo 70"},
-    "target_min_market": {"en": "70-mode market probability floor", "es": "Piso de probabilidad de mercado modo 70"},
-    "target_min_ev": {"en": "70-mode minimum EV", "es": "EV mínimo modo 70"},
-    "target_max_mismatch": {"en": "Max price/probability mismatch", "es": "Máxima diferencia precio/probabilidad"},
-    "min_api_coverage": {"en": "70-mode minimum API coverage", "es": "Cobertura API mínima modo 70"},
-    "require_all_apis": {"en": "Require all configured APIs", "es": "Requerir todas las APIs configuradas"},
-    "h2h_only": {"en": "70-mode h2h only", "es": "Modo 70 solo h2h"},
-    "manual_preview": {"en": "Manual signal preview", "es": "Vista previa manual"},
-    "stats_prob": {"en": "Stats probability %", "es": "Probabilidad por datos %"},
-    "injury_score": {"en": "Injury/lineup score", "es": "Puntaje lesión/alineación"},
-    "weather_score": {"en": "Weather score", "es": "Puntaje clima"},
-    "memory_roi": {"en": "ARA memory ROI %", "es": "ROI memoria ARA %"},
-    "memory_upload": {"en": "Upload learning memory CSV", "es": "Subir CSV de memoria"},
-    "run": {"en": "Run multi-API Predictor Pro", "es": "Ejecutar Predictor Pro multi-API"},
-    "output": {"en": "Fusion output", "es": "Salida de fusión"},
-    "target_table": {"en": "70% ±1 Target Picks", "es": "Picks objetivo 70% ±1"},
-    "table": {"en": "Ranked markets", "es": "Mercados ordenados"},
-    "rejected_70": {"en": "Rejected from 70% ±1 Mode", "es": "Rechazados del modo 70% ±1"},
-    "config": {"en": "Run config", "es": "Configuración"},
-}
 
-
-def t(key: str) -> str:
-    return TEXT.get(key, {}).get(LANG, TEXT.get(key, {}).get("en", key))
+@dataclass(frozen=True)
+class RunConfig:
+    app_version: str
+    odds_api_enabled: bool
+    sportsdataio_enabled: bool
+    weatherapi_enabled: bool
+    scan_target: str
+    sport_search: str
+    team_filter: str
+    regions: list[str]
+    markets: list[str]
+    max_feeds: int
+    max_events: int
+    min_books: int
+    min_reliability: float
+    latest_event_date: str
+    target_probability: float
+    target_tolerance: float
+    target_min_books: int
+    target_min_reliability: float
+    target_min_market_probability: float
+    target_min_ev: float
+    target_max_mismatch: float
+    target_min_api_coverage: float
+    require_all_configured_apis: bool
+    target_h2h_only: bool
+    ara_memory_source: str
+    ara_memory_rows: int
 
 
 def get_secret(*names: str) -> str:
@@ -106,19 +75,19 @@ def clean(value: Any) -> str:
     return " ".join(str(value or "").lower().replace("-", " ").replace("_", " ").split())
 
 
-def similarity(left: str, right: str) -> float:
+def similarity(left: Any, right: Any) -> float:
     left_clean, right_clean = clean(left), clean(right)
     if not left_clean or not right_clean:
         return 0.0
-    if left_clean in right_clean:
+    if left_clean == right_clean or left_clean in right_clean or right_clean in left_clean:
         return 1.0
     return SequenceMatcher(None, left_clean, right_clean).ratio()
 
 
 def sport_score(sport: Any, query: str) -> float:
-    text = f"{getattr(sport, 'key', '')} {getattr(sport, 'title', '')} {getattr(sport, 'group', '')} {getattr(sport, 'description', '')}"
-    if not query or clean(query) == "auto":
+    if not query.strip() or clean(query) == "auto":
         return 0.5
+    text = f"{getattr(sport, 'key', '')} {getattr(sport, 'title', '')} {getattr(sport, 'group', '')} {getattr(sport, 'description', '')}"
     return similarity(query, text)
 
 
@@ -152,10 +121,10 @@ def parse_number(value: Any) -> float | None:
         return None
 
 
-def memory_signal_from_frame(frame: pd.DataFrame | None, manual_roi_percent: float) -> tuple[float, str, int]:
+def memory_signal_from_frame(frame: pd.DataFrame | None, manual_roi_percent: float, source_prefix: str) -> tuple[float, str, int]:
     manual_signal = manual_roi_percent / 100.0
     if frame is None or frame.empty:
-        return manual_signal, "manual_memory_roi", 0
+        return manual_signal, f"{source_prefix}_empty_using_manual", 0
     candidates = (
         "bucket_roi",
         "profile_roi",
@@ -180,8 +149,24 @@ def memory_signal_from_frame(frame: pd.DataFrame | None, manual_roi_percent: flo
                 parsed /= 100.0
             values.append(parsed)
         if values:
-            return round(sum(values) / len(values), 6), f"uploaded_memory:{original}", len(frame)
-    return manual_signal, "uploaded_memory_no_signal_column_using_manual", len(frame)
+            return round(sum(values) / len(values), 6), f"{source_prefix}:{original}", len(frame)
+    return manual_signal, f"{source_prefix}_no_signal_column_using_manual", len(frame)
+
+
+def memory_signal_from_inputs(uploaded_file: Any, csv_text: str, manual_roi_percent: float) -> tuple[float, str, int]:
+    if uploaded_file is not None:
+        try:
+            frame = pd.read_csv(uploaded_file)
+            return memory_signal_from_frame(frame, manual_roi_percent, "uploaded_memory")
+        except Exception as exc:
+            st.warning(f"Could not read uploaded memory file. Using manual ARA ROI. Error: {exc}")
+    if csv_text.strip():
+        try:
+            frame = pd.read_csv(StringIO(csv_text.strip()))
+            return memory_signal_from_frame(frame, manual_roi_percent, "pasted_memory")
+        except Exception as exc:
+            st.warning(f"Could not read pasted memory CSV. Using manual ARA ROI. Error: {exc}")
+    return manual_roi_percent / 100.0, "manual_memory_roi", 0
 
 
 def next_sunday(today: date | None = None) -> date:
@@ -238,128 +223,96 @@ def api_coverage_fields(api_context: dict[str, Any], *, odds_configured: bool, s
     }
 
 
-@dataclass(frozen=True)
-class UIConfig:
-    language: str
-    odds_api_enabled: bool
-    sportsdataio_enabled: bool
-    weatherapi_enabled: bool
-    game: str
-    scan_target: str
-    sport_search: str
-    team_filter: str
-    regions: list[str]
-    markets: list[str]
-    max_feeds: int
-    max_events: int
-    min_books: int
-    min_reliability: float
-    latest_event_date: str
-    target_70_mode: bool
-    target_probability: float
-    target_tolerance: float
-    target_min_books: int
-    target_min_reliability: float
-    target_min_market_probability: float
-    target_min_ev: float
-    target_max_mismatch: float
-    target_min_api_coverage: float
-    require_all_configured_apis: bool
-    target_h2h_only: bool
+st.title("Pro Predictor")
+st.caption("Multi-source all-sports predictor. Direct uploader fix build.")
+st.info(f"App version: {APP_VERSION}")
 
-
-language_name = st.selectbox("Language / Idioma", list(LANGUAGES.keys()), index=0)
-LANG = LANGUAGES[language_name]
-
-st.title(t("title"))
-st.caption(t("caption"))
-st.info(t("help"))
-
-st.subheader(t("api_sources"))
+st.subheader("API sources")
 saved_odds = get_secret("ODDS_API_KEY", "THE_ODDS_API_KEY")
 saved_sports = get_secret("SPORTSDATAIO_API_KEY")
 saved_weather = get_secret("WEATHERAPI_KEY", "WEATHER_API_KEY")
-api_col1, api_col2, api_col3 = st.columns(3)
-with api_col1:
-    odds_override = st.text_input(t("odds_key"), type="password", placeholder=t("loaded") if saved_odds else "")
+api1, api2, api3 = st.columns(3)
+with api1:
+    odds_override = st.text_input("Odds API key", type="password", placeholder="Loaded from secrets" if saved_odds else "")
     odds_key = odds_override.strip() or saved_odds
-with api_col2:
-    sports_override = st.text_input(t("sports_key"), type="password", placeholder=t("loaded") if saved_sports else "")
+with api2:
+    sports_override = st.text_input("SportsDataIO key", type="password", placeholder="Loaded from secrets" if saved_sports else "")
     sports_key = sports_override.strip() or saved_sports
-with api_col3:
-    weather_override = st.text_input(t("weather_key"), type="password", placeholder=t("loaded") if saved_weather else "")
+with api3:
+    weather_override = st.text_input("WeatherAPI key", type="password", placeholder="Loaded from secrets" if saved_weather else "")
     weather_key = weather_override.strip() or saved_weather
 
-status_cols = st.columns(3)
-status_cols[0].metric("Odds API", t("enabled") if odds_key else t("missing"))
-status_cols[1].metric("SportsDataIO", t("enabled") if sports_key else t("missing"))
-status_cols[2].metric("WeatherAPI", t("enabled") if weather_key else t("missing"))
+s1, s2, s3 = st.columns(3)
+s1.metric("Odds API", "Enabled" if odds_key else "Missing")
+s2.metric("SportsDataIO", "Enabled" if sports_key else "Missing")
+s3.metric("WeatherAPI", "Enabled" if weather_key else "Missing")
 
-st.subheader(t("game_setup"))
+st.subheader("Game setup")
 setup1, setup2 = st.columns(2)
 with setup1:
-    game = st.text_input(t("game"), value="Mexico vs South Korea")
-    target_options = [t("all_sports"), t("one_league"), t("one_team")]
-    scan_target = st.radio(t("scan_target"), target_options, horizontal=True)
-    sport_query = st.text_input(t("sport_search"), value="auto")
+    game = st.text_input("Game", value="Mexico vs South Korea")
+    scan_target = st.radio("Scan target", ["All sports", "One league/sport", "One team/player"], horizontal=True)
+    sport_query = st.text_input("Sport/feed search", value="auto")
 with setup2:
-    team_filter = st.text_input(t("team_filter"), value=game if scan_target == t("one_team") else "")
-    regions = st.multiselect(t("regions"), ["us", "us2", "uk", "eu", "au"], default=["us", "eu", "uk"])
-    markets = st.multiselect(t("markets"), ["h2h", "spreads", "totals"], default=["h2h"])
+    team_filter = st.text_input("Team/player filter", value=game if scan_target == "One team/player" else "")
+    regions = st.multiselect("Bookmaker regions", ["us", "us2", "uk", "eu", "au"], default=["us", "eu", "uk"])
+    markets = st.multiselect("Markets", ["h2h", "spreads", "totals"], default=["h2h"])
 
-with st.expander(t("controls"), expanded=True):
+with st.expander("Predictor controls", expanded=True):
     c1, c2, c3, c4, c5 = st.columns(5)
-    max_feeds = c1.number_input(t("max_feeds"), min_value=1, max_value=120, value=50, step=1)
-    max_events = c2.number_input(t("max_events"), min_value=1, max_value=75, value=35, step=1)
-    min_books = c3.number_input(t("min_books"), min_value=1, max_value=25, value=4, step=1)
-    min_reliability = c4.slider(t("min_reliability"), min_value=0.0, max_value=100.0, value=90.0, step=1.0)
-    latest_event_date = c5.date_input(t("latest_event_date"), value=next_sunday())
+    max_feeds = c1.number_input("Max feeds", min_value=1, max_value=120, value=50, step=1)
+    max_events = c2.number_input("Max events per feed", min_value=1, max_value=75, value=35, step=1)
+    min_books = c3.number_input("Minimum books", min_value=1, max_value=25, value=4, step=1)
+    min_reliability = c4.slider("Minimum reliability", min_value=0.0, max_value=100.0, value=90.0, step=1.0)
+    latest_event_date = c5.date_input("Latest event date", value=next_sunday())
     st.divider()
-    target_70_mode = st.toggle(t("target_70_mode"), value=True)
+    target_70_mode = st.toggle("70% ±1 Target Mode", value=True)
     t1, t2, t3, t4 = st.columns(4)
-    target_probability = t1.number_input(t("target_probability"), min_value=0.50, max_value=0.90, value=0.70, step=0.01, format="%.2f")
-    target_tolerance = t2.number_input(t("target_tolerance"), min_value=0.00, max_value=0.10, value=0.01, step=0.01, format="%.2f")
-    target_min_books = t3.number_input(t("target_min_books"), min_value=1, max_value=25, value=4, step=1)
-    target_min_reliability = t4.number_input(t("target_min_reliability"), min_value=0.0, max_value=100.0, value=95.0, step=1.0)
+    target_probability = t1.number_input("Target win probability", min_value=0.50, max_value=0.90, value=0.70, step=0.01, format="%.2f")
+    target_tolerance = t2.number_input("Tolerance ±", min_value=0.00, max_value=0.10, value=0.01, step=0.01, format="%.2f")
+    target_min_books = t3.number_input("70-mode minimum books", min_value=1, max_value=25, value=4, step=1)
+    target_min_reliability = t4.number_input("70-mode minimum reliability", min_value=0.0, max_value=100.0, value=95.0, step=1.0)
     q1, q2, q3, q4 = st.columns(4)
-    target_min_market_probability = q1.number_input(t("target_min_market"), min_value=0.50, max_value=0.90, value=0.62, step=0.01, format="%.2f")
-    target_min_ev = q2.number_input(t("target_min_ev"), min_value=-0.50, max_value=1.00, value=0.00, step=0.01, format="%.2f")
-    target_max_mismatch = q3.number_input(t("target_max_mismatch"), min_value=0.01, max_value=0.50, value=0.12, step=0.01, format="%.2f")
-    target_h2h_only = q4.toggle(t("h2h_only"), value=True)
+    target_min_market_probability = q1.number_input("70-mode market probability floor", min_value=0.50, max_value=0.90, value=0.62, step=0.01, format="%.2f")
+    target_min_ev = q2.number_input("70-mode minimum EV", min_value=-0.50, max_value=1.00, value=0.00, step=0.01, format="%.2f")
+    target_max_mismatch = q3.number_input("Max price/probability mismatch", min_value=0.01, max_value=0.50, value=0.12, step=0.01, format="%.2f")
+    target_h2h_only = q4.toggle("70-mode h2h only", value=True)
     a1, a2 = st.columns(2)
-    target_min_api_coverage = a1.number_input(t("min_api_coverage"), min_value=0.0, max_value=1.0, value=1.0, step=0.05, format="%.2f")
-    require_all_configured_apis = a2.toggle(t("require_all_apis"), value=True)
+    target_min_api_coverage = a1.number_input("70-mode minimum API coverage", min_value=0.0, max_value=1.0, value=1.0, step=0.05, format="%.2f")
+    require_all_configured_apis = a2.toggle("Require all configured APIs", value=True)
 
-with st.expander(t("manual_preview"), expanded=False):
+with st.expander("Manual signal preview", expanded=False):
     st.caption("Manual preview is used only when live API data is unavailable; live scan rows use real API context fields.")
     p1, p2, p3 = st.columns(3)
-    stats_probability = p1.number_input(t("stats_prob"), min_value=1.0, max_value=99.0, value=58.0, step=0.1)
-    injury_score = p2.number_input(t("injury_score"), min_value=0.0, max_value=100.0, value=90.0, step=1.0)
-    weather_score = p3.number_input(t("weather_score"), min_value=0.0, max_value=100.0, value=95.0, step=1.0)
-    memory_roi = p3.number_input(t("memory_roi"), min_value=-100.0, max_value=100.0, value=0.0, step=0.5)
+    stats_probability = p1.number_input("Stats probability %", min_value=1.0, max_value=99.0, value=58.0, step=0.1)
+    injury_score = p2.number_input("Injury/lineup score", min_value=0.0, max_value=100.0, value=90.0, step=1.0)
+    weather_score = p3.number_input("Weather score", min_value=0.0, max_value=100.0, value=95.0, step=1.0)
+    memory_roi = p3.number_input("ARA memory ROI %", min_value=-100.0, max_value=100.0, value=0.0, step=0.5)
+
+st.subheader("ARA memory")
+st.caption("Upload accepts any file type. Choose your CSV file, or paste CSV text below. ARA memory is optional.")
+memory_file = st.file_uploader(
+    "Upload ARA learning memory file",
+    type=None,
+    accept_multiple_files=False,
+    key="direct_page_memory_upload_v9",
+    help="Accepts any file type. Choose your CSV file. If the picker does not open, paste CSV text below.",
+)
+memory_csv_text = st.text_area(
+    "Paste ARA learning memory CSV here",
+    value="",
+    height=150,
+    key="direct_page_memory_paste_v9",
+    placeholder="bucket_roi,profile_win_rate\n0.03,0.58",
+)
 
 memory_df: pd.DataFrame | None = None
-memory_file = st.file_uploader(
-    t("memory_upload"),
-    type=["csv"],
-    accept_multiple_files=False,
-    key="ara_memory_csv_upload",
-    help="Optional. On iPhone, if the upload picker does not open, use the paste fallback below.",
-)
-with st.expander("ARA memory paste fallback" if LANG == "en" else "Respaldo: pegar memoria ARA", expanded=False):
-    memory_csv_text = st.text_area(
-        "Paste learning memory CSV here" if LANG == "en" else "Pega aquí el CSV de memoria",
-        value="",
-        height=140,
-        key="ara_memory_csv_paste",
-        placeholder="bucket_roi,profile_win_rate\n0.03,0.58",
-    )
 if memory_file is not None:
     try:
         memory_df = pd.read_csv(memory_file)
         st.success(f"{len(memory_df)} memory rows loaded from upload")
     except Exception as exc:
-        st.warning(f"Could not load uploaded memory CSV: {exc}")
+        st.warning(f"Could not load uploaded memory file: {exc}")
 elif memory_csv_text.strip():
     try:
         memory_df = pd.read_csv(StringIO(memory_csv_text.strip()))
@@ -367,18 +320,16 @@ elif memory_csv_text.strip():
     except Exception as exc:
         st.warning(f"Could not load pasted memory CSV: {exc}")
 else:
-    st.caption("ARA memory upload is optional. The predictor can run without it." if LANG == "en" else "La memoria ARA es opcional. El predictor puede correr sin ella.")
+    st.caption("ARA memory is optional. The predictor can run without it.")
 
-memory_signal, memory_source, memory_rows = memory_signal_from_frame(memory_df, float(memory_roi))
-if memory_rows:
-    st.caption(f"ARA memory source: {memory_source}; rows: {memory_rows}; signal: {memory_signal:.4f}")
+memory_signal, memory_source, memory_rows = memory_signal_from_frame(memory_df, float(memory_roi), "ara_memory")
+st.caption(f"ARA memory source: {memory_source}; rows: {memory_rows}; signal: {memory_signal:.4f}")
 
-config = UIConfig(
-    language=LANG,
+config = RunConfig(
+    app_version=APP_VERSION,
     odds_api_enabled=bool(odds_key),
     sportsdataio_enabled=bool(sports_key),
     weatherapi_enabled=bool(weather_key),
-    game=game,
     scan_target=scan_target,
     sport_search=sport_query,
     team_filter=team_filter,
@@ -389,7 +340,6 @@ config = UIConfig(
     min_books=int(min_books),
     min_reliability=float(min_reliability),
     latest_event_date=str(latest_event_date),
-    target_70_mode=bool(target_70_mode),
     target_probability=float(target_probability),
     target_tolerance=float(target_tolerance),
     target_min_books=int(target_min_books),
@@ -400,6 +350,8 @@ config = UIConfig(
     target_min_api_coverage=float(target_min_api_coverage),
     require_all_configured_apis=bool(require_all_configured_apis),
     target_h2h_only=bool(target_h2h_only),
+    ara_memory_source=memory_source,
+    ara_memory_rows=memory_rows,
 )
 
 target_policy = TargetModePolicy(
@@ -417,9 +369,9 @@ target_policy = TargetModePolicy(
 
 context_builder = LiveAPIContextBuilder(sportsdataio_key=sports_key, weatherapi_key=weather_key)
 
-if st.button(t("run"), type="primary", use_container_width=True):
+if st.button("Run multi-API Predictor Pro", type="primary", use_container_width=True):
     if not odds_key:
-        st.warning("Odds API key is required for live market scan." if LANG == "en" else "La clave de Odds API es necesaria para escanear mercados en vivo.")
+        st.warning("Odds API key is required for live market scan.")
         preview_row = {
             "market_probability": 0.70,
             "stats_probability": stats_probability / 100.0,
@@ -428,7 +380,7 @@ if st.button(t("run"), type="primary", use_container_width=True):
             "bucket_roi": memory_signal,
         }
         fused = fuse_row(preview_row)
-        st.subheader(t("output"))
+        st.subheader("Fusion output")
         st.write({"market_probability": pct(fused.market_probability), "final_probability": pct(fused.final_probability), "reliability": fused.reliability_score, "confidence": fused.confidence})
         st.code(json.dumps(asdict(config), indent=2), language="json")
         st.stop()
@@ -444,7 +396,7 @@ if st.button(t("run"), type="primary", use_container_width=True):
     rows: list[dict[str, Any]] = []
     skipped: list[str] = []
     progress = st.progress(0)
-    market_param = ",".join(markets)
+    market_param = ",".join(markets or ["h2h"])
     for index, sport in enumerate(selected_sports):
         try:
             events = scan_market(odds_key, sport.key, regions=",".join(regions), max_events=int(max_events), markets=market_param)
@@ -470,11 +422,8 @@ if st.button(t("run"), type="primary", use_container_width=True):
             prediction = getattr(pick, "name", "")
             api_context = context_builder.context_for_event(event, pick_name=prediction)
             api_context.update(api_coverage_fields(api_context, odds_configured=bool(odds_key), sports_configured=bool(sports_key), weather_configured=bool(weather_key)))
-            fusion_input = {
-                "market_probability": market_probability,
-                "bucket_roi": memory_signal,
-            }
-            for context_key in ("stats_probability", "injury_risk_score", "weather_risk_score", "weather_flag", "bucket_roi", "historical_roi", "historical_win_rate"):
+            fusion_input = {"market_probability": market_probability, "bucket_roi": memory_signal}
+            for context_key in ("stats_probability", "injury_risk_score", "weather_risk_score", "weather_flag"):
                 if api_context.get(context_key) not in (None, ""):
                     fusion_input[context_key] = api_context[context_key]
 
@@ -526,9 +475,9 @@ if st.button(t("run"), type="primary", use_container_width=True):
     progress.empty()
 
     if not rows:
-        st.info("No usable markets returned with these filters." if LANG == "en" else "No hubo mercados útiles con estos filtros.")
+        st.info("No usable markets returned with these filters.")
         if skipped:
-            with st.expander("Skipped feeds" if LANG == "en" else "Feeds omitidos"):
+            with st.expander("Skipped feeds"):
                 for item in skipped[:50]:
                     st.write(f"- {item}")
         st.stop()
@@ -551,28 +500,27 @@ if st.button(t("run"), type="primary", use_container_width=True):
     rejected_70 = [row for row in ranked if not row["target_70_mode"]]
 
     metric_cols = st.columns(6)
-    metric_cols[0].metric(t("table"), len(ranked))
-    metric_cols[1].metric(t("target_table"), len(target_rows))
-    metric_cols[2].metric(t("target_probability"), pct(float(target_probability)))
-    metric_cols[3].metric(t("target_tolerance"), f"±{float(target_tolerance) * 100:.1f}%")
+    metric_cols[0].metric("Ranked markets", len(ranked))
+    metric_cols[1].metric("70% ±1 Target Picks", len(target_rows))
+    metric_cols[2].metric("Target win probability", pct(float(target_probability)))
+    metric_cols[3].metric("Tolerance ±", f"±{float(target_tolerance) * 100:.1f}%")
     metric_cols[4].metric("Full API rows", sum(1 for row in ranked if row.get("all_configured_apis_used") is True))
     metric_cols[5].metric("Duplicates rejected", sum(1 for row in ranked if row["duplicate_event_pick"]))
 
     if target_70_mode:
-        st.subheader(t("target_table"))
+        st.subheader("70% ±1 Target Picks")
         if target_rows:
             st.dataframe(target_rows, use_container_width=True, hide_index=True)
-            st.download_button("Download 70% target CSV" if LANG == "en" else "Descargar CSV objetivo 70%", pd.DataFrame(target_rows).to_csv(index=False), file_name="pro_predictor_70_target_mode.csv", mime="text/csv")
+            st.download_button("Download 70% target CSV", pd.DataFrame(target_rows).to_csv(index=False), file_name="pro_predictor_70_target_mode.csv", mime="text/csv")
         else:
-            st.info("No picks passed 70% ±1 mode. That is acceptable; the filter is intentionally strict." if LANG == "en" else "Ningún pick pasó el modo 70% ±1. Es aceptable; el filtro es intencionalmente estricto.")
-
-        with st.expander(t("rejected_70"), expanded=False):
+            st.info("No picks passed 70% ±1 mode. That is acceptable; the filter is intentionally strict.")
+        with st.expander("Rejected from 70% ±1 Mode", expanded=False):
             st.dataframe(rejected_70, use_container_width=True, hide_index=True)
 
-    st.subheader(t("table"))
+    st.subheader("Ranked markets")
     st.dataframe(ranked, use_container_width=True, hide_index=True)
-    st.download_button("Download all ranked CSV" if LANG == "en" else "Descargar CSV completo", pd.DataFrame(ranked).to_csv(index=False), file_name="pro_predictor_multi_api.csv", mime="text/csv")
-    st.subheader(t("config"))
+    st.download_button("Download all ranked CSV", pd.DataFrame(ranked).to_csv(index=False), file_name="pro_predictor_multi_api.csv", mime="text/csv")
+    st.subheader("Run config")
     st.code(json.dumps(asdict(config), indent=2), language="json")
 else:
-    st.info("Enter API keys and run the multi-source predictor." if LANG == "en" else "Ingresa las claves API y ejecuta el predictor multifuente.")
+    st.info("Enter API keys and run the multi-source predictor.")
