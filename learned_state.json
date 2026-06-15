@@ -10,9 +10,9 @@
   "notes": [
     "Learns probability calibration from graded historical predictions.",
     "This does not prove betting profitability; use untouched forward tests before making performance claims.",
-    "Merged 109 existing rows with 1 uploaded rows; removed 0 duplicates; trained on 110 rows."
+    "Merged 110 existing rows with 0 uploaded rows; removed 0 duplicates; trained on 110 rows."
   ],
   "slope": 1.1111665067328516,
-  "source": "pro_predictor_multi_api_high_confidence_only_updated_win_loss.csv",
-  "trained_at_utc": "2026-06-15T16:09:53+00:00"
+  "source": "2026-06-15T16-19_export_3_marked_win_loss.csv",
+  "trained_at_utc": "2026-06-15T18:33:46+00:00"
 }
