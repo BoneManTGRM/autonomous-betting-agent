@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import asdict, dataclass
+from datetime import date, datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from typing import Any
 
@@ -55,6 +56,7 @@ TEXT = {
     "max_events": {"en": "Max events per feed", "es": "Máximo de eventos por feed"},
     "min_books": {"en": "Minimum books", "es": "Mínimo de casas"},
     "min_reliability": {"en": "Minimum reliability", "es": "Confiabilidad mínima"},
+    "latest_event_date": {"en": "Latest event date", "es": "Fecha máxima del evento"},
     "target_70_mode": {"en": "70% ±1 Target Mode", "es": "Modo objetivo 70% ±1"},
     "target_probability": {"en": "Target win probability", "es": "Probabilidad objetivo"},
     "target_tolerance": {"en": "Tolerance ±", "es": "Tolerancia ±"},
@@ -63,6 +65,8 @@ TEXT = {
     "target_min_market": {"en": "70-mode market probability floor", "es": "Piso de probabilidad de mercado modo 70"},
     "target_min_ev": {"en": "70-mode minimum EV", "es": "EV mínimo modo 70"},
     "target_max_mismatch": {"en": "Max price/probability mismatch", "es": "Máxima diferencia precio/probabilidad"},
+    "min_api_coverage": {"en": "70-mode minimum API coverage", "es": "Cobertura API mínima modo 70"},
+    "require_all_apis": {"en": "Require all configured APIs", "es": "Requerir todas las APIs configuradas"},
     "h2h_only": {"en": "70-mode h2h only", "es": "Modo 70 solo h2h"},
     "manual_preview": {"en": "Manual signal preview", "es": "Vista previa manual"},
     "stats_prob": {"en": "Stats probability %", "es": "Probabilidad por datos %"},
@@ -137,6 +141,60 @@ def pct(value: float | None) -> str:
     return "" if value is None else f"{value * 100:.1f}%"
 
 
+def next_sunday(today: date | None = None) -> date:
+    base = today or date.today()
+    days = (6 - base.weekday()) % 7
+    if days == 0:
+        days = 7
+    return base + timedelta(days=days)
+
+
+def parse_event_date(value: Any) -> date | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).date()
+
+
+def api_coverage_fields(api_context: dict[str, Any], *, odds_configured: bool, sports_configured: bool, weather_configured: bool) -> dict[str, Any]:
+    configured: list[str] = []
+    used: list[str] = []
+    if odds_configured:
+        configured.append("odds_api")
+        if str(api_context.get("odds_api_source_used", "")).lower() == "yes":
+            used.append("odds_api")
+    if sports_configured:
+        configured.append("sportsdataio")
+        if str(api_context.get("sportsdataio_source_used", "")).lower() == "yes":
+            used.append("sportsdataio")
+    if weather_configured:
+        configured.append("weatherapi")
+        if str(api_context.get("weather_source_used", "")).lower() == "yes":
+            used.append("weatherapi")
+    configured_count = len(configured)
+    used_count = len(used)
+    score = 0.0 if configured_count == 0 else round(used_count / configured_count, 6)
+    missing = [source for source in configured if source not in used]
+    return {
+        "configured_api_sources": ",".join(configured),
+        "api_sources_used": ",".join(used),
+        "api_sources_missing": ",".join(missing),
+        "configured_api_sources_count": configured_count,
+        "api_sources_used_count": used_count,
+        "api_coverage_score": score,
+        "api_coverage_percent": pct(score),
+        "all_configured_apis_used": used_count == configured_count and configured_count > 0,
+    }
+
+
 @dataclass(frozen=True)
 class UIConfig:
     language: str
@@ -153,6 +211,7 @@ class UIConfig:
     max_events: int
     min_books: int
     min_reliability: float
+    latest_event_date: str
     target_70_mode: bool
     target_probability: float
     target_tolerance: float
@@ -161,6 +220,8 @@ class UIConfig:
     target_min_market_probability: float
     target_min_ev: float
     target_max_mismatch: float
+    target_min_api_coverage: float
+    require_all_configured_apis: bool
     target_h2h_only: bool
 
 
@@ -204,11 +265,12 @@ with setup2:
     markets = st.multiselect(t("markets"), ["h2h", "spreads", "totals"], default=["h2h"])
 
 with st.expander(t("controls"), expanded=True):
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     max_feeds = c1.number_input(t("max_feeds"), min_value=1, max_value=120, value=50, step=1)
     max_events = c2.number_input(t("max_events"), min_value=1, max_value=75, value=35, step=1)
     min_books = c3.number_input(t("min_books"), min_value=1, max_value=25, value=4, step=1)
     min_reliability = c4.slider(t("min_reliability"), min_value=0.0, max_value=100.0, value=90.0, step=1.0)
+    latest_event_date = c5.date_input(t("latest_event_date"), value=next_sunday())
     st.divider()
     target_70_mode = st.toggle(t("target_70_mode"), value=True)
     t1, t2, t3, t4 = st.columns(4)
@@ -221,6 +283,9 @@ with st.expander(t("controls"), expanded=True):
     target_min_ev = q2.number_input(t("target_min_ev"), min_value=-0.50, max_value=1.00, value=0.00, step=0.01, format="%.2f")
     target_max_mismatch = q3.number_input(t("target_max_mismatch"), min_value=0.01, max_value=0.50, value=0.12, step=0.01, format="%.2f")
     target_h2h_only = q4.toggle(t("h2h_only"), value=True)
+    a1, a2 = st.columns(2)
+    target_min_api_coverage = a1.number_input(t("min_api_coverage"), min_value=0.0, max_value=1.0, value=1.0, step=0.05, format="%.2f")
+    require_all_configured_apis = a2.toggle(t("require_all_apis"), value=True)
 
 with st.expander(t("manual_preview"), expanded=False):
     st.caption("Manual preview is used only when live API data is unavailable; live scan rows use real API context fields.")
@@ -253,6 +318,7 @@ config = UIConfig(
     max_events=int(max_events),
     min_books=int(min_books),
     min_reliability=float(min_reliability),
+    latest_event_date=str(latest_event_date),
     target_70_mode=bool(target_70_mode),
     target_probability=float(target_probability),
     target_tolerance=float(target_tolerance),
@@ -261,6 +327,8 @@ config = UIConfig(
     target_min_market_probability=float(target_min_market_probability),
     target_min_ev=float(target_min_ev),
     target_max_mismatch=float(target_max_mismatch),
+    target_min_api_coverage=float(target_min_api_coverage),
+    require_all_configured_apis=bool(require_all_configured_apis),
     target_h2h_only=bool(target_h2h_only),
 )
 
@@ -272,6 +340,8 @@ target_policy = TargetModePolicy(
     min_market_probability=float(target_min_market_probability),
     min_ev=float(target_min_ev),
     max_price_probability_gap=float(target_max_mismatch),
+    min_api_coverage_score=float(target_min_api_coverage),
+    require_all_configured_apis=bool(require_all_configured_apis),
     h2h_only=bool(target_h2h_only),
 )
 
@@ -312,6 +382,9 @@ if st.button(t("run"), type="primary", use_container_width=True):
             skipped.append(f"{getattr(sport, 'title', sport.key)}: {exc}")
             events = []
         for event in events:
+            event_day = parse_event_date(getattr(event, "commence_time", ""))
+            if event_day is None or event_day > latest_event_date:
+                continue
             match = event_match_score(event, team_filter)
             if team_filter.strip() and match < 0.85:
                 continue
@@ -326,6 +399,7 @@ if st.button(t("run"), type="primary", use_container_width=True):
 
             prediction = getattr(pick, "name", "")
             api_context = context_builder.context_for_event(event, pick_name=prediction)
+            api_context.update(api_coverage_fields(api_context, odds_configured=bool(odds_key), sports_configured=bool(sports_key), weather_configured=bool(weather_key)))
             fusion_input = {
                 "market_probability": market_probability,
                 "bucket_roi": memory_roi / 100.0,
@@ -345,6 +419,8 @@ if st.button(t("run"), type="primary", use_container_width=True):
                 "event": event_name,
                 "sport": getattr(event, "sport_title", getattr(sport, "title", "")),
                 "start": getattr(event, "commence_time", ""),
+                "event_date": str(event_day),
+                "latest_event_date_filter": str(latest_event_date),
                 "market_type": "h2h",
                 "prediction": prediction,
                 "dedupe_key": clean(f"{event_name} {prediction}"),
@@ -384,7 +460,7 @@ if st.button(t("run"), type="primary", use_container_width=True):
                     st.write(f"- {item}")
         st.stop()
 
-    prelim_ranked = sorted(rows, key=lambda row: (row["reliability_score"], row["final_probability_value"], row.get("estimated_ev_value") or -999), reverse=True)
+    prelim_ranked = sorted(rows, key=lambda row: (row["reliability_score"], row["final_probability_value"], row.get("estimated_ev_value") or -999, row.get("api_coverage_score") or 0), reverse=True)
     seen_keys: set[str] = set()
     for row in prelim_ranked:
         duplicate = row["dedupe_key"] in seen_keys
@@ -397,16 +473,17 @@ if st.button(t("run"), type="primary", use_container_width=True):
         row["target_probability_band_low"] = pct(target_result.probability_band_low)
         row["target_probability_band_high"] = pct(target_result.probability_band_high)
 
-    ranked = sorted(prelim_ranked, key=lambda row: (row["target_70_mode"], row["target_70_quality_score"], row["reliability_score"], row["final_probability_value"]), reverse=True)
+    ranked = sorted(prelim_ranked, key=lambda row: (row["target_70_mode"], row["target_70_quality_score"], row.get("api_coverage_score") or 0, row["reliability_score"], row["final_probability_value"]), reverse=True)
     target_rows = [row for row in ranked if row["target_70_mode"]]
     rejected_70 = [row for row in ranked if not row["target_70_mode"]]
 
-    metric_cols = st.columns(5)
+    metric_cols = st.columns(6)
     metric_cols[0].metric(t("table"), len(ranked))
     metric_cols[1].metric(t("target_table"), len(target_rows))
     metric_cols[2].metric(t("target_probability"), pct(float(target_probability)))
     metric_cols[3].metric(t("target_tolerance"), f"±{float(target_tolerance) * 100:.1f}%")
-    metric_cols[4].metric("Duplicates rejected", sum(1 for row in ranked if row["duplicate_event_pick"]))
+    metric_cols[4].metric("Full API rows", sum(1 for row in ranked if row.get("all_configured_apis_used") is True))
+    metric_cols[5].metric("Duplicates rejected", sum(1 for row in ranked if row["duplicate_event_pick"]))
 
     if target_70_mode:
         st.subheader(t("target_table"))
