@@ -48,10 +48,12 @@ except Exception:
 try:
     from autonomous_betting_agent.audit import enrich_prediction_frame, install_live_api_audit_context
     from autonomous_betting_agent.live_api_context import LiveAPIContextBuilder
+    from autonomous_betting_agent.mobile_report import render_mobile_predictor_report
 
     install_live_api_audit_context(LiveAPIContextBuilder)
 except Exception:
     enrich_prediction_frame = None  # type: ignore[assignment]
+    render_mobile_predictor_report = None  # type: ignore[assignment]
 
 
 def _called_from_page(page_name: str) -> bool:
@@ -86,6 +88,14 @@ def _looks_like_predictor_report(data: Any) -> bool:
     )
 
 
+def _report_signature(data: Any) -> str:
+    try:
+        columns = ",".join(str(col) for col in data.columns[:12])
+        return f"{len(data)}:{columns}:{str(data.head(1).to_dict())[:160]}"
+    except Exception:
+        return "unknown"
+
+
 def _install_page_helpers() -> None:
     try:
         import streamlit as st
@@ -99,18 +109,32 @@ def _install_page_helpers() -> None:
     real_dg_dataframe = DeltaGenerator.dataframe
     real_subheader = st.subheader
 
-    def capture(data: Any) -> None:
+    def capture(data: Any) -> Any:
         if _called_from_pro_predictor() and _looks_like_predictor_report(data):
             try:
                 captured = data.copy()
                 if enrich_prediction_frame is not None:
                     captured = enrich_prediction_frame(captured)
                 st.session_state["_aba_pro_predictor_latest_report"] = captured
+                return captured
             except Exception:
                 pass
+        return data
+
+    def should_render_mobile(data: Any) -> bool:
+        if not (_called_from_pro_predictor() and _looks_like_predictor_report(data)):
+            return False
+        signature = _report_signature(data)
+        rendered = st.session_state.setdefault("_aba_mobile_report_signatures", set())
+        if signature in rendered:
+            return False
+        rendered.add(signature)
+        return True
 
     def patched_st_dataframe(data: Any = None, *args: Any, **kwargs: Any) -> Any:
-        capture(data)
+        captured = capture(data)
+        if render_mobile_predictor_report is not None and should_render_mobile(captured):
+            return render_mobile_predictor_report(captured, table_renderer=real_st_dataframe)
         return real_st_dataframe(data, *args, **kwargs)
 
     def patched_dg_dataframe(self: Any, data: Any = None, *args: Any, **kwargs: Any) -> Any:
