@@ -1667,7 +1667,7 @@
     ],
     "slope": 1.1111665067328516,
     "source": "2026-06-15T16-19_export_3_marked_win_loss.csv",
-    "trained_at_utc": "2026-06-15T18:33:46+00:00"
+    "trained_at_utc": "2026-06-15T18:38:48+00:00"
   },
   "parse_stats": {
     "input_rows": 108,
@@ -2218,6 +2218,6 @@
     "rows_after_pruning": 110,
     "uploaded_usable_rows": 0
   },
-  "trained_at_utc": "2026-06-15T18:33:46+00:00",
+  "trained_at_utc": "2026-06-15T18:38:48+00:00",
   "version": "learning-memory-bank-v2"
 }
