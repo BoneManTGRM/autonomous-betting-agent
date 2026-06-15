@@ -5,38 +5,24 @@ from typing import Any, Mapping
 import pandas as pd
 
 from .audit import parse_float
+from .row_normalizer import normalize_frame, normalize_row, probability_value, safe_text
 
 
 def _safe(value: Any) -> str:
-    if value is None:
-        return ''
-    try:
-        if pd.isna(value):
-            return ''
-    except Exception:
-        pass
-    return str(value).strip()
-
-
-def _first(row: Mapping[str, Any], *names: str) -> str:
-    normalized = {str(key).lower().replace(' ', '_').replace('-', '_'): value for key, value in row.items()}
-    for name in names:
-        value = normalized.get(name.lower().replace(' ', '_').replace('-', '_'))
-        if _safe(value):
-            return _safe(value)
-    return ''
+    return safe_text(value)
 
 
 def classify_evidence_row(row: Mapping[str, Any]) -> tuple[str, str]:
-    lock_status = _first(row, 'lock_status').lower()
-    probability_source = _first(row, 'probability_source').lower()
-    decimal_price = parse_float(_first(row, 'decimal_price', 'best_price', 'odds'))
-    probability = parse_float(_first(row, 'model_probability', 'probability', 'final_probability', 'final_probability_value'))
-    result = _first(row, 'result_status', 'outcome', 'result', 'win_loss').lower()
-    timestamp = _first(row, 'locked_at_utc', 'prediction_timestamp', 'odds_timestamp')
-    source = _first(row, 'source', 'source_file').lower()
+    normalized = normalize_row(row)
+    lock_status = _safe(row.get('lock_status')).lower()
+    probability_source = _safe(row.get('probability_source')).lower()
+    decimal_price = parse_float(normalized.get('decimal_price'))
+    probability = probability_value(normalized, 'model_probability')
+    result = _safe(normalized.get('result_status')).lower()
+    timestamp = _safe(row.get('locked_at_utc') or normalized.get('prediction_timestamp') or row.get('odds_timestamp'))
+    source = _safe(row.get('source') or row.get('source_file') or normalized.get('odds_source')).lower()
 
-    has_result = result in {'win', 'won', 'loss', 'lost', '0', '1'}
+    has_result = result in {'win', 'loss', 'void'}
     has_probability = probability is not None
     has_odds = decimal_price is not None and decimal_price > 1.0
     has_timestamp = bool(timestamp)
@@ -55,8 +41,9 @@ def classify_evidence_row(row: Mapping[str, Any]) -> tuple[str, str]:
 def build_proof_readiness_frame(frame: pd.DataFrame) -> pd.DataFrame:
     if frame is None or frame.empty:
         return pd.DataFrame(columns=['evidence_level', 'evidence_reason'])
+    normalized_frame = normalize_frame(frame)
     rows: list[dict[str, Any]] = []
-    for raw in frame.to_dict(orient='records'):
+    for raw in normalized_frame.to_dict(orient='records'):
         level, reason = classify_evidence_row(raw)
         item = dict(raw)
         item['evidence_level'] = level
