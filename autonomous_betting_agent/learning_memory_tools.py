@@ -8,28 +8,34 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .learning import GradedPrediction, ProbabilityCalibrator
+from .learning_strength import learning_memory_health
 
 PROBABILITY_COLUMNS = (
     'final_probability_value',
     'calibrated_probability',
+    'model_probability_clean',
     'model_probability',
     'predicted_probability',
     'pick_probability',
     'favorite_probability',
     'market_probability_value',
     'market_probability',
+    'market_implied_probability',
+    'implied_probability',
     'no_vig_probability',
     'confidence_probability',
     'probability',
 )
-RESULT_COLUMNS = ('result', 'outcome', 'win_loss', 'graded_result', 'status')
-PRICE_COLUMNS = ('best_price', 'sportsbook_odds', 'decimal_odds', 'average_price', 'avg_price', 'odds', 'price')
-PICK_COLUMNS = ('prediction', 'pick', 'predicted_side', 'predicted_winner', 'favorite')
+RESULT_COLUMNS = ('result_status', 'result', 'outcome', 'win_loss', 'graded_result', 'status', 'final_result')
+PRICE_COLUMNS = ('best_price', 'decimal_price', 'sportsbook_odds', 'decimal_odds', 'average_price', 'avg_price', 'odds', 'price')
+PICK_COLUMNS = ('prediction', 'pick', 'predicted_side', 'predicted_winner', 'favorite', 'selection')
 WINNER_COLUMNS = ('winner', 'actual_winner', 'winning_side', 'final_winner')
 EVENT_COLUMNS = ('event', 'event_name', 'game', 'match', 'fixture')
 SPORT_COLUMNS = ('sport', 'sport_title', 'league', 'competition')
-START_COLUMNS = ('start', 'known_start_utc', 'commence_time', 'event_date', 'date')
-CONFIDENCE_COLUMNS = ('confidence', 'confidence_bucket', 'read', 'decision', 'confidence_tier')
+START_COLUMNS = ('event_start_utc', 'start', 'known_start_utc', 'commence_time', 'event_date', 'date')
+CONFIDENCE_COLUMNS = ('agent_decision', 'confidence', 'confidence_bucket', 'read', 'decision', 'confidence_tier')
+MARKET_COLUMNS = ('market_type', 'market', 'prop_type')
+BOOKMAKER_COLUMNS = ('bookmaker', 'sportsbook', 'book', 'best_bookmaker')
 
 
 def clean_key(value: Any) -> str:
@@ -61,9 +67,9 @@ def parse_probability(value: Any) -> float | None:
 
 def parse_result(value: Any) -> int | None:
     text = '' if value is None else str(value).strip().lower()
-    if text in {'won', 'win', 'w', 'correct', 'hit', 'true', 'yes', '1'}:
+    if text in {'won', 'win', 'w', 'correct', 'hit', 'true', 'yes', '1', 'ganó', 'gano', 'acierto', 'acertado'}:
         return 1
-    if text in {'lost', 'loss', 'l', 'incorrect', 'miss', 'false', 'no', '0'}:
+    if text in {'lost', 'loss', 'l', 'incorrect', 'miss', 'false', 'no', '0', 'perdió', 'perdio', 'fallo', 'falló'}:
         return 0
     return None
 
@@ -85,14 +91,14 @@ def first_float(row: dict[str, Any], names: tuple[str, ...]) -> float | None:
 
 
 def fallback_probability(row: dict[str, Any], source: str = '') -> tuple[float | None, str]:
-    text = ' '.join([source, first_text(row, CONFIDENCE_COLUMNS), first_text(row, ('source', 'note', 'result_note'))]).lower()
-    if any(token in text for token in ('a+ high', 'high confidence', 'strong_candidate', 'strong candidate')):
+    text = ' '.join([source, first_text(row, CONFIDENCE_COLUMNS), first_text(row, ('source', 'note', 'result_note', 'decision_reasons', 'decision_signals'))]).lower()
+    if any(token in text for token in ('play_strong', 'jugar_fuerte', 'a+ high', 'high confidence', 'strong_candidate', 'strong candidate')):
         return 0.70, 'fallback_high_confidence'
-    if any(token in text for token in ('high', 'alta', 'a strong')):
+    if any(token in text for token in ('play_small', 'high', 'alta', 'a strong')):
         return 0.67, 'fallback_high_confidence'
-    if any(token in text for token in ('medium', 'media', 'lean', 'b lean')):
+    if any(token in text for token in ('medium', 'media', 'lean', 'b lean', 'watch_only', 'solo_vigilar')):
         return 0.60, 'fallback_medium_confidence'
-    if any(token in text for token in ('low', 'baja', 'watch_only', 'watch only')):
+    if any(token in text for token in ('low', 'baja', 'no_action', 'sin_accion')):
         return 0.52, 'fallback_low_confidence'
     return None, 'missing'
 
@@ -129,6 +135,8 @@ def compact_row(row: dict[str, Any], row_number: int, source: str) -> dict[str, 
     prediction = first_text(row, PICK_COLUMNS)
     start = first_text(row, START_COLUMNS)
     sport = first_text(row, SPORT_COLUMNS)
+    market_type = first_text(row, MARKET_COLUMNS)
+    bookmaker = first_text(row, BOOKMAKER_COLUMNS)
     price = first_float(row, PRICE_COLUMNS)
     books = first_float(row, ('books', 'bookmaker_count', 'source_count', 'bookmakers'))
     api_coverage = first_float(row, ('api_coverage_score', 'api_coverage'))
@@ -138,6 +146,8 @@ def compact_row(row: dict[str, Any], row_number: int, source: str) -> dict[str, 
         'event': event[:140],
         'start': start[:40],
         'sport': sport[:80],
+        'market_type': market_type[:80],
+        'bookmaker': bookmaker[:80],
         'prediction': prediction[:100],
         'probability': round(probability, 6),
         'probability_source': probability_source,
@@ -149,7 +159,7 @@ def compact_row(row: dict[str, Any], row_number: int, source: str) -> dict[str, 
         'source': source[:120],
     }
     item['error_abs'] = round(abs(item['probability'] - item['outcome']), 6)
-    item['dedupe_key'] = '|'.join(part for part in (event.lower().strip(), start[:10].lower().strip(), prediction.lower().strip(), str(result)) if part)
+    item['dedupe_key'] = '|'.join(part for part in (event.lower().strip(), start[:10].lower().strip(), market_type.lower().strip(), prediction.lower().strip(), str(result)) if part)
     return item
 
 
@@ -160,6 +170,8 @@ def read_compact_csv_bytes(data: bytes, source: str) -> tuple[list[dict[str, Any
         'missing_probability': 0,
         'missing_result': 0,
         'fallback_probability_rows': 0,
+        'price_implied_probability_rows': 0,
+        'direct_probability_rows': 0,
         'wins': 0,
         'losses': 0,
     }
@@ -182,6 +194,10 @@ def read_compact_csv_bytes(data: bytes, source: str) -> tuple[list[dict[str, Any
             continue
         if str(probability_source).startswith('fallback_'):
             stats['fallback_probability_rows'] += 1
+        elif probability_source == 'price_implied':
+            stats['price_implied_probability_rows'] += 1
+        else:
+            stats['direct_probability_rows'] += 1
         stats['usable_rows'] += 1
         stats['wins'] += int(item['outcome'] == 1)
         stats['losses'] += int(item['outcome'] == 0)
@@ -200,7 +216,7 @@ def valid_bank_row(row: Any) -> dict[str, Any] | None:
     clean['probability'] = round(probability, 6)
     clean['outcome'] = int(result)
     clean['error_abs'] = round(abs(clean['probability'] - clean['outcome']), 6)
-    clean['dedupe_key'] = str(clean.get('dedupe_key') or f"{clean.get('event','')}|{clean.get('start','')}|{clean.get('prediction','')}|{clean.get('outcome','')}").lower()
+    clean['dedupe_key'] = str(clean.get('dedupe_key') or f"{clean.get('event','')}|{clean.get('start','')}|{clean.get('market_type','')}|{clean.get('prediction','')}|{clean.get('outcome','')}").lower()
     return clean
 
 
@@ -283,6 +299,8 @@ def api_bucket(value: Any) -> str:
 def segment_keys(row: dict[str, Any]) -> list[tuple[str, str, str]]:
     keys: list[tuple[str, str, str]] = []
     sport = str(row.get('sport') or '').strip()
+    market_type = str(row.get('market_type') or '').strip()
+    bookmaker = str(row.get('bookmaker') or '').strip()
     confidence = str(row.get('confidence') or '').strip()
     probability = float(row['probability'])
     bucket = probability_bucket(probability)
@@ -293,6 +311,12 @@ def segment_keys(row: dict[str, Any]) -> list[tuple[str, str, str]]:
     if sport:
         keys.append(('sport', sport, f'Sport: {sport}'))
         keys.append(('sport_probability_bucket', f'{sport}|{bucket}', f'{sport} / {bucket}'))
+    if market_type:
+        keys.append(('market_type', market_type, f'Market: {market_type}'))
+        if sport:
+            keys.append(('sport_market', f'{sport}|{market_type}', f'{sport} / {market_type}'))
+    if bookmaker:
+        keys.append(('bookmaker', bookmaker, f'Bookmaker: {bookmaker}'))
     if confidence:
         keys.append(('confidence', confidence, f'Confidence/read: {confidence}'))
     if row.get('books') is not None:
@@ -379,8 +403,9 @@ def memory_metrics(rows: list[dict[str, Any]]) -> dict[str, float | int | None]:
 
 
 def build_memory_bank(*, compact_rows: list[dict[str, Any]], calibrator: ProbabilityCalibrator, segments: list[dict[str, Any]], parse_stats: dict[str, Any], prune_report: dict[str, Any], mode: str, existing_count: int, uploaded_count: int, duplicates_removed: int) -> dict[str, Any]:
+    health = learning_memory_health(compact_rows)
     return {
-        'version': 'learning-memory-bank-v3',
+        'version': 'learning-memory-bank-v4',
         'trained_at_utc': datetime.now(timezone.utc).isoformat(timespec='seconds'),
         'training_mode': mode,
         'summary': {
@@ -390,7 +415,13 @@ def build_memory_bank(*, compact_rows: list[dict[str, Any]], calibrator: Probabi
             'rows_after_pruning': len(compact_rows),
             'patterns_saved': len(segments),
             'fallback_probability_rows': int(parse_stats.get('fallback_probability_rows', 0)),
+            'price_implied_probability_rows': int(parse_stats.get('price_implied_probability_rows', 0)),
+            'direct_probability_rows': int(parse_stats.get('direct_probability_rows', 0)),
+            'learning_health_score': health['learning_health_score'],
+            'learning_health_tier': health['learning_health_tier'],
+            'recommended_learning_action': health['recommended_learning_action'],
         },
+        'learning_health': health,
         'parse_stats': parse_stats,
         'prune_report': prune_report,
         'global_calibrator': calibrator.to_dict(),
