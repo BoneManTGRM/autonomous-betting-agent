@@ -72,6 +72,22 @@ class FourToolOrchestratorTests(unittest.TestCase):
         self.assertEqual(health['resolved_probability_rows'], 6)
         self.assertEqual(four_tool_recommendation(frame), 'learning_memory')
 
+    def test_compact_learning_rows_use_outcome_and_probability_aliases(self):
+        frame = pd.DataFrame([
+            {
+                'event': f'E{i}',
+                'prediction': 'B',
+                'probability': 0.61,
+                'outcome': 1 if i % 2 else 0,
+            }
+            for i in range(6)
+        ])
+        health = page_health(frame, page='learning_memory')
+        self.assertEqual(health['status'], 'ready_to_train_with_sample_warning')
+        self.assertEqual(health['resolved_probability_rows'], 6)
+        self.assertEqual(health['blockers'], [])
+        self.assertEqual(four_tool_recommendation(frame), 'learning_memory')
+
     def test_finished_rows_without_probabilities_are_not_training_ready(self):
         frame = pd.DataFrame([
             {'event': f'E{i}', 'prediction': 'B', 'result_status': 'win' if i % 2 else 'loss'}
