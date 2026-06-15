@@ -18,13 +18,14 @@ from .tracking import PredictionLedgerRow, SelectionDecision, SelectionPolicy, T
 
 
 def _install_bilingual_sidebar() -> None:
-    """Install a reliable Streamlit sidebar language/nav patch.
+    """Install one global Streamlit language/nav/report translator.
 
-    The sidebar renders after the language selector so it can show only one
-    language at a time. The selected language is stored in session state and in
-    the URL query params, so it stays selected when switching pages or refreshing.
+    The selected language is stored in session state and in the URL query params,
+    so one choice applies across pages and survives refresh/page changes. Report
+    tables and CSV downloads are translated centrally when Español is selected.
     """
     try:
+        import pandas as pd
         import streamlit as st
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
@@ -61,6 +62,139 @@ def _install_bilingual_sidebar() -> None:
         "Herramientas especializadas: las páginas USA, México, Universitario, Combate y NBA son buscadores enfocados, no reemplazos completos del Predictor Pro.",
     )
 
+    es_columns = {
+        "event": "evento",
+        "game": "partido",
+        "match": "partido",
+        "sport": "deporte",
+        "league": "liga",
+        "start": "inicio",
+        "event_date": "fecha_evento",
+        "latest_event_date_filter": "filtro_fecha_maxima",
+        "market_type": "tipo_mercado",
+        "prediction": "pronostico",
+        "pick": "seleccion",
+        "favorite": "favorito",
+        "outcome": "resultado",
+        "result": "resultado",
+        "winner": "ganador",
+        "actual_winner": "ganador_real",
+        "probability": "probabilidad",
+        "prob": "probabilidad",
+        "market_probability": "probabilidad_mercado",
+        "market_probability_value": "valor_probabilidad_mercado",
+        "final_probability": "probabilidad_final",
+        "final_probability_value": "valor_probabilidad_final",
+        "calibrated_probability": "probabilidad_calibrada",
+        "predicted_probability": "probabilidad_pronosticada",
+        "avg_predicted": "promedio_pronosticado",
+        "actual_hit_rate": "tasa_acierto_real",
+        "actual_win_rate": "tasa_victoria_real",
+        "hit_rate": "tasa_acierto",
+        "brier": "brier",
+        "brier_score": "puntaje_brier",
+        "log_loss": "log_loss",
+        "best_price": "mejor_cuota",
+        "avg_price": "cuota_promedio",
+        "average_price": "cuota_promedio",
+        "odds": "cuotas",
+        "price": "cuota",
+        "books": "casas",
+        "bookmakers": "casas",
+        "best_book": "mejor_casa",
+        "best_bookmaker": "mejor_casa",
+        "confidence": "confianza",
+        "read": "lectura",
+        "classification": "clasificacion",
+        "quality": "calidad",
+        "reliability": "confiabilidad",
+        "reliability_score": "puntaje_confiabilidad",
+        "target_70_mode": "modo_objetivo_70",
+        "target_70_quality_score": "puntaje_calidad_objetivo_70",
+        "target_70_rejection_reason": "razon_rechazo_objetivo_70",
+        "target_probability_band_low": "banda_objetivo_baja",
+        "target_probability_band_high": "banda_objetivo_alta",
+        "estimated_ev_value": "valor_ev_estimado",
+        "estimated_ev_decimal": "ev_estimado_decimal",
+        "api_coverage_score": "puntaje_cobertura_api",
+        "api_coverage_percent": "porcentaje_cobertura_api",
+        "api_sources_used": "apis_usadas",
+        "api_sources_missing": "apis_faltantes",
+        "configured_api_sources": "apis_configuradas",
+        "all_configured_apis_used": "todas_las_apis_configuradas_usadas",
+        "sportsdataio_status": "estado_sportsdataio",
+        "weatherapi_status": "estado_weatherapi",
+        "weather_location": "ubicacion_clima",
+        "weather_reason": "razon_clima",
+        "weather_flag": "alerta_clima",
+        "weather_risk_score": "puntaje_riesgo_clima",
+        "venue_name": "nombre_sede",
+        "venue_name_fifa": "nombre_sede_fifa",
+        "venue_city": "ciudad_sede",
+        "venue_state": "estado_sede",
+        "venue_country": "pais_sede",
+        "venue_source": "fuente_sede",
+        "venue_note": "nota_sede",
+        "sede_fifa": "sede_fifa",
+        "estadio_real": "estadio_real",
+        "ciudad_area": "ciudad_area",
+        "pais_sede": "pais_sede",
+        "fuente_sede": "fuente_sede",
+        "area": "area",
+        "area_type": "tipo_area",
+        "group_value": "valor_grupo",
+        "records": "registros",
+        "actual_minus_predicted": "real_menos_pronosticado",
+        "smoothed_hit_rate": "tasa_suavizada",
+        "smoothed_edge": "ventaja_suavizada",
+        "memory_type": "tipo_memoria",
+        "importance": "importancia",
+        "action": "accion",
+    }
+    es_values = {
+        "HIGH": "ALTA",
+        "MEDIUM": "MEDIA",
+        "LOW": "BAJA",
+        "High": "Alta",
+        "Medium": "Media",
+        "Low": "Baja",
+        "True": "Verdadero",
+        "False": "Falso",
+        "true": "verdadero",
+        "false": "falso",
+        "yes": "sí",
+        "no": "no",
+        "won": "ganó",
+        "lost": "perdió",
+        "unknown": "pendiente",
+        "pending": "pendiente",
+        "used": "usado",
+        "not_supported_sport": "deporte_no_compatible",
+        "not_configured": "no_configurado",
+        "not_available_from_feed": "no_disponible_en_feed",
+        "no_location": "sin_ubicacion",
+        "raise_trust": "subir_confianza",
+        "lower_trust": "bajar_confianza",
+        "watch": "vigilar",
+    }
+    es_phrases = {
+        "outside": "fuera de",
+        "band": "banda",
+        "market probability below floor": "probabilidad de mercado debajo del piso",
+        "not enough books": "no hay suficientes casas",
+        "reliability below target": "confiabilidad debajo del objetivo",
+        "price/probability mismatch": "desajuste precio/probabilidad",
+        "EV below target": "EV debajo del objetivo",
+        "API coverage below target": "cobertura API debajo del objetivo",
+        "not all configured APIs used": "no se usaron todas las APIs configuradas",
+        "duplicate event/pick": "evento/pronóstico duplicado",
+        "not h2h": "no es h2h",
+        "not high confidence": "no es confianza alta",
+        "Venue was not provided by the available API sources.": "La sede no fue proporcionada por las APIs disponibles.",
+        "Neutral-site FIFA venue override matched by event teams and start time.": "Sede neutral FIFA identificada por equipos y hora de inicio.",
+        "Venue inferred from SportsDataIO home-team metadata; neutral-site events may differ.": "Sede inferida desde metadatos del equipo local en SportsDataIO; eventos en sede neutral pueden diferir.",
+    }
+
     def query_language() -> str:
         try:
             value = st.query_params.get("lang", "")
@@ -86,6 +220,44 @@ def _install_bilingual_sidebar() -> None:
         except Exception:
             pass
 
+    def translate_value(value: Any) -> Any:
+        if language_value() != "Español" or value is None:
+            return value
+        text = str(value)
+        text = es_values.get(text, text)
+        for source, target in es_phrases.items():
+            text = text.replace(source, target)
+        return text
+
+    def translate_frame(data: Any) -> Any:
+        if language_value() != "Español":
+            return data
+        if not isinstance(data, pd.DataFrame):
+            return data
+        frame = data.copy()
+        for col in frame.columns:
+            if frame[col].dtype == object:
+                frame[col] = frame[col].map(translate_value)
+        return frame.rename(columns={str(col): es_columns.get(str(col), str(col)) for col in frame.columns})
+
+    def translate_csv_text(data: Any) -> Any:
+        if language_value() != "Español":
+            return data
+        try:
+            if isinstance(data, bytes):
+                text = data.decode("utf-8")
+                was_bytes = True
+            elif isinstance(data, str):
+                text = data
+                was_bytes = False
+            else:
+                return data
+            frame = pd.read_csv(__import__("io").StringIO(text))
+            translated = translate_frame(frame).to_csv(index=False)
+            return translated.encode("utf-8") if was_bytes else translated
+        except Exception:
+            return data
+
     def render_nav(lang: str) -> None:
         with st.sidebar:
             st.markdown("---")
@@ -104,6 +276,12 @@ def _install_bilingual_sidebar() -> None:
     real_set_page_config = st.set_page_config
     real_st_selectbox = st.selectbox
     real_dg_selectbox = DeltaGenerator.selectbox
+    real_st_dataframe = st.dataframe
+    real_dg_dataframe = DeltaGenerator.dataframe
+    real_st_table = st.table
+    real_dg_table = DeltaGenerator.table
+    real_st_download_button = st.download_button
+    real_dg_download_button = DeltaGenerator.download_button
 
     def patched_set_page_config(*args: Any, **kwargs: Any) -> Any:
         return real_set_page_config(*args, **kwargs)
@@ -134,9 +312,51 @@ def _install_bilingual_sidebar() -> None:
     def patched_dg_selectbox(self: Any, label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
         return language_selectbox(label, options, args, kwargs, real_dg_selectbox, target=self)
 
+    def patched_st_dataframe(data: Any = None, *args: Any, **kwargs: Any) -> Any:
+        return real_st_dataframe(translate_frame(data), *args, **kwargs)
+
+    def patched_dg_dataframe(self: Any, data: Any = None, *args: Any, **kwargs: Any) -> Any:
+        return real_dg_dataframe(self, translate_frame(data), *args, **kwargs)
+
+    def patched_st_table(data: Any = None, *args: Any, **kwargs: Any) -> Any:
+        return real_st_table(translate_frame(data), *args, **kwargs)
+
+    def patched_dg_table(self: Any, data: Any = None, *args: Any, **kwargs: Any) -> Any:
+        return real_dg_table(self, translate_frame(data), *args, **kwargs)
+
+    def _translate_download_payload(args: tuple[Any, ...], kwargs: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+        kwargs = dict(kwargs)
+        file_name = str(kwargs.get("file_name", ""))
+        mime = str(kwargs.get("mime", ""))
+        should_translate = language_value() == "Español" and (file_name.endswith(".csv") or mime == "text/csv")
+        if not should_translate:
+            return args, kwargs
+        if "data" in kwargs:
+            kwargs["data"] = translate_csv_text(kwargs["data"])
+            return args, kwargs
+        if args:
+            mutable = list(args)
+            mutable[0] = translate_csv_text(mutable[0])
+            return tuple(mutable), kwargs
+        return args, kwargs
+
+    def patched_st_download_button(label: Any, *args: Any, **kwargs: Any) -> Any:
+        args, kwargs = _translate_download_payload(args, kwargs)
+        return real_st_download_button(label, *args, **kwargs)
+
+    def patched_dg_download_button(self: Any, label: Any, *args: Any, **kwargs: Any) -> Any:
+        args, kwargs = _translate_download_payload(args, kwargs)
+        return real_dg_download_button(self, label, *args, **kwargs)
+
     st.set_page_config = patched_set_page_config
     st.selectbox = patched_st_selectbox
+    st.dataframe = patched_st_dataframe
+    st.table = patched_st_table
+    st.download_button = patched_st_download_button
     DeltaGenerator.selectbox = patched_dg_selectbox
+    DeltaGenerator.dataframe = patched_dg_dataframe
+    DeltaGenerator.table = patched_dg_table
+    DeltaGenerator.download_button = patched_dg_download_button
 
 
 _install_bilingual_sidebar()
