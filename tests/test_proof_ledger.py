@@ -86,6 +86,16 @@ class ProofLedgerTests(unittest.TestCase):
         combined = append_predictions_to_ledger(self.sample_predictions(), user_id='Cody Test')
         self.assertEqual(len(combined), 2)
 
+    def test_formula_like_cells_are_safe_and_verifiable(self) -> None:
+        frame = pd.DataFrame([
+            {'event': '=HYPERLINK("http://bad")', 'prediction': '@bad', 'model_probability': '70%', 'decimal_price': 1.8, 'result_status': 'pending'}
+        ])
+        combined = append_predictions_to_ledger(frame, user_id='Cody Test')
+        self.assertTrue(str(combined.loc[0, 'event']).startswith("'="))
+        self.assertTrue(str(combined.loc[0, 'prediction']).startswith("'@"))
+        loaded = load_ledger('Cody Test')
+        self.assertTrue(verify_hash_chain(loaded).valid)
+
 
 if __name__ == '__main__':
     unittest.main()
