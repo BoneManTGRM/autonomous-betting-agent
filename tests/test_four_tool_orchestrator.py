@@ -53,8 +53,9 @@ class FourToolOrchestratorTests(unittest.TestCase):
         health = page_health(frame, page='what_are_the_odds')
         self.assertEqual(health['status'], 'ready_for_lock_or_learning')
         self.assertEqual(health['playable_rows'], 1)
+        self.assertEqual(health['lock_ready_rows'], 1)
 
-    def test_finished_rows_route_to_learning_memory(self):
+    def test_finished_rows_with_probabilities_route_to_learning_memory(self):
         frame = pd.DataFrame([
             {
                 'event': f'E{i}',
@@ -66,9 +67,20 @@ class FourToolOrchestratorTests(unittest.TestCase):
             for i in range(6)
         ])
         health = page_health(frame, page='learning_memory')
-        self.assertEqual(health['status'], 'ready_to_train')
-        self.assertEqual(health['next_action'], 'train_and_save_memory')
+        self.assertEqual(health['status'], 'ready_to_train_with_sample_warning')
+        self.assertEqual(health['next_action'], 'train_but_collect_more_results')
+        self.assertEqual(health['resolved_probability_rows'], 6)
         self.assertEqual(four_tool_recommendation(frame), 'learning_memory')
+
+    def test_finished_rows_without_probabilities_are_not_training_ready(self):
+        frame = pd.DataFrame([
+            {'event': f'E{i}', 'prediction': 'B', 'result_status': 'win' if i % 2 else 'loss'}
+            for i in range(6)
+        ])
+        health = page_health(frame, page='learning_memory')
+        self.assertEqual(health['status'], 'has_results_but_needs_probabilities')
+        self.assertEqual(health['next_action'], 'add_probabilities_or_prices_before_training')
+        self.assertEqual(health['resolved_probability_rows'], 0)
 
 
 if __name__ == '__main__':
