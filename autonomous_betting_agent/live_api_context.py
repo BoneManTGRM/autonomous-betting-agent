@@ -10,6 +10,37 @@ from .environment_intelligence import score_environment
 from .sportsdataio import SportsDataIOClient, SportsDataIOConfig
 
 
+FIFA_VENUE_OVERRIDES: dict[str, dict[str, str]] = {
+    "2026-06-15T16:00:00Z|cape verde|spain": {"sede_fifa": "Atlanta Stadium", "estadio_real": "Mercedes-Benz Stadium", "ciudad_area": "Atlanta, Georgia", "pais_sede": "USA"},
+    "2026-06-15T19:00:00Z|belgium|egypt": {"sede_fifa": "Seattle Stadium", "estadio_real": "Lumen Field", "ciudad_area": "Seattle, Washington", "pais_sede": "USA"},
+    "2026-06-15T22:00:00Z|saudi arabia|uruguay": {"sede_fifa": "Miami Stadium", "estadio_real": "Hard Rock Stadium", "ciudad_area": "Miami Gardens, Florida", "pais_sede": "USA"},
+    "2026-06-16T19:00:00Z|france|senegal": {"sede_fifa": "New York New Jersey Stadium", "estadio_real": "MetLife Stadium", "ciudad_area": "East Rutherford, New Jersey", "pais_sede": "USA"},
+    "2026-06-16T22:00:00Z|iraq|norway": {"sede_fifa": "Boston Stadium", "estadio_real": "Gillette Stadium", "ciudad_area": "Foxborough, Massachusetts", "pais_sede": "USA"},
+    "2026-06-17T01:00:00Z|algeria|argentina": {"sede_fifa": "Kansas City Stadium", "estadio_real": "GEHA Field at Arrowhead Stadium", "ciudad_area": "Kansas City, Missouri", "pais_sede": "USA"},
+    "2026-06-17T04:00:00Z|austria|jordan": {"sede_fifa": "San Francisco Bay Area Stadium", "estadio_real": "Levi's Stadium", "ciudad_area": "Santa Clara, California", "pais_sede": "USA"},
+    "2026-06-17T17:00:00Z|dr congo|portugal": {"sede_fifa": "Houston Stadium", "estadio_real": "NRG Stadium", "ciudad_area": "Houston, Texas", "pais_sede": "USA"},
+    "2026-06-17T20:00:00Z|croatia|england": {"sede_fifa": "Dallas Stadium", "estadio_real": "AT&T Stadium", "ciudad_area": "Arlington, Texas", "pais_sede": "USA"},
+    "2026-06-18T02:00:00Z|colombia|uzbekistan": {"sede_fifa": "Mexico City Stadium", "estadio_real": "Estadio Azteca", "ciudad_area": "Mexico City", "pais_sede": "Mexico"},
+    "2026-06-18T19:00:00Z|bosnia & herzegovina|switzerland": {"sede_fifa": "Los Angeles Stadium", "estadio_real": "SoFi Stadium", "ciudad_area": "Inglewood, California", "pais_sede": "USA"},
+    "2026-06-18T22:00:00Z|canada|qatar": {"sede_fifa": "BC Place Vancouver", "estadio_real": "BC Place", "ciudad_area": "Vancouver, British Columbia", "pais_sede": "Canada"},
+    "2026-06-19T19:00:00Z|australia|usa": {"sede_fifa": "Seattle Stadium", "estadio_real": "Lumen Field", "ciudad_area": "Seattle, Washington", "pais_sede": "USA"},
+    "2026-06-20T01:00:00Z|brazil|haiti": {"sede_fifa": "Philadelphia Stadium", "estadio_real": "Lincoln Financial Field", "ciudad_area": "Philadelphia, Pennsylvania", "pais_sede": "USA"},
+    "2026-06-20T17:00:00Z|netherlands|sweden": {"sede_fifa": "Houston Stadium", "estadio_real": "NRG Stadium", "ciudad_area": "Houston, Texas", "pais_sede": "USA"},
+    "2026-06-20T20:00:00Z|germany|ivory coast": {"sede_fifa": "Toronto Stadium", "estadio_real": "BMO Field", "ciudad_area": "Toronto, Ontario", "pais_sede": "Canada"},
+    "2026-06-21T00:00:00Z|curaçao|ecuador": {"sede_fifa": "Kansas City Stadium", "estadio_real": "GEHA Field at Arrowhead Stadium", "ciudad_area": "Kansas City, Missouri", "pais_sede": "USA"},
+    "2026-06-21T04:00:00Z|japan|tunisia": {"sede_fifa": "Estadio Monterrey", "estadio_real": "Estadio BBVA", "ciudad_area": "Guadalupe / Monterrey, Nuevo Leon", "pais_sede": "Mexico"},
+    "2026-06-21T16:00:00Z|saudi arabia|spain": {"sede_fifa": "Atlanta Stadium", "estadio_real": "Mercedes-Benz Stadium", "ciudad_area": "Atlanta, Georgia", "pais_sede": "USA"},
+    "2026-06-21T19:00:00Z|belgium|iran": {"sede_fifa": "Los Angeles Stadium", "estadio_real": "SoFi Stadium", "ciudad_area": "Inglewood, California", "pais_sede": "USA"},
+    "2026-06-21T22:00:00Z|cape verde|uruguay": {"sede_fifa": "Miami Stadium", "estadio_real": "Hard Rock Stadium", "ciudad_area": "Miami Gardens, Florida", "pais_sede": "USA"},
+    "2026-06-22T17:00:00Z|argentina|austria": {"sede_fifa": "Dallas Stadium", "estadio_real": "AT&T Stadium", "ciudad_area": "Arlington, Texas", "pais_sede": "USA"},
+    "2026-06-22T21:00:00Z|france|iraq": {"sede_fifa": "Philadelphia Stadium", "estadio_real": "Lincoln Financial Field", "ciudad_area": "Philadelphia, Pennsylvania", "pais_sede": "USA"},
+    "2026-06-23T03:00:00Z|algeria|jordan": {"sede_fifa": "San Francisco Bay Area Stadium", "estadio_real": "Levi's Stadium", "ciudad_area": "Santa Clara, California", "pais_sede": "USA"},
+    "2026-06-23T17:00:00Z|portugal|uzbekistan": {"sede_fifa": "Houston Stadium", "estadio_real": "NRG Stadium", "ciudad_area": "Houston, Texas", "pais_sede": "USA"},
+    "2026-06-23T20:00:00Z|england|ghana": {"sede_fifa": "Boston Stadium", "estadio_real": "Gillette Stadium", "ciudad_area": "Foxborough, Massachusetts", "pais_sede": "USA"},
+    "2026-06-23T23:00:00Z|croatia|panama": {"sede_fifa": "Toronto Stadium", "estadio_real": "BMO Field", "ciudad_area": "Toronto, Ontario", "pais_sede": "Canada"},
+}
+
+
 def _clean(value: Any) -> str:
     return " ".join(str(value or "").lower().replace("-", " ").replace("_", " ").split())
 
@@ -33,6 +64,28 @@ def _first(row: Mapping[str, Any], names: tuple[str, ...]) -> Any:
     return ""
 
 
+def _nested_first(row: Mapping[str, Any] | None, names: tuple[str, ...]) -> Any:
+    if not row:
+        return ""
+    direct = _first(row, names)
+    if direct not in (None, ""):
+        return direct
+    for name in names:
+        parts = [part for part in name.replace("-", "_").split("_") if part]
+        if len(parts) < 2:
+            continue
+        current: Any = row
+        for part in parts:
+            if not isinstance(current, Mapping):
+                current = None
+                break
+            match = next((key for key in current.keys() if str(key).lower() == part.lower()), None)
+            current = current.get(match) if match is not None else None
+        if current not in (None, ""):
+            return current
+    return ""
+
+
 def _similarity(left: Any, right: Any) -> float:
     left_clean, right_clean = _clean(left), _clean(right)
     if not left_clean or not right_clean:
@@ -42,6 +95,97 @@ def _similarity(left: Any, right: Any) -> float:
     if left_clean in right_clean or right_clean in left_clean:
         return 0.92
     return SequenceMatcher(None, left_clean, right_clean).ratio()
+
+
+def _iso_start_key(start: datetime | None, raw: str = "") -> str:
+    if start is not None:
+        return start.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    text = str(raw or "").strip()
+    return text[:-6] + "Z" if text.endswith("+00:00") else text
+
+
+def _teams_key(start: datetime | None, raw_start: str, left: str, right: str) -> str:
+    teams = sorted([_clean(left), _clean(right)])
+    return f"{_iso_start_key(start, raw_start)}|{teams[0]}|{teams[1]}"
+
+
+def _blank_venue() -> dict[str, Any]:
+    return {
+        "venue_name": "",
+        "venue_name_fifa": "",
+        "venue_city": "",
+        "venue_state": "",
+        "venue_country": "",
+        "venue_source": "not_available_from_feed",
+        "venue_note": "Venue was not provided by the available API sources.",
+        "sede_fifa": "",
+        "estadio_real": "",
+        "ciudad_area": "",
+        "pais_sede": "",
+        "fuente_sede": "not_available_from_feed",
+    }
+
+
+def _fifa_venue_override(home_team: str, away_team: str, start: datetime | None, raw_start: str) -> dict[str, Any] | None:
+    row = FIFA_VENUE_OVERRIDES.get(_teams_key(start, raw_start, home_team, away_team))
+    if not row:
+        return None
+    city_area = row.get("ciudad_area", "")
+    city_parts = [part.strip() for part in city_area.split(",")]
+    city = city_parts[0] if city_parts else ""
+    state = ", ".join(city_parts[1:]) if len(city_parts) > 1 else ""
+    return {
+        "venue_name": row.get("estadio_real", ""),
+        "venue_name_fifa": row.get("sede_fifa", ""),
+        "venue_city": city,
+        "venue_state": state,
+        "venue_country": row.get("pais_sede", ""),
+        "venue_source": "fifa_venue_override",
+        "venue_note": "Neutral-site FIFA venue override matched by event teams and start time.",
+        "sede_fifa": row.get("sede_fifa", ""),
+        "estadio_real": row.get("estadio_real", ""),
+        "ciudad_area": row.get("ciudad_area", ""),
+        "pais_sede": row.get("pais_sede", ""),
+        "fuente_sede": "fifa_venue_override",
+    }
+
+
+def _venue_from_team(record: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    if not record:
+        return None
+    venue_name = _nested_first(record, ("StadiumDetails_Name", "Stadium_Name", "VenueName", "Venue", "Stadium"))
+    city = _nested_first(record, ("StadiumDetails_City", "Stadium_City", "VenueCity", "City", "School"))
+    state = _nested_first(record, ("StadiumDetails_State", "Stadium_State", "VenueState", "State", "Province"))
+    country = _nested_first(record, ("StadiumDetails_Country", "Stadium_Country", "VenueCountry", "Country"))
+    if not any((venue_name, city, state, country)):
+        return None
+    city_area = ", ".join(str(part) for part in (city, state) if part)
+    return {
+        "venue_name": str(venue_name or ""),
+        "venue_name_fifa": "",
+        "venue_city": str(city or ""),
+        "venue_state": str(state or ""),
+        "venue_country": str(country or ""),
+        "venue_source": "sportsdataio_home_team_metadata",
+        "venue_note": "Venue inferred from SportsDataIO home-team metadata; neutral-site events may differ.",
+        "sede_fifa": "",
+        "estadio_real": str(venue_name or ""),
+        "ciudad_area": city_area,
+        "pais_sede": str(country or ""),
+        "fuente_sede": "sportsdataio_home_team_metadata",
+    }
+
+
+def _venue_weather_location(venue: Mapping[str, Any], fallback: str) -> str:
+    city_area = str(venue.get("ciudad_area") or "").strip()
+    country = str(venue.get("pais_sede") or "").strip()
+    if city_area:
+        return ", ".join(part for part in (city_area, country) if part)
+    city = str(venue.get("venue_city") or "").strip()
+    state = str(venue.get("venue_state") or "").strip()
+    if city:
+        return ", ".join(part for part in (city, state or country) if part)
+    return fallback
 
 
 def sportsdataio_sport_from_odds(sport_key: str, sport_title: str = "") -> str | None:
@@ -90,11 +234,11 @@ def _team_aliases(record: Mapping[str, Any]) -> set[str]:
         "ShortName",
     )
     for name in simple_names:
-        value = _first(record, (name,))
+        value = _nested_first(record, (name,))
         if value:
             aliases.add(_clean(value))
-    city = _first(record, ("City", "School"))
-    nickname = _first(record, ("Name", "TeamName"))
+    city = _nested_first(record, ("City", "School"))
+    nickname = _nested_first(record, ("Name", "TeamName"))
     if city and nickname:
         aliases.add(_clean(f"{city} {nickname}"))
     return {alias for alias in aliases if alias}
@@ -117,15 +261,15 @@ def _match_team(team: str, teams: list[dict[str, Any]]) -> dict[str, Any] | None
 def _win_pct(record: Mapping[str, Any] | None) -> float | None:
     if not record:
         return None
-    direct = _float(_first(record, ("Percentage", "WinningPercentage", "WinPercentage", "Pct", "WinPct")))
+    direct = _float(_nested_first(record, ("Percentage", "WinningPercentage", "WinPercentage", "Pct", "WinPct")))
     if direct is not None:
         if direct > 1.0:
             direct /= 100.0
         if 0.0 <= direct <= 1.0:
             return direct
-    wins = _float(_first(record, ("Wins", "Win", "GamesWon")))
-    losses = _float(_first(record, ("Losses", "Loss", "GamesLost")))
-    ties = _float(_first(record, ("Ties", "Tie"))) or 0.0
+    wins = _float(_nested_first(record, ("Wins", "Win", "GamesWon")))
+    losses = _float(_nested_first(record, ("Losses", "Loss", "GamesLost")))
+    ties = _float(_nested_first(record, ("Ties", "Tie"))) or 0.0
     if wins is None or losses is None:
         return None
     total = wins + losses + ties
@@ -157,7 +301,7 @@ def _team_keys(record: Mapping[str, Any] | None) -> set[str]:
     if not record:
         return set()
     names = ("Team", "TeamKey", "Key", "Name", "FullName", "City", "TeamID", "GlobalTeamID")
-    return {_clean(_first(record, (name,))) for name in names if _first(record, (name,))}
+    return {_clean(_nested_first(record, (name,))) for name in names if _nested_first(record, (name,))}
 
 
 def _injury_team_match(injury: Mapping[str, Any], team_record: Mapping[str, Any] | None) -> bool:
@@ -165,10 +309,10 @@ def _injury_team_match(injury: Mapping[str, Any], team_record: Mapping[str, Any]
     if not keys:
         return False
     injury_values = {
-        _clean(_first(injury, ("Team",))),
-        _clean(_first(injury, ("TeamKey",))),
-        _clean(_first(injury, ("TeamID",))),
-        _clean(_first(injury, ("GlobalTeamID",))),
+        _clean(_nested_first(injury, ("Team",))),
+        _clean(_nested_first(injury, ("TeamKey",))),
+        _clean(_nested_first(injury, ("TeamID",))),
+        _clean(_nested_first(injury, ("GlobalTeamID",))),
     }
     return bool(keys & {value for value in injury_values if value})
 
@@ -182,7 +326,7 @@ def _injury_score(injuries: list[dict[str, Any]], picked_record: Mapping[str, An
     severe = 0
     watch = 0
     for injury in team_injuries:
-        text = _clean(" ".join(str(_first(injury, (name,))) for name in ("Status", "InjuryStatus", "GameStatus", "Practice", "BodyPart")))
+        text = _clean(" ".join(str(_nested_first(injury, (name,))) for name in ("Status", "InjuryStatus", "GameStatus", "Practice", "BodyPart")))
         if any(token in text for token in ("out", "injured reserve", "ir", "doubtful", "inactive")):
             severe += 1
         elif any(token in text for token in ("questionable", "probable", "limited")):
@@ -217,11 +361,11 @@ def _forecast_days_for(start: datetime | None) -> int:
 def _location_from_team(record: Mapping[str, Any] | None, fallback_team: str) -> str:
     if not record:
         return fallback_team
-    stadium_city = _first(record, ("StadiumDetails_City", "Stadium_City", "VenueCity"))
-    stadium_state = _first(record, ("StadiumDetails_State", "Stadium_State", "VenueState"))
-    city = _first(record, ("City", "School"))
-    state = _first(record, ("State", "Province"))
-    country = _first(record, ("Country",))
+    stadium_city = _nested_first(record, ("StadiumDetails_City", "Stadium_City", "VenueCity"))
+    stadium_state = _nested_first(record, ("StadiumDetails_State", "Stadium_State", "VenueState"))
+    city = _nested_first(record, ("City", "School"))
+    state = _nested_first(record, ("State", "Province"))
+    country = _nested_first(record, ("Country",))
     if stadium_city:
         return ", ".join(str(part) for part in (stadium_city, stadium_state or country) if part)
     if city:
@@ -345,7 +489,8 @@ class LiveAPIContextBuilder:
         sport_title = str(getattr(event, "sport_title", ""))
         home_team = str(getattr(event, "home_team", ""))
         away_team = str(getattr(event, "away_team", ""))
-        start = _event_datetime(str(getattr(event, "commence_time", "")))
+        raw_start = str(getattr(event, "commence_time", ""))
+        start = _event_datetime(raw_start)
         context: dict[str, Any] = {
             "odds_api_source_used": "yes",
             "sportsdataio_source_used": "no",
@@ -355,6 +500,7 @@ class LiveAPIContextBuilder:
             "weather_source_used": "no",
             "weatherapi_status": "not_configured" if not self.weatherapi_key and self.weather_client is None else "no_location",
         }
+        context.update(_blank_venue())
 
         sdio_sport = sportsdataio_sport_from_odds(sport_key, sport_title)
         home_record: dict[str, Any] | None = None
@@ -372,8 +518,8 @@ class LiveAPIContextBuilder:
                     "sportsdataio_team_metadata_used": "yes" if teams_status == "used" and (home_record or away_record) else "no",
                     "sportsdataio_home_team_matched": "yes" if home_record else "no",
                     "sportsdataio_away_team_matched": "yes" if away_record else "no",
-                    "sportsdataio_home_city": _first(home_record or {}, ("City", "School", "StadiumDetails_City")),
-                    "sportsdataio_away_city": _first(away_record or {}, ("City", "School", "StadiumDetails_City")),
+                    "sportsdataio_home_city": _nested_first(home_record or {}, ("City", "School", "StadiumDetails_City")),
+                    "sportsdataio_away_city": _nested_first(away_record or {}, ("City", "School", "StadiumDetails_City")),
                 }
             )
             stats_probability, stats_reason = _stats_probability_for_pick(home_record, away_record, home_team, away_team, pick_name)
@@ -397,7 +543,12 @@ class LiveAPIContextBuilder:
                 context["injury_source_reason"] = f"SportsDataIO injuries unavailable: {injuries_status}"
                 context["sportsdataio_picked_team_injury_count"] = 0
 
-        location = _location_from_team(home_record, home_team)
+        venue_context = _fifa_venue_override(home_team, away_team, start, raw_start) or _venue_from_team(home_record)
+        if venue_context:
+            context.update(venue_context)
+
+        fallback_location = _location_from_team(home_record, home_team)
+        location = _venue_weather_location(context, fallback_location)
         weather_row, weather_status = self._weather(location, start)
         context["weather_location"] = location
         context["weatherapi_status"] = weather_status
