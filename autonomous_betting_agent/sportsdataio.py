@@ -26,7 +26,7 @@ class SportsDataIOConfig:
     version: str = "v3"
     fmt: str = "json"
     base_url: str = DEFAULT_BASE_URL
-    auth_mode: str = "header"
+    auth_mode: str = "auto"
     timeout_seconds: float = 30.0
 
     @classmethod
@@ -39,7 +39,7 @@ class SportsDataIOConfig:
         fmt: str = "json",
         base_url: str = DEFAULT_BASE_URL,
         env_var: str = DEFAULT_KEY_ENV,
-        auth_mode: str = "header",
+        auth_mode: str = "auto",
         timeout_seconds: float = 30.0,
     ) -> "SportsDataIOConfig":
         api_key = os.environ.get(env_var, "").strip()
@@ -74,13 +74,10 @@ def _endpoint_path(endpoint: str) -> str:
 class SportsDataIOClient:
     """Small SportsDataIO HTTP client.
 
-    SportsDataIO has league-specific feeds such as:
-
-    https://api.sportsdata.io/v3/nfl/scores/json/{endpoint}
-    https://api.sportsdata.io/v3/nfl/stats/json/{endpoint}
-
-    This client intentionally supports arbitrary endpoints so the repo can work with
-    whichever feeds are enabled on the user's SportsDataIO account.
+    SportsDataIO supports subscription-key auth through the
+    Ocp-Apim-Subscription-Key header and, for many feeds/accounts, through a
+    key query parameter. auth_mode='auto' tries header first and retries query
+    auth on 401/403 so the app works with either account style.
     """
 
     def __init__(self, config: SportsDataIOConfig, session: requests.Session | None = None) -> None:
@@ -95,6 +92,28 @@ class SportsDataIOClient:
         endpoint_value = _endpoint_path(endpoint)
         return f"{self.config.base_url.rstrip('/')}/{version_value}/{sport_value}/{subfeed_value}/{fmt_value}/{endpoint_value}"
 
+    def _request(
+        self,
+        endpoint: str,
+        *,
+        sport: str | None,
+        subfeed: str | None,
+        params: Mapping[str, Any] | None,
+        auth_mode: str,
+    ) -> requests.Response:
+        query = dict(params or {})
+        headers: dict[str, str] = {}
+        if auth_mode == "query":
+            query["key"] = self.config.api_key
+        else:
+            headers["Ocp-Apim-Subscription-Key"] = self.config.api_key
+        return self.session.get(
+            self.build_url(endpoint, sport=sport, subfeed=subfeed),
+            params=query,
+            headers=headers,
+            timeout=self.config.timeout_seconds,
+        )
+
     def get(
         self,
         endpoint: str,
@@ -103,19 +122,16 @@ class SportsDataIOClient:
         subfeed: str | None = None,
         params: Mapping[str, Any] | None = None,
     ) -> Any:
-        query = dict(params or {})
-        headers: dict[str, str] = {}
-        if self.config.auth_mode == "query":
-            query["key"] = self.config.api_key
+        mode = self.config.auth_mode.lower().strip() or "auto"
+        if mode == "auto":
+            response = self._request(endpoint, sport=sport, subfeed=subfeed, params=params, auth_mode="header")
+            if response.status_code in {401, 403}:
+                response = self._request(endpoint, sport=sport, subfeed=subfeed, params=params, auth_mode="query")
+        elif mode == "query":
+            response = self._request(endpoint, sport=sport, subfeed=subfeed, params=params, auth_mode="query")
         else:
-            headers["Ocp-Apim-Subscription-Key"] = self.config.api_key
+            response = self._request(endpoint, sport=sport, subfeed=subfeed, params=params, auth_mode="header")
 
-        response = self.session.get(
-            self.build_url(endpoint, sport=sport, subfeed=subfeed),
-            params=query,
-            headers=headers,
-            timeout=self.config.timeout_seconds,
-        )
         if response.status_code >= 400:
             detail = response.text[:500]
             raise SportsDataIOError(f"SportsDataIO request failed with HTTP {response.status_code}: {detail}")
@@ -146,7 +162,7 @@ def load_client_from_env(
     subfeed: str = "scores",
     version: str = "v3",
     fmt: str = "json",
-    auth_mode: str = "header",
+    auth_mode: str = "auto",
 ) -> SportsDataIOClient:
     return SportsDataIOClient(
         SportsDataIOConfig.from_env(
@@ -166,12 +182,7 @@ def write_json_payload(payload: Any, path: str | Path) -> None:
 
 
 def payload_to_records(payload: Any, *, record_key: str | None = None) -> list[dict[str, Any]]:
-    """Convert common SportsDataIO JSON shapes into a list of flat-ish records.
-
-    If the payload is a list, each dict element becomes a record. If it is a dict
-    containing one or more list values, the selected list is used. Nested lists and
-    dicts are preserved as JSON strings so the output can be written safely to CSV.
-    """
+    """Convert common SportsDataIO JSON shapes into a list of flat-ish records."""
     if isinstance(payload, list):
         items = payload
     elif isinstance(payload, dict):
