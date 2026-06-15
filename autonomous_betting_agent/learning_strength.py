@@ -8,10 +8,15 @@ from .audit import parse_float
 
 
 def _status(row: dict[str, Any]) -> str:
-    text = str(row.get('result_status') or row.get('result') or '').strip().lower()
-    if text in {'win', 'won', 'w', 'correct', 'hit'}:
+    raw = row.get('result_status')
+    if raw is None or str(raw).strip() == '':
+        raw = row.get('result')
+    if raw is None or str(raw).strip() == '':
+        raw = row.get('outcome')
+    text = str(raw or '').strip().lower()
+    if text in {'1', '1.0', 'win', 'won', 'w', 'correct', 'hit', 'true'}:
         return 'win'
-    if text in {'loss', 'lost', 'l', 'incorrect', 'miss'}:
+    if text in {'0', '0.0', 'loss', 'lost', 'l', 'incorrect', 'miss', 'false'}:
         return 'loss'
     return ''
 
