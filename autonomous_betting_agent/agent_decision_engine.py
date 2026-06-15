@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 import pandas as pd
@@ -11,6 +12,7 @@ from .row_normalizer import normalize_frame, safe_text
 MINIMUM_EDGE = 0.035
 STRONG_EDGE = 0.075
 HIGH_PROBABILITY = 0.62
+TERMINAL_RESULTS = {'win', 'loss', 'void'}
 DECISION_ORDER = {
     'play_strong': 1,
     'play_small': 2,
@@ -38,6 +40,38 @@ def clean_probability(value: Any) -> float | None:
     return None
 
 
+def parse_datetime_utc(value: Any) -> datetime | None:
+    text = safe_text(value)
+    if not text:
+        return None
+    try:
+        if text.endswith('Z'):
+            text = text[:-1] + '+00:00'
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def event_timing_status(row: dict[str, Any], *, now_utc: datetime | None = None) -> str:
+    now = now_utc or datetime.now(timezone.utc)
+    start = parse_datetime_utc(row.get('event_start_utc'))
+    prediction_time = parse_datetime_utc(row.get('prediction_timestamp'))
+    if start is None:
+        return 'missing_event_start'
+    if prediction_time is not None and prediction_time >= start:
+        return 'prediction_timestamp_not_before_start'
+    if now >= start and prediction_time is None:
+        return 'event_already_started_without_prediction_timestamp'
+    if now >= start:
+        return 'event_already_started'
+    if prediction_time is None:
+        return 'future_event_not_locked_yet'
+    return 'prediction_before_start'
+
+
 def field_coverage_score(row: dict[str, Any]) -> float:
     fields = [
         'event',
@@ -56,7 +90,10 @@ def field_coverage_score(row: dict[str, Any]) -> float:
 
 
 def can_lock_candidate(row: dict[str, Any]) -> bool:
-    required = ['event', 'prediction', 'model_probability', 'decimal_price']
+    required = ['event', 'prediction', 'model_probability', 'decimal_price', 'event_start_utc']
+    status = event_timing_status(row)
+    if status not in {'future_event_not_locked_yet', 'prediction_before_start'}:
+        return False
     return all(safe_text(row.get(field)) for field in required)
 
 
@@ -72,17 +109,27 @@ def stake_guidance(decision: str, score: float, locked: bool) -> float:
     return round(base, 3)
 
 
-def evaluate_row(row: dict[str, Any], *, min_edge: float = MINIMUM_EDGE, strong_edge: float = STRONG_EDGE) -> dict[str, Any]:
+def evaluate_row(
+    row: dict[str, Any],
+    *,
+    min_edge: float = MINIMUM_EDGE,
+    strong_edge: float = STRONG_EDGE,
+    now_utc: datetime | None = None,
+) -> dict[str, Any]:
     model_prob = clean_probability(row.get('model_probability'))
     market_prob = implied_probability(row.get('decimal_price'))
     coverage = field_coverage_score(row)
     line = analyze_line_row(row)
+    timing = event_timing_status(row, now_utc=now_utc)
     has_lock_time = bool(safe_text(row.get('prediction_timestamp')))
+    result_status = safe_text(row.get('result_status')).lower()
     lock_ready = can_lock_candidate(row)
 
     reasons: list[str] = []
     signals: list[str] = []
 
+    if result_status in TERMINAL_RESULTS:
+        reasons.append('historical_result_present')
     if not safe_text(row.get('event')):
         reasons.append('missing_event')
     if not safe_text(row.get('prediction')):
@@ -95,10 +142,22 @@ def evaluate_row(row: dict[str, Any], *, min_edge: float = MINIMUM_EDGE, strong_
         reasons.append('missing_bookmaker')
     if not safe_text(row.get('odds_source')):
         reasons.append('missing_odds_source')
+    if not safe_text(row.get('event_start_utc')):
+        reasons.append('missing_event_start')
     if not has_lock_time:
         signals.append('not_locked_yet')
     if lock_ready:
         signals.append('lock_ready')
+    if timing == 'prediction_timestamp_not_before_start':
+        reasons.append('prediction_timestamp_not_before_start')
+    elif timing == 'event_already_started_without_prediction_timestamp':
+        reasons.append('event_already_started_without_prediction_timestamp')
+    elif timing == 'event_already_started':
+        signals.append('event_already_started')
+    elif timing == 'future_event_not_locked_yet':
+        signals.append('future_event_not_locked_yet')
+    elif timing == 'prediction_before_start':
+        signals.append('prediction_before_start')
     if coverage < 0.70:
         reasons.append('low_field_coverage')
 
@@ -125,9 +184,16 @@ def evaluate_row(row: dict[str, Any], *, min_edge: float = MINIMUM_EDGE, strong_
 
     critical_missing = {'missing_event', 'missing_prediction', 'missing_model_probability', 'missing_decimal_price'}
     source_missing = {'missing_bookmaker', 'missing_odds_source'}
+    hard_no_action = {
+        'historical_result_present',
+        'prediction_timestamp_not_before_start',
+        'event_already_started_without_prediction_timestamp',
+    }
 
     if any(reason in reasons for reason in critical_missing):
         decision = 'review_needed'
+    elif any(reason in reasons for reason in hard_no_action):
+        decision = 'no_action'
     elif 'negative_edge' in reasons or 'low_field_coverage' in reasons:
         decision = 'no_action'
     elif any(reason in reasons for reason in source_missing):
@@ -153,6 +219,8 @@ def evaluate_row(row: dict[str, Any], *, min_edge: float = MINIMUM_EDGE, strong_
         score -= 7.5
     if has_lock_time:
         score += 5.0
+    if timing == 'prediction_before_start':
+        score += 5.0
     if decision == 'review_needed':
         score = min(score, 35.0)
     if decision == 'no_action':
@@ -165,6 +233,7 @@ def evaluate_row(row: dict[str, Any], *, min_edge: float = MINIMUM_EDGE, strong_
         'agent_decision': decision,
         'agent_score': score,
         'decision_rank': DECISION_ORDER.get(decision, 99),
+        'event_timing_status': timing,
         'lock_ready': bool(lock_ready),
         'already_locked': bool(has_lock_time),
         'recommended_stake_units': stake_guidance(decision, score, has_lock_time),
@@ -179,14 +248,20 @@ def evaluate_row(row: dict[str, Any], *, min_edge: float = MINIMUM_EDGE, strong_
     }
 
 
-def build_agent_decisions(frame: pd.DataFrame, *, min_edge: float = MINIMUM_EDGE, strong_edge: float = STRONG_EDGE) -> pd.DataFrame:
+def build_agent_decisions(
+    frame: pd.DataFrame,
+    *,
+    min_edge: float = MINIMUM_EDGE,
+    strong_edge: float = STRONG_EDGE,
+    now_utc: datetime | None = None,
+) -> pd.DataFrame:
     if frame is None or frame.empty:
         return pd.DataFrame()
     data = normalize_frame(frame)
     rows: list[dict[str, Any]] = []
     for row in data.to_dict(orient='records'):
         item = dict(row)
-        item.update(evaluate_row(row, min_edge=min_edge, strong_edge=strong_edge))
+        item.update(evaluate_row(row, min_edge=min_edge, strong_edge=strong_edge, now_utc=now_utc))
         rows.append(item)
     result = pd.DataFrame(rows)
     if {'decision_rank', 'agent_score'}.issubset(result.columns):
