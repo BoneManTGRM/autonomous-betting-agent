@@ -3,6 +3,30 @@ from __future__ import annotations
 import streamlit as st
 
 _REAL_FILE_UPLOADER = st.file_uploader
+_REAL_NUMBER_INPUT = st.number_input
+_REAL_SLIDER = st.slider
+_REAL_TOGGLE = st.toggle
+
+DEFAULT_NUMBER_INPUT_VALUES = {
+    "max feeds": 120,
+    "max events per feed": 75,
+    "minimum books": 2,
+    "70-mode minimum books": 2,
+    "70-mode minimum reliability": 80.0,
+    "70-mode minimum api coverage": 0.50,
+}
+
+DEFAULT_SLIDER_VALUES = {
+    "minimum reliability": 70.0,
+}
+
+DEFAULT_TOGGLE_VALUES = {
+    "require all configured apis": False,
+}
+
+
+def _label_key(label) -> str:
+    return " ".join(str(label or "").lower().replace("%", "").replace("±", "").split())
 
 
 def mobile_safe_file_uploader(label, *args, **kwargs):
@@ -16,6 +40,30 @@ def mobile_safe_file_uploader(label, *args, **kwargs):
     return _REAL_FILE_UPLOADER(label, *args, **kwargs)
 
 
+def defaulted_number_input(label, *args, **kwargs):
+    key = _label_key(label)
+    if key in DEFAULT_NUMBER_INPUT_VALUES:
+        kwargs["value"] = DEFAULT_NUMBER_INPUT_VALUES[key]
+    return _REAL_NUMBER_INPUT(label, *args, **kwargs)
+
+
+def defaulted_slider(label, *args, **kwargs):
+    key = _label_key(label)
+    if key in DEFAULT_SLIDER_VALUES:
+        kwargs["value"] = DEFAULT_SLIDER_VALUES[key]
+    return _REAL_SLIDER(label, *args, **kwargs)
+
+
+def defaulted_toggle(label, *args, **kwargs):
+    key = _label_key(label)
+    if key in DEFAULT_TOGGLE_VALUES:
+        kwargs["value"] = DEFAULT_TOGGLE_VALUES[key]
+    return _REAL_TOGGLE(label, *args, **kwargs)
+
+
 st.file_uploader = mobile_safe_file_uploader
+st.number_input = defaulted_number_input
+st.slider = defaulted_slider
+st.toggle = defaulted_toggle
 
 import pages.pro_predictor  # noqa: F401,E402
