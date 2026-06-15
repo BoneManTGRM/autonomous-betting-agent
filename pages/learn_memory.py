@@ -11,6 +11,7 @@ import pandas as pd
 import requests
 import streamlit as st
 
+from autonomous_betting_agent.four_tool_orchestrator import page_health_frame
 from autonomous_betting_agent.learning import ProbabilityCalibrator, fit_probability_calibrator
 from autonomous_betting_agent.learning_memory_tools import (
     build_memory_bank,
@@ -45,6 +46,7 @@ TEXT = {
         'saved_calibration': 'Saved calibration',
         'cumulative': 'Cumulative memory',
         'health': 'Learning health',
+        'handoff': 'Training handoff readiness',
         'upload': 'Upload graded results CSV',
         'preview': 'Upload preview',
         'train': 'Train and remember',
@@ -72,6 +74,7 @@ TEXT = {
         'saved_calibration': 'Calibración guardada',
         'cumulative': 'Memoria acumulativa',
         'health': 'Salud del aprendizaje',
+        'handoff': 'Preparación para entrenamiento',
         'upload': 'Subir CSV de resultados calificados',
         'preview': 'Vista previa de carga',
         'train': 'Entrenar y recordar',
@@ -185,6 +188,11 @@ def show_health(rows: list[dict[str, Any]], title: str) -> dict[str, Any]:
     return health
 
 
+def show_handoff(rows: list[dict[str, Any]], title: str) -> None:
+    st.subheader(title)
+    st.dataframe(page_health_frame(pd.DataFrame(rows), page='learning_memory'), use_container_width=True, hide_index=True)
+
+
 st.title(t('title'))
 st.caption(t('caption'))
 st.info(t('workflow'))
@@ -220,7 +228,8 @@ summary_cols[2].metric('Avg predicted', pct(existing_metrics['avg_predicted']) i
 summary_cols[3].metric('Brier', 'N/A' if existing_metrics['brier'] is None else f"{float(existing_metrics['brier']):.4f}")
 summary_cols[4].metric('Wins', existing_metrics['wins'])
 summary_cols[5].metric('Losses', existing_metrics['losses'])
-existing_health = show_health(existing_rows, t('health'))
+show_health(existing_rows, t('health'))
+show_handoff(existing_rows, t('handoff'))
 
 if existing_segments:
     st.subheader(t('patterns'))
@@ -243,6 +252,7 @@ if graded_upload is not None:
     pcols[6].metric('Fallback', parse_stats.get('fallback_probability_rows', 0))
     pcols[7].metric('Missing result', parse_stats.get('missing_result', 0))
     show_health(uploaded_rows, 'Upload health' if LANG == 'en' else 'Salud de la carga')
+    show_handoff(uploaded_rows, 'Upload handoff readiness' if LANG == 'en' else 'Preparación de carga')
     if uploaded_rows:
         st.dataframe(pd.DataFrame(uploaded_rows).head(100), use_container_width=True, hide_index=True)
     else:
@@ -292,6 +302,7 @@ if st.button(t('train'), type='primary', use_container_width=True):
     st.subheader('Training summary' if LANG == 'en' else 'Resumen del entrenamiento')
     st.json(memory_bank['summary'])
     show_health(pruned_rows, 'Final trained memory health' if LANG == 'en' else 'Salud final de la memoria entrenada')
+    show_handoff(pruned_rows, 'Final training handoff readiness' if LANG == 'en' else 'Preparación final de entrenamiento')
     st.subheader(t('patterns'))
     segments_frame = pd.DataFrame(segments[:60])
     st.dataframe(segments_frame, use_container_width=True, hide_index=True)
