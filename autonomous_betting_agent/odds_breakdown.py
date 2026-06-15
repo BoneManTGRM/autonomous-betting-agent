@@ -12,8 +12,8 @@ import streamlit as st
 TEXT = {
     "en": {
         "section": "What Are the Odds / CSV Odds Breakdown",
-        "caption": "Analyze a Pro Predictor report or uploaded CSV for winner odds, no-vig fair odds, edge, EV, score estimate, spread/total, round/method, home run, and prop-style fields.",
-        "note": "Best accuracy comes when the CSV contains every outcome in a market. If the file only has one pick per event, the tool still calculates raw implied edge, fair odds, EV, and score estimates, while no-vig fields stay blank.",
+        "caption": "Analyze a Pro Predictor report, a What Are the Odds export, or a props/scores CSV for winner odds, fair odds, edge, EV, score estimates, and props.",
+        "note": "Best accuracy comes when the CSV contains model probability plus market price. If the file only has market probability or price, the tool still reads it as odds-only and does not pretend it is a model edge.",
         "latest": "Use latest Pro Predictor results from this run",
         "upload": "Upload odds/report CSV",
         "paste": "Or paste CSV text",
@@ -22,11 +22,11 @@ TEXT = {
         "detailed": "Detailed",
         "full": "Full ARA",
         "analyze": "Analyze odds",
-        "waiting": "Run Pro Predictor first, or upload/paste a CSV here.",
+        "waiting": "Run Pro Predictor first, upload a report CSV, or upload a scores/props CSV here.",
         "source": "Source",
         "rows": "Rows analyzed",
         "candidates": "Candidate rows",
-        "score_rows": "Score estimates",
+        "score_rows": "Score rows",
         "official_props": "Official/csv props",
         "main": "Main odds report",
         "extras": "Scores, props, and extras",
@@ -35,14 +35,14 @@ TEXT = {
         "download_main": "Download odds breakdown CSV",
         "download_props": "Download scores/props CSV",
         "no_props": "No round, home run, or official prop fields were detected. Score estimates still appear here when the model can infer them.",
-        "missing_prob": "Some rows have no model probability. Check Diagnostics to see which probability column was detected.",
+        "missing_prob": "Some rows have no model probability. They can still be read as odds-only if market probability or price exists.",
         "no_vig_note": "No-vig requires multiple outcomes for the same event/market. This file appears to contain one selected pick per event, so raw implied edge is more useful than no-vig.",
         "top_value": "Top value candidates",
     },
     "es": {
         "section": "Qué dicen las cuotas / Desglose CSV",
-        "caption": "Analiza un reporte de Predictor Pro o CSV subido para ganador, cuotas justas sin margen, ventaja, EV, marcador estimado, spread/total, round/método, home run y campos tipo prop.",
-        "note": "La mejor precisión llega cuando el CSV contiene todos los resultados de un mercado. Si el archivo solo tiene un pick por evento, aún calcula ventaja implícita bruta, cuotas justas, EV y marcador estimado, mientras los campos sin margen quedan en blanco.",
+        "caption": "Analiza un reporte de Predictor Pro, una exportación de Qué dicen las cuotas, o un CSV de marcadores/props para ganador, cuotas justas, ventaja, EV, marcador estimado y props.",
+        "note": "La mejor precisión llega cuando el CSV contiene probabilidad del modelo más precio de mercado. Si el archivo solo tiene probabilidad de mercado o cuota, se lee como solo-cuotas y no finge que es ventaja del modelo.",
         "latest": "Usar resultados más recientes de Predictor Pro",
         "upload": "Subir CSV de cuotas/reporte",
         "paste": "O pegar texto CSV",
@@ -51,11 +51,11 @@ TEXT = {
         "detailed": "Detallado",
         "full": "ARA completo",
         "analyze": "Analizar cuotas",
-        "waiting": "Ejecuta Predictor Pro primero, o sube/pega un CSV aquí.",
+        "waiting": "Ejecuta Predictor Pro primero, sube un CSV de reporte, o sube un CSV de marcadores/props aquí.",
         "source": "Fuente",
         "rows": "Filas analizadas",
         "candidates": "Filas candidatas",
-        "score_rows": "Marcadores estimados",
+        "score_rows": "Filas de marcador",
         "official_props": "Props oficiales/csv",
         "main": "Reporte principal de cuotas",
         "extras": "Marcadores, props y extras",
@@ -64,7 +64,7 @@ TEXT = {
         "download_main": "Descargar desglose de cuotas CSV",
         "download_props": "Descargar marcadores/props CSV",
         "no_props": "No se detectaron campos de round, home run o props oficiales. Los marcadores estimados aún aparecen aquí cuando el modelo puede inferirlos.",
-        "missing_prob": "Algunas filas no tienen probabilidad del modelo. Revisa Diagnóstico para ver qué columna de probabilidad se detectó.",
+        "missing_prob": "Algunas filas no tienen probabilidad del modelo. Aun así se pueden leer como solo-cuotas si existe probabilidad de mercado o cuota.",
         "no_vig_note": "Sin margen requiere varios resultados del mismo evento/mercado. Este archivo parece contener un pick por evento, así que la ventaja implícita bruta es más útil que sin-margen.",
         "top_value": "Mejores candidatos de valor",
     },
@@ -77,6 +77,8 @@ ES_COLS = {
     "prediction": "pronostico",
     "model_probability": "probabilidad_modelo",
     "market_probability": "probabilidad_mercado",
+    "odds_probability_used": "probabilidad_usada",
+    "probability_source": "fuente_probabilidad",
     "best_price": "mejor_cuota",
     "decimal_price": "cuota_decimal",
     "implied_probability": "probabilidad_implicita",
@@ -108,12 +110,16 @@ ES_VALUES = {
     "strong_candidate": "candidato_fuerte",
     "candidate": "candidato",
     "watch_only": "solo_vigilar",
+    "odds_only": "solo_cuotas",
     "skip": "omitir",
     "model_estimate": "estimacion_modelo",
     "csv_market_or_field": "mercado_o_campo_csv",
     "csv_field": "campo_csv",
     "raw_implied_edge": "ventaja_implicita_bruta",
     "no_vig_edge": "ventaja_sin_margen",
+    "model_probability": "probabilidad_modelo",
+    "market_probability": "probabilidad_mercado",
+    "price_implied_probability": "probabilidad_implicita_cuota",
     "moneyline/winner": "moneyline/ganador",
 }
 
@@ -133,7 +139,7 @@ def _clean_key(value: Any) -> str:
     return re.sub(r"_+", "_", text).strip("_")
 
 
-def _find_col(df: pd.DataFrame, aliases: tuple[str, ...], contains: tuple[str, ...] = ()) -> str | None:
+def _find_col(df: pd.DataFrame, aliases: tuple[str, ...]) -> str | None:
     lookup = {_clean_key(col): col for col in df.columns}
     alias_keys = [_clean_key(alias) for alias in aliases]
     for key in alias_keys:
@@ -144,11 +150,6 @@ def _find_col(df: pd.DataFrame, aliases: tuple[str, ...], contains: tuple[str, .
         compact = key.replace("_", "")
         if compact in compact_lookup:
             return compact_lookup[compact]
-    contains_keys = [_clean_key(item) for item in contains]
-    for col in df.columns:
-        col_key = _clean_key(col)
-        if any(item and item in col_key for item in contains_keys):
-            return col
     return None
 
 
@@ -268,8 +269,8 @@ def _opponent_from_event(event: str, pick: str) -> str:
 
 
 def _score_estimate(event: str, pick: str, sport: str, probability: float | None, total: float | None, spread: float | None, row: pd.Series) -> tuple[str, str, str]:
-    exact = _first_value(row, ("correct_score", "predicted_score", "score_prediction", "estimated_score", "marcador_estimado"))
-    if exact not in (None, ""):
+    exact = _first_value(row, ("correct_score", "predicted_score", "score_prediction", "estimated_score", "marcador_estimado", "prop_estimate", "estimacion_prop"))
+    if exact not in (None, "") and "score" in str(_first_value(row, ("prop_type", "tipo_prop"))).lower():
         return str(exact), "csv_market_or_field", "Score came from a detected CSV field."
     family = _sport_family(sport)
     if family == "combat":
@@ -318,6 +319,12 @@ def _home_run(row: pd.Series) -> tuple[str, str, str]:
 
 
 def _prop_fields(row: pd.Series) -> list[dict[str, Any]]:
+    prop_type = _first_value(row, ("prop_type", "tipo_prop"))
+    prop_estimate = _first_value(row, ("prop_estimate", "estimacion_prop"))
+    source = _first_value(row, ("source", "fuente")) or "csv_field"
+    note = _first_value(row, ("note", "nota")) or "Detected from uploaded CSV column."
+    if prop_type and prop_estimate:
+        return [{"prop_type": str(prop_type), "prop_estimate": prop_estimate, "source": source, "note": note}]
     keywords = ("correct_score", "round", "ronda", "method", "metodo", "home_run", "homerun", "hr", "jonron", "td", "touchdown", "goal", "gol", "assist", "asistencia", "strikeout", "ponche", "player", "jugador", "prop", "over_under", "total", "spread", "handicap")
     props: list[dict[str, Any]] = []
     for col in row.index:
@@ -343,17 +350,19 @@ def _quality(probability: float | None, implied: float | None, no_vig: float | N
     return round(min(100.0, score), 1)
 
 
-def _decision(probability: float | None, edge: float | None, ev: float | None, confidence: str, quality: float) -> tuple[str, str]:
+def _decision(model_probability: float | None, probability_used: float | None, probability_source: str, edge: float | None, ev: float | None, confidence: str, quality: float) -> tuple[str, str]:
     conf = str(confidence or "").upper()
-    if probability is None:
+    if model_probability is None and probability_used is not None:
+        return "odds_only", "No model probability was found; row was read as market/price odds only."
+    if model_probability is None:
         return "watch_only", "Missing model probability."
     if "LOW" in conf or "BAJA" in conf:
         return "skip", "Low-confidence row."
     if quality < 45:
         return "watch_only", "Odds quality is too low or missing too many fields."
-    if probability >= 0.70 and (edge is None or edge >= 0.0) and (ev is None or ev >= 0.0):
+    if model_probability >= 0.70 and (edge is None or edge >= 0.0) and (ev is None or ev >= 0.0):
         return "strong_candidate", "High probability with positive or neutral value indicators."
-    if probability >= 0.60 and (edge is None or edge >= -0.015) and (ev is None or ev >= -0.03):
+    if model_probability >= 0.60 and (edge is None or edge >= -0.015) and (ev is None or ev >= -0.03):
         return "candidate", "Usable probability range; verify price movement and warnings."
     return "watch_only", "Not strong enough for the shortlist."
 
@@ -368,6 +377,16 @@ def _translate_frame(frame: pd.DataFrame) -> pd.DataFrame:
     return out.rename(columns={col: ES_COLS.get(str(col), str(col)) for col in out.columns})
 
 
+def _choose_probability(model_probability: float | None, market_probability: float | None, implied: float | None) -> tuple[float | None, str]:
+    if model_probability is not None:
+        return model_probability, "model_probability"
+    if market_probability is not None:
+        return market_probability, "market_probability"
+    if implied is not None:
+        return implied, "price_implied_probability"
+    return None, "missing"
+
+
 def build_odds_breakdown(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     columns = list(df.columns)
     event_col = _find_col(df, ("event", "evento", "event_name", "game", "partido", "match", "fixture"))
@@ -376,7 +395,7 @@ def build_odds_breakdown(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, 
     prob_col = _find_col(df, ("model_probability", "probabilidad_modelo", "final_probability_value", "valor_probabilidad_final", "prob_final", "final_probability", "probabilidad_final", "calibrated_probability", "probabilidad_calibrada", "predicted_probability", "probabilidad_pronosticada", "probability", "probabilidad"))
     market_prob_col = _find_col(df, ("market_probability", "market_probability_value", "prob_mercado", "probabilidad_mercado"))
     price_col = _find_col(df, ("best_price", "mejor_cuota", "decimal_price", "decimal_odds", "average_price", "avg_price", "odds", "cuotas", "price", "cuota"))
-    market_col = _find_col(df, ("market_type", "tipo_mercado", "market", "mercado", "bet_type", "prop_type"))
+    market_col = _find_col(df, ("market_type", "tipo_mercado", "market", "mercado", "bet_type"))
     confidence_col = _find_col(df, ("confidence", "confianza", "read", "lectura", "classification", "decision"))
     total_col = _find_col(df, ("total", "line_total", "over_under", "points_total"))
     spread_col = _find_col(df, ("spread", "line_spread", "handicap"))
@@ -393,13 +412,14 @@ def build_odds_breakdown(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, 
         sport = _infer_sport(row, explicit_sport, columns)
         pick = str(row.get(pick_col, "")) if pick_col else ""
         market_type = str(row.get(market_col, "moneyline/winner")) if market_col else "moneyline/winner"
-        probability = _prob(row.get(prob_col)) if prob_col else None
+        model_probability = _prob(row.get(prob_col)) if prob_col else None
         market_probability = _prob(row.get(market_prob_col)) if market_prob_col else None
         price = row.get(price_col, "") if price_col else ""
         decimal = _decimal_price(price)
-        implied = market_probability if market_probability is not None else (None if decimal is None else 1.0 / decimal)
+        implied = None if decimal is None else 1.0 / decimal
+        probability_used, probability_source = _choose_probability(model_probability, market_probability, implied)
         ev_csv = _num(row.get(ev_col)) if ev_col else None
-        computed_ev = None if probability is None or decimal is None else probability * decimal - 1.0
+        computed_ev = None if model_probability is None or decimal is None else model_probability * decimal - 1.0
         total = _num(row.get(total_col)) if total_col else None
         spread = _num(row.get(spread_col)) if spread_col else None
         books = _num(row.get(books_col)) if books_col else None
@@ -407,14 +427,16 @@ def build_odds_breakdown(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, 
         if api is not None and api > 1.0:
             api /= 100.0
         confidence = str(row.get(confidence_col, "")) if confidence_col else ""
-        score, score_source, score_note = _score_estimate(event, pick, sport, probability, total, spread, row)
+        score, score_source, score_note = _score_estimate(event, pick, sport, probability_used, total, spread, row)
         records.append({
             "event": event,
             "sport": sport,
             "market_type": market_type,
             "prediction": pick,
-            "model_probability": _pct(probability),
+            "model_probability": _pct(model_probability),
             "market_probability": _pct(market_probability),
+            "odds_probability_used": _pct(probability_used),
+            "probability_source": probability_source,
             "best_price": price,
             "decimal_price": _round_num(decimal),
             "implied_probability": _pct(implied),
@@ -427,7 +449,8 @@ def build_odds_breakdown(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, 
             "score_source": score_source,
             "score_note": score_note,
             "warning": row.get(warning_col, "") if warning_col else "",
-            "_p": probability,
+            "_model_p": model_probability,
+            "_p": probability_used,
             "_implied": implied,
             "_ev": computed_ev if computed_ev is not None else ev_csv,
             "_books": books,
@@ -437,7 +460,7 @@ def build_odds_breakdown(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, 
         if score:
             prop_rows.append({"event": event, "sport": sport, "prediction": pick, "prop_type": "estimated_score", "prop_estimate": score, "source": score_source, "note": score_note})
         family = _sport_family(sport)
-        round_value, round_source, round_note = _combat_round(row, pick, probability) if family == "combat" else ("", "", "")
+        round_value, round_source, round_note = _combat_round(row, pick, probability_used) if family == "combat" else ("", "", "")
         hr_value, hr_source, hr_note = _home_run(row) if family == "baseball" or any("home" in _clean_key(c) or "hr" == _clean_key(c) for c in row.index) else ("", "", "")
         if round_value:
             prop_rows.append({"event": event, "sport": sport, "prediction": pick, "prop_type": "round/method", "prop_estimate": round_value, "source": round_source, "note": round_note})
@@ -458,6 +481,7 @@ def build_odds_breakdown(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, 
         reasons: list[str] = []
         quality_scores: list[float] = []
         for idx, rec in main.iterrows():
+            model_p = rec["_model_p"]
             p = rec["_p"]
             implied = rec["_implied"]
             no_vig = None
@@ -465,9 +489,9 @@ def build_odds_breakdown(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, 
             if implied is not None and not pd.isna(implied) and implied_count.loc[idx] >= 2 and implied_sum.loc[idx] > 1.0:
                 no_vig = float(implied) / float(implied_sum.loc[idx])
                 hold = float(implied_sum.loc[idx]) - 1.0
-            edge = None if p is None else (p - no_vig if no_vig is not None else p - implied if implied is not None and not pd.isna(implied) else None)
+            edge = None if model_p is None else (model_p - no_vig if no_vig is not None else model_p - implied if implied is not None and not pd.isna(implied) else None)
             quality = _quality(p, implied, no_vig, rec["_books"], rec["_api"], str(rec.get("confidence", "")))
-            decision, reason = _decision(p, edge, rec["_ev"], str(rec.get("confidence", "")), quality)
+            decision, reason = _decision(model_p, p, str(rec.get("probability_source", "")), edge, rec["_ev"], str(rec.get("confidence", "")), quality)
             no_vig_values.append(no_vig)
             hold_values.append(hold)
             edge_values.append(edge)
@@ -477,18 +501,18 @@ def build_odds_breakdown(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, 
             quality_scores.append(quality)
         main["no_vig_implied_probability"] = [_pct(x) for x in no_vig_values]
         main["market_hold"] = [_pct(x) for x in hold_values]
-        main["model_minus_implied"] = [_pct((p - i) if p is not None and i is not None and not pd.isna(i) else None) for p, i in zip(main["_p"], main["_implied"])]
+        main["model_minus_implied"] = [_pct((p - i) if p is not None and i is not None and not pd.isna(i) else None) for p, i in zip(main["_model_p"], main["_implied"])]
         main["model_minus_no_vig"] = [_pct(x) for x in edge_values]
         main["edge_source"] = edge_source
-        main["fair_decimal_price"] = [_round_num(_fair_decimal(p)) for p in main["_p"]]
-        main["fair_american_price"] = [_fair_american(p) for p in main["_p"]]
+        main["fair_decimal_price"] = [_round_num(_fair_decimal(p)) for p in main["_model_p"]]
+        main["fair_american_price"] = [_fair_american(p) for p in main["_model_p"]]
         main["odds_quality_score"] = quality_scores
         main["decision"] = decisions
         main["decision_reason"] = reasons
-        order = {"strong_candidate": 3, "candidate": 2, "watch_only": 1, "skip": 0}
+        order = {"strong_candidate": 4, "candidate": 3, "odds_only": 2, "watch_only": 1, "skip": 0}
         main["_decision_order"] = main["decision"].map(order).fillna(0)
         main = main.sort_values(["_decision_order", "odds_quality_score", "_p"], ascending=[False, False, False])
-        main = main.drop(columns=["_p", "_implied", "_ev", "_books", "_api", "_group", "_decision_order"])
+        main = main.drop(columns=["_model_p", "_p", "_implied", "_ev", "_books", "_api", "_group", "_decision_order"])
 
     diagnostics = pd.DataFrame([{
         "rows_analyzed": len(df),
@@ -555,7 +579,7 @@ def render_odds_breakdown_section(key_prefix: str = "what_are_the_odds") -> None
         candidate_count = int(main_df["decision"].isin(["candidate", "strong_candidate"]).sum()) if "decision" in main_df.columns else 0
         score_count = 0 if not isinstance(props_df, pd.DataFrame) or props_df.empty else int((props_df["prop_type"] == "estimated_score").sum())
         csv_prop_count = 0 if not isinstance(props_df, pd.DataFrame) or props_df.empty else int(props_df["source"].astype(str).str.contains("csv", case=False, na=False).sum())
-        missing_prob_count = int((main_df["model_probability"].astype(str).str.strip() == "").sum()) if "model_probability" in main_df.columns else len(main_df)
+        missing_model_count = int((main_df["model_probability"].astype(str).str.strip() == "").sum()) if "model_probability" in main_df.columns else len(main_df)
 
         m1, m2, m3, m4 = st.columns(4)
         m1.metric(_t("rows"), len(main_df))
@@ -563,14 +587,14 @@ def render_odds_breakdown_section(key_prefix: str = "what_are_the_odds") -> None
         m3.metric(_t("score_rows"), score_count)
         m4.metric(_t("official_props"), csv_prop_count)
 
-        if missing_prob_count:
+        if missing_model_count:
             st.warning(_t("missing_prob"))
         if "no_vig_implied_probability" in main_df.columns and (main_df["no_vig_implied_probability"].astype(str).str.strip() == "").all():
             st.info(_t("no_vig_note"))
 
         tabs = st.tabs([_t("summary"), _t("main"), _t("extras"), _t("diag")])
         with tabs[0]:
-            summary_cols = ["event", "sport", "prediction", "model_probability", "best_price", "implied_probability", "model_minus_implied", "computed_ev_decimal", "odds_quality_score", "decision", "estimated_score"]
+            summary_cols = ["event", "sport", "prediction", "model_probability", "market_probability", "odds_probability_used", "probability_source", "best_price", "implied_probability", "model_minus_implied", "computed_ev_decimal", "odds_quality_score", "decision", "estimated_score"]
             display = main_df[[col for col in summary_cols if col in main_df.columns]].copy()
             st.dataframe(_translate_frame(display), use_container_width=True, hide_index=True)
             top = main_df[main_df.get("decision", pd.Series(dtype=str)).isin(["strong_candidate", "candidate"])].head(10) if "decision" in main_df.columns else pd.DataFrame()
@@ -579,7 +603,7 @@ def render_odds_breakdown_section(key_prefix: str = "what_are_the_odds") -> None
                 st.dataframe(_translate_frame(top[[col for col in summary_cols if col in top.columns]]), use_container_width=True, hide_index=True)
         with tabs[1]:
             if depth == _t("simple"):
-                display_cols = ["event", "sport", "prediction", "model_probability", "best_price", "implied_probability", "model_minus_implied", "decision", "estimated_score"]
+                display_cols = ["event", "sport", "prediction", "model_probability", "market_probability", "odds_probability_used", "probability_source", "best_price", "implied_probability", "decision", "estimated_score"]
                 display = main_df[[col for col in display_cols if col in main_df.columns]].copy()
             else:
                 display = main_df.copy()
