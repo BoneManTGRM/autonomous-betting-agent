@@ -12,7 +12,7 @@ from .audit import enrich_prediction_frame, parse_float
 from .local_users import DEFAULT_USER_ID, sanitize_user_id
 from .row_normalizer import normalize_frame, normalize_row, safe_text
 
-SNAPSHOT_SCHEMA_VERSION = 'prediction-snapshot-v2'
+SNAPSHOT_SCHEMA_VERSION = 'prediction-snapshot-v3'
 REQUIRED_OFFICIAL_FIELDS = ('event', 'prediction', 'model_probability', 'decimal_price', 'locked_at_utc')
 
 
@@ -71,20 +71,35 @@ def official_lock_status(row: Mapping[str, Any]) -> tuple[str, str]:
     return 'official_locked', 'Official prediction snapshot locked before grading.'
 
 
-def build_prediction_snapshots(frame: pd.DataFrame, *, user_id: str = DEFAULT_USER_ID, locked_at_utc: str | None = None) -> pd.DataFrame:
+def build_prediction_snapshots(
+    frame: pd.DataFrame,
+    *,
+    user_id: str = DEFAULT_USER_ID,
+    locked_at_utc: str | None = None,
+    allow_auto_lock: bool = False,
+) -> pd.DataFrame:
     if frame is None or frame.empty:
         return pd.DataFrame()
     clean_user = sanitize_user_id(user_id)
     enriched = normalize_frame(enrich_prediction_frame(frame))
-    locked_at = locked_at_utc or utc_now_iso()
+    new_lock_time = locked_at_utc or (utc_now_iso() if allow_auto_lock else '')
     rows: list[dict[str, Any]] = []
     for raw in enriched.to_dict(orient='records'):
         normalized = normalize_row(raw)
+        existing_lock_time = normalized.get('prediction_timestamp', '')
+        lock_time = existing_lock_time or new_lock_time
+        if existing_lock_time:
+            lock_origin = 'existing_timestamp'
+        elif new_lock_time and allow_auto_lock:
+            lock_origin = 'new_lock_created_now'
+        else:
+            lock_origin = 'missing_timestamp'
         row = {
             'snapshot_schema_version': SNAPSHOT_SCHEMA_VERSION,
             'local_user_id': clean_user,
             'snapshot_id': '',
-            'locked_at_utc': normalized.get('prediction_timestamp') or locked_at,
+            'locked_at_utc': lock_time,
+            'lock_origin': lock_origin,
             'event': normalized.get('event', ''),
             'sport': normalized.get('sport', ''),
             'market_type': normalized.get('market_type', ''),
@@ -127,13 +142,15 @@ def verify_snapshots(frame: pd.DataFrame) -> SnapshotVerification:
 
 def snapshot_summary(frame: pd.DataFrame) -> dict[str, Any]:
     if frame is None or frame.empty:
-        return {'total': 0, 'official_locked': 0, 'not_official': 0, 'missing_odds': 0, 'missing_probability': 0}
+        return {'total': 0, 'official_locked': 0, 'not_official': 0, 'missing_odds': 0, 'missing_probability': 0, 'new_locks_created': 0}
     status = frame.get('lock_status', pd.Series(dtype=str)).fillna('').astype(str)
     reason = frame.get('lock_reason', pd.Series(dtype=str)).fillna('').astype(str).str.lower()
+    origin = frame.get('lock_origin', pd.Series(dtype=str)).fillna('').astype(str)
     return {
         'total': int(len(frame)),
         'official_locked': int(status.eq('official_locked').sum()),
         'not_official': int(status.ne('official_locked').sum()),
         'missing_odds': int(reason.str.contains('decimal_price', na=False).sum()),
         'missing_probability': int(reason.str.contains('model_probability', na=False).sum()),
+        'new_locks_created': int(origin.eq('new_lock_created_now').sum()),
     }
