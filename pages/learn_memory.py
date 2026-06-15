@@ -22,13 +22,9 @@ from autonomous_betting_agent.learning_memory_tools import (
     merge_dedupe_rows,
     prune_rows,
     read_compact_csv_bytes,
-    report_frame if False else memory_metrics,
     rows_to_graded,
     valid_bank_row,
 )
-
-# The conditional import above keeps older static analyzers quiet in some Streamlit runtimes.
-# Rebind report_frame below because this page owns language-specific display labels.
 
 
 def get_secret(*names: str) -> str:
