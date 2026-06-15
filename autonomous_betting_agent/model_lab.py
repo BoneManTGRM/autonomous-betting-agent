@@ -4,6 +4,8 @@ from typing import Any
 
 import pandas as pd
 
+PRIORITY_ORDER = {'high': 0, 'medium': 1, 'low': 2}
+
 
 def recommendations_from_patterns(patterns: list[dict[str, Any]]) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
@@ -40,10 +42,11 @@ def recommendations_from_patterns(patterns: list[dict[str, Any]]) -> pd.DataFram
             'reliability': reliability,
             'recommended_action': action,
             'priority': priority,
+            'priority_order': PRIORITY_ORDER.get(priority, 99),
         })
     if not rows:
         return pd.DataFrame(columns=['area', 'records', 'recommended_action', 'priority'])
-    return pd.DataFrame(rows).sort_values(['priority', 'records'], ascending=[True, False])
+    return pd.DataFrame(rows).sort_values(['priority_order', 'records'], ascending=[True, False]).drop(columns=['priority_order'])
 
 
 def lab_summary(recommendations: pd.DataFrame) -> dict[str, int]:
