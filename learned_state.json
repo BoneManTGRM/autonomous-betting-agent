@@ -1,18 +1,18 @@
 {
-  "accuracy_after": 0.5688073394495413,
-  "accuracy_before": 0.6146788990825688,
-  "brier_after": 0.22686851380892042,
-  "brier_before": 0.2276088623853211,
-  "events_trained": 109,
-  "intercept": -0.15390831028472596,
-  "log_loss_after": 0.6386403424488106,
-  "log_loss_before": 0.6408535181114161,
+  "accuracy_after": 0.5818181818181818,
+  "accuracy_before": 0.6181818181818182,
+  "brier_after": 0.22583904673735516,
+  "brier_before": 0.22644191391782725,
+  "events_trained": 110,
+  "intercept": -0.14680747106771538,
+  "log_loss_after": 0.636465575614385,
+  "log_loss_before": 0.6384674106487526,
   "notes": [
     "Learns probability calibration from graded historical predictions.",
     "This does not prove betting profitability; use untouched forward tests before making performance claims.",
-    "Merged 0 existing rows with 109 uploaded rows; removed 0 duplicates; trained on 109 rows."
+    "Merged 109 existing rows with 1 uploaded rows; removed 0 duplicates; trained on 110 rows."
   ],
-  "slope": 1.0881050899866582,
-  "source": "pro_predictor_updated_win_loss_new_finished_marked.csv",
-  "trained_at_utc": "2026-06-15T12:21:44+00:00"
+  "slope": 1.1111665067328516,
+  "source": "pro_predictor_multi_api_high_confidence_only_updated_win_loss.csv",
+  "trained_at_utc": "2026-06-15T16:09:53+00:00"
 }
