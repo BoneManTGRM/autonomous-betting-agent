@@ -16,7 +16,7 @@ TEXT = {
     'en': {
         'title': 'Scanner Pro',
         'caption': 'One consolidated scanner for all supported sports, leagues, markets, books, and live odds feeds.',
-        'info': 'Use Scanner Pro for live market discovery. Use Pro Predictor for final prediction scoring and Learning Memory for durable training.',
+        'info': 'Use Scanner Pro for live market discovery. Use Pro Predictor for final prediction scoring, What Are the Odds for market/value review, and Learning Memory for durable training.',
         'api_key': 'Odds API key',
         'missing_key': 'Missing Odds API key. Add THE_ODDS_API_KEY or ODDS_API_KEY in Streamlit secrets.',
         'scan_scope': 'Scan scope',
@@ -39,12 +39,12 @@ TEXT = {
         'totals': 'Totals',
         'download': 'Download Scanner Pro CSV',
         'no_rows': 'No rows returned. Try fewer filters or another sport/region.',
-        'stored': 'Scanner rows saved in session for Market Finder Pro and Learning Memory review.',
+        'stored': 'Scanner rows saved in session for What Are the Odds and Learning Memory review.',
     },
     'es': {
         'title': 'Scanner Pro',
         'caption': 'Escáner único para todos los deportes, ligas, mercados, casas de apuestas y cuotas en vivo compatibles.',
-        'info': 'Usa Scanner Pro para descubrir mercados en vivo. Usa Pro Predictor para la calificación final de predicciones y Memoria de Aprendizaje para entrenamiento duradero.',
+        'info': 'Usa Scanner Pro para descubrir mercados en vivo. Usa Pro Predictor para la calificación final de predicciones, What Are the Odds para revisar mercado/valor y Memoria de Aprendizaje para entrenamiento duradero.',
         'api_key': 'Clave de Odds API',
         'missing_key': 'Falta la clave de Odds API. Agrega THE_ODDS_API_KEY u ODDS_API_KEY en los secretos de Streamlit.',
         'scan_scope': 'Alcance del escaneo',
@@ -67,7 +67,7 @@ TEXT = {
         'totals': 'Totales',
         'download': 'Descargar CSV de Scanner Pro',
         'no_rows': 'No se encontraron filas. Prueba con menos filtros u otro deporte/región.',
-        'stored': 'Las filas del escáner se guardaron en la sesión para Market Finder Pro y revisión en Memoria de Aprendizaje.',
+        'stored': 'Las filas del escáner se guardaron en la sesión para revisión en What Are the Odds y Memoria de Aprendizaje.',
     },
 }
 
