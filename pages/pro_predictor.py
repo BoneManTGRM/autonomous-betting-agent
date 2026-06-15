@@ -9,6 +9,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from autonomous_betting_agent.live_api_context import LiveAPIContextBuilder
 from autonomous_betting_agent.live_odds import list_sports, scan_market
 from autonomous_betting_agent.multi_source_fusion import fuse_row
 from autonomous_betting_agent.target_mode import (
@@ -25,12 +26,12 @@ LANGUAGES = {"English": "en", "Español": "es"}
 TEXT = {
     "title": {"en": "Pro Predictor", "es": "Predictor Profesional"},
     "caption": {
-        "en": "Multi-source all-sports predictor. It uses sportsbook odds as the base signal, then applies capped adjustments from SportsDataIO, WeatherAPI, and ARA learning memory.",
-        "es": "Predictor multifuente para todos los deportes. Usa las cuotas como señal base y aplica ajustes limitados de SportsDataIO, WeatherAPI y memoria ARA.",
+        "en": "Multi-source all-sports predictor. It uses sportsbook odds as the base signal, then applies real per-event context from SportsDataIO, WeatherAPI, and ARA learning memory when available.",
+        "es": "Predictor multifuente para todos los deportes. Usa cuotas como señal base y contexto real por evento de SportsDataIO, WeatherAPI y memoria ARA cuando está disponible.",
     },
     "help": {
-        "en": "How to read it: market odds create the base probability. Stats, injuries/lineups, weather/context, and learning memory can move the probability only within capped limits.",
-        "es": "Cómo leerlo: las cuotas crean la probabilidad base. Estadísticas, lesiones/alineaciones, clima/contexto y memoria pueden mover la probabilidad solo dentro de límites.",
+        "en": "How to read it: market odds create the base probability. SportsDataIO, WeatherAPI, and learning memory can move the probability only when real source data was actually used. Output rows show source_used/status fields.",
+        "es": "Cómo leerlo: las cuotas crean la probabilidad base. SportsDataIO, WeatherAPI y memoria solo ajustan la probabilidad cuando se usaron datos reales. Las filas muestran campos source_used/status.",
     },
     "api_sources": {"en": "API sources", "es": "Fuentes API"},
     "odds_key": {"en": "Odds API key", "es": "Clave de Odds API"},
@@ -222,6 +223,7 @@ with st.expander(t("controls"), expanded=True):
     target_h2h_only = q4.toggle(t("h2h_only"), value=True)
 
 with st.expander(t("manual_preview"), expanded=False):
+    st.caption("Manual preview is used only when live API data is unavailable; live scan rows use real API context fields.")
     p1, p2, p3 = st.columns(3)
     stats_probability = p1.number_input(t("stats_prob"), min_value=1.0, max_value=99.0, value=58.0, step=0.1)
     injury_score = p2.number_input(t("injury_score"), min_value=0.0, max_value=100.0, value=90.0, step=1.0)
@@ -273,14 +275,16 @@ target_policy = TargetModePolicy(
     h2h_only=bool(target_h2h_only),
 )
 
+context_builder = LiveAPIContextBuilder(sportsdataio_key=sports_key, weatherapi_key=weather_key)
+
 if st.button(t("run"), type="primary", use_container_width=True):
     if not odds_key:
         st.warning("Odds API key is required for live market scan." if LANG == "en" else "La clave de Odds API es necesaria para escanear mercados en vivo.")
         preview_row = {
             "market_probability": 0.70,
-            "stats_probability": stats_probability / 100.0 if sports_key else "",
-            "injury_risk_score": injury_score if sports_key else "",
-            "weather_risk_score": weather_score if weather_key else "",
+            "stats_probability": stats_probability / 100.0,
+            "injury_risk_score": injury_score,
+            "weather_risk_score": weather_score,
             "bucket_roi": memory_roi / 100.0,
         }
         fused = fuse_row(preview_row)
@@ -319,13 +323,17 @@ if st.button(t("run"), type="primary", use_container_width=True):
             books = int(getattr(event, "bookmaker_count", 0) or getattr(pick, "source_count", 0) or 0)
             if books < int(min_books):
                 continue
+
+            prediction = getattr(pick, "name", "")
+            api_context = context_builder.context_for_event(event, pick_name=prediction)
             fusion_input = {
                 "market_probability": market_probability,
-                "stats_probability": stats_probability / 100.0 if sports_key else "",
-                "injury_risk_score": injury_score if sports_key else "",
-                "weather_risk_score": weather_score if weather_key else "",
                 "bucket_roi": memory_roi / 100.0,
             }
+            for context_key in ("stats_probability", "injury_risk_score", "weather_risk_score", "weather_flag", "bucket_roi", "historical_roi", "historical_win_rate"):
+                if api_context.get(context_key) not in (None, ""):
+                    fusion_input[context_key] = api_context[context_key]
+
             fused = fuse_row(fusion_input)
             if fused.reliability_score < float(min_reliability):
                 continue
@@ -333,7 +341,6 @@ if st.button(t("run"), type="primary", use_container_width=True):
             gap_value = price_probability_gap(best_price, market_probability)
             ev_value = estimated_ev(final_value, best_price)
             event_name = f"{getattr(event, 'away_team', '')} at {getattr(event, 'home_team', '')}"
-            prediction = getattr(pick, "name", "")
             row = {
                 "event": event_name,
                 "sport": getattr(event, "sport_title", getattr(sport, "title", "")),
@@ -361,8 +368,10 @@ if st.button(t("run"), type="primary", use_container_width=True):
                 "reliability_score": fused.reliability_score,
                 "confidence": fused.confidence,
                 "fusion_reason": fused.fusion_reason,
+                "fusion_warning": fused.fusion_warning,
                 "match_score": f"{match:.0%}",
             }
+            row.update(api_context)
             rows.append(row)
         progress.progress((index + 1) / max(1, len(selected_sports)))
     progress.empty()
