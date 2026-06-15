@@ -15,7 +15,7 @@ _REAL_DG_NUMBER_INPUT = DeltaGenerator.number_input
 _REAL_DG_SLIDER = DeltaGenerator.slider
 _REAL_DG_TOGGLE = DeltaGenerator.toggle
 
-REPO_MEMORY_PATH = Path(__file__).resolve().parent / "data" / "ara_learning_memory.csv"
+REPO_MEMORY_PATH = Path(__file__).resolve().parent / "data" / "ara_permanent_learning_memory.csv"
 
 DEFAULT_NUMBER_INPUT_VALUES = {
     "max feeds": 120,
