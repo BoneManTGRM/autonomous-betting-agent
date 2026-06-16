@@ -10,13 +10,10 @@ from autonomous_betting_agent.memory_read_patch import install_memory_read_merge
 APP_NAME = "ABA Signal Pro"
 APP_TAGLINE = "Powered by Reparodynamics"
 BRANDED_REPORT_PREFIX = f"{APP_NAME}\n{APP_TAGLINE}"
+REPO_ROOT = Path(__file__).resolve().parent
+LOGO_PATH = REPO_ROOT / "assets" / "aba_signal_pro_logo.svg"
 
-st.set_page_config(
-    page_title=APP_NAME,
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
+_REAL_SET_PAGE_CONFIG = st.set_page_config
 _REAL_FILE_UPLOADER = st.file_uploader
 _REAL_ST_NUMBER_INPUT = st.number_input
 _REAL_ST_SLIDER = st.slider
@@ -27,7 +24,13 @@ _REAL_DG_SLIDER = DeltaGenerator.slider
 _REAL_DG_TEXT_INPUT = DeltaGenerator.text_input
 _REAL_DG_TOGGLE = DeltaGenerator.toggle
 
-REPO_MEMORY_PATH = Path(__file__).resolve().parent / "data" / "ara_permanent_learning_memory.csv"
+_REAL_SET_PAGE_CONFIG(
+    page_title=APP_NAME,
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+REPO_MEMORY_PATH = REPO_ROOT / "data" / "ara_permanent_learning_memory.csv"
 
 DEFAULT_NUMBER_INPUT_VALUES = {
     "max feeds": 50,
@@ -69,6 +72,11 @@ CORE_PAGES = [
 ]
 
 
+def safe_set_page_config(*args, **kwargs):
+    """Ignore page-level config calls after the app shell has already configured Streamlit."""
+    return None
+
+
 def _label_key(label) -> str:
     return " ".join(str(label or "").lower().replace("%", "").replace("±", "").split())
 
@@ -102,11 +110,17 @@ def _apply_toggle_default(label, kwargs):
 
 
 def render_sidebar_brand() -> None:
-    st.sidebar.success("ABA")
-    st.sidebar.markdown("### Signal")
-    st.sidebar.error("Pro")
-    st.sidebar.caption(APP_TAGLINE)
-    st.sidebar.divider()
+    if hasattr(st, "logo") and LOGO_PATH.exists():
+        try:
+            st.logo(str(LOGO_PATH), size="large")
+        except TypeError:
+            st.logo(str(LOGO_PATH))
+    else:
+        st.sidebar.success("ABA")
+        st.sidebar.markdown("### Signal")
+        st.sidebar.error("Pro")
+        st.sidebar.caption(APP_TAGLINE)
+        st.sidebar.divider()
 
 
 def mobile_safe_file_uploader(label, *args, **kwargs):
@@ -174,6 +188,7 @@ def install_report_branding() -> None:
 
 install_memory_read_merge(REPO_MEMORY_PATH)
 install_report_branding()
+st.set_page_config = safe_set_page_config
 st.file_uploader = mobile_safe_file_uploader
 st.number_input = defaulted_st_number_input
 st.slider = defaulted_st_slider
