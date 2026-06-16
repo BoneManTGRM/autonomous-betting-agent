@@ -5,6 +5,6 @@ headless = true
 gatherUsageStats = false
 
 [client]
-showSidebarNavigation = true
+showSidebarNavigation = false
 
 toolbarMode = "minimal"
