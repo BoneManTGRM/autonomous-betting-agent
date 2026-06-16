@@ -94,7 +94,7 @@ if not api_key:
 scope = st.radio(t('scan_scope'), [t('all_sports'), t('one_sport'), t('manual_sports')], horizontal=True)
 regions = st.multiselect(t('regions'), ['us', 'eu', 'uk', 'au'], default=['us'])
 markets = st.multiselect(t('markets'), ['h2h', 'spreads', 'totals'], default=['h2h'])
-max_events = st.number_input(t('max_events'), min_value=1, max_value=100, value=20, step=5)
+max_events = st.number_input(t('max_events'), min_value=1, max_value=1000, value=1000, step=50)
 min_books = st.number_input(t('min_books'), min_value=1, max_value=20, value=1, step=1)
 manual_keys = parse_manual_keys(st.text_input(t('manual_keys'), value='', help=t('manual_help')))
 sports_df = pd.DataFrame(columns=['key', 'title', 'group', 'active'])
