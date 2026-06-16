@@ -10,10 +10,10 @@ It is designed for sports analysts, market researchers, prediction reviewers, pr
 
 ## Current product structure
 
-The app is organized around one clean four-tool workflow:
+The app is organized around a five-stage workflow:
 
 ```text
-Scanner Pro -> Pro Predictor -> What Are the Odds -> Learning Memory
+Scanner Pro -> Pro Predictor -> What Are the Odds -> Odds Lock Pro -> Learning Memory
 ```
 
 | Tool | Main job |
@@ -21,9 +21,49 @@ Scanner Pro -> Pro Predictor -> What Are the Odds -> Learning Memory
 | **Scanner Pro** | Scans live odds feeds, normalizes markets, ranks market quality, and sends clean rows forward. |
 | **Pro Predictor** | Builds model probabilities, applies learned memory, scores agent decisions, and produces prediction-ready rows. |
 | **What Are the Odds** | Runs the market/value command board: edge, agent decision, scanner strength, CLV, loss review, sport routing, and lock-ready review. |
+| **Odds Lock Pro** | Creates timestamped proof ledgers, public/private dashboards, client-safe reports, bankroll controls, and audit-ready proof IDs. |
 | **Learning Memory** | Trains durable calibration and pattern memory from finished, graded results. |
 
-The sidebar intentionally shows only these four core tools. Older duplicate scanner, market-finder, league-specific, and legacy self-learning pages were removed or consolidated.
+Older duplicate scanner, market-finder, league-specific, and legacy self-learning pages were removed or consolidated.
+
+## Influencer and private-group workflow
+
+For a serious sports creator, research group, or private analyst, the valuable workflow is not only prediction. It is proof, repeatability, and reporting.
+
+The recommended operating path is:
+
+1. **Scanner Pro** finds and ranks markets.
+2. **Pro Predictor** builds probability and decision rows.
+3. **What Are the Odds** reviews value, edge, CLV, risk, and lock readiness.
+4. **Odds Lock Pro** locks qualified future picks into a timestamped proof ledger.
+5. Finished results are graded.
+6. **Learning Memory** retrains calibration from finished results with usable probabilities or prices.
+
+This structure helps separate live research, official locked picks, public-facing reports, and learning data.
+
+## Odds Lock Pro
+
+Odds Lock Pro is the monetization and trust layer.
+
+It adds:
+
+- timestamped locked pick ledger
+- unique `proof_id`
+- SHA-256 `proof_hash`
+- pre-start lock-status check
+- model probability vs implied probability edge
+- recommended stake units
+- fractional Kelly-style risk sizing with caps
+- public/client-safe view
+- private audit view
+- daily copy/paste report generator
+- Spanish/English reports
+- sport and market performance dashboard
+- bankroll exposure dashboard
+- daily exposure limit checks
+- per-sport exposure limit checks
+
+The public/client view hides internal fields such as full model probability, proof hash, private scoring, and internal diagnostics while keeping useful proof fields such as event, pick, price, confidence, result, units, and proof ID.
 
 ## Four-tool handoff health
 
@@ -58,9 +98,12 @@ The current system includes:
 - scanner strength scoring
 - agent decision scoring
 - lock-ready candidate detection
+- timestamped proof ledger generation
+- public/private client reporting
 - no-vig and implied-probability review
 - model-vs-market edge review
 - bankroll and drawdown analysis
+- exposure limits and stake sizing
 - closing-line value diagnostics
 - loss review and future-rule generation
 - sport-specific model routing
@@ -177,7 +220,9 @@ A future prediction is strongest when it has:
 - decimal price
 - bookmaker / odds source
 - event start time
-- prediction timestamp or lock timestamp before event start
+- lock timestamp before event start
+- proof ID
+- proof hash
 - final result added later
 
 A high hit rate alone is not enough. ROI, average price, CLV, book coverage, sample size, duplicate control, and prospective timestamped proof matter more than headline accuracy.
@@ -229,6 +274,8 @@ GITHUB_BRANCH
 ```
 
 `GITHUB_TOKEN` is only needed if Learning Memory should save trained memory files back to GitHub from the deployed app.
+
+Do not put real API keys in GitHub, README files, screenshots, or public CSVs.
 
 ## Run tests
 
