@@ -35,10 +35,10 @@ def _install_streamlit_helpers() -> None:
         'global_language', 'app_language', 'language_settings_language', 'start_here_language',
         'tool_command_center_language', 'command_center_language', 'game_intelligence_language',
         'deployment_health_language', 'scanner_pro_language', 'pro_predictor_language',
-        'ultra80_profit_mode_language', 'what_are_the_odds_language', 'what_are_the_odds_pro_language',
-        'odds_lock_pro_language', 'public_proof_dashboard_language', 'auto_result_grading_language',
-        'daily_workflow_language', 'learning_memory_language', 'learn_memory_language',
-        'monthly_license_readiness_language', 'buyer_demo_mode_language',
+        'ultra80_profit_mode_language', 'threshold_optimizer_language', 'what_are_the_odds_language',
+        'what_are_the_odds_pro_language', 'odds_lock_pro_language', 'public_proof_dashboard_language',
+        'auto_result_grading_language', 'daily_workflow_language', 'learning_memory_language',
+        'learn_memory_language', 'monthly_license_readiness_language', 'buyer_demo_mode_language',
         'daily_operator_checklist_language', 'private_beta_sales_dashboard_language', 'reset_data_language',
     ]
 
@@ -46,29 +46,30 @@ def _install_streamlit_helpers() -> None:
         ('Scanner Pro', 'Scanner Pro', 'pages/scanner_pro.py'),
         ('Pro Predictor', 'Predictor Pro', 'pages/pro_predictor.py'),
         ('Ultra 80 Profit Mode', 'Modo Ultra 80 Rentable', 'pages/ultra80_profit_mode.py'),
+        ('Threshold Optimizer', 'Optimizador de Umbrales', 'pages/threshold_optimizer.py'),
         ('What Are the Odds', 'Cuotas y Valor', 'pages/what_are_the_odds.py'),
         ('Odds Lock Pro', 'Bloqueo de Cuotas Pro', 'pages/odds_lock_pro.py'),
         ('Public Proof Dashboard', 'Dashboard Público de Prueba', 'pages/public_proof_dashboard.py'),
         ('Learning Memory', 'Memoria de Aprendizaje', 'pages/learn_memory.py'),
     )
     notes_en = (
-        'Commercial workflow: Scanner Pro → Pro Predictor → Ultra 80 Profit Mode → What Are the Odds → Odds Lock Pro → Public Proof Dashboard → Learning Memory.',
+        'Commercial workflow: Scanner Pro → Pro Predictor → Ultra 80 Profit Mode → Odds Lock Pro → Public Proof Dashboard → Threshold Optimizer → Learning Memory.',
         'Use Scanner Pro for live market discovery.',
         'Use Pro Predictor for final all-sports prediction scoring.',
         'Use Ultra 80 Profit Mode for the strict 80%+ and positive-profit shortlist.',
-        'Use What Are the Odds for market/value review, CLV, loss autopsy, and lock-ready candidates.',
         'Use Odds Lock Pro to create timestamped proof rows before results are known.',
         'Use Public Proof Dashboard for client-safe metrics, result uploads, persistent ledger storage, and report cards.',
+        'Use Threshold Optimizer after results finish to learn the best cutoffs and false-positive patterns.',
         'Use Learning Memory for durable training and saved model memory.',
     )
     notes_es = (
-        'Flujo comercial: Scanner Pro → Predictor Pro → Modo Ultra 80 Rentable → Cuotas y Valor → Bloqueo de Cuotas Pro → Dashboard Público de Prueba → Memoria de Aprendizaje.',
+        'Flujo comercial: Scanner Pro → Predictor Pro → Modo Ultra 80 Rentable → Bloqueo de Cuotas Pro → Dashboard Público de Prueba → Optimizador de Umbrales → Memoria de Aprendizaje.',
         'Usa Scanner Pro para descubrir mercados en vivo.',
         'Usa Predictor Pro para la calificación final de predicciones en todos los deportes.',
         'Usa Modo Ultra 80 Rentable para la lista estricta de 80%+ y ganancia positiva.',
-        'Usa Cuotas y Valor para revisar mercado, valor, CLV, autopsia de pérdidas y candidatos listos para bloquear.',
         'Usa Bloqueo de Cuotas Pro para crear filas de prueba con timestamp antes de conocer resultados.',
         'Usa Dashboard Público de Prueba para métricas seguras para clientes, resultados, ledger persistente y tarjetas de reporte.',
+        'Usa Optimizador de Umbrales después de los resultados para aprender mejores cortes y falsos positivos.',
         'Usa Memoria de Aprendizaje para entrenamiento duradero y memoria guardada del modelo.',
     )
 
@@ -84,6 +85,9 @@ def _install_streamlit_helpers() -> None:
         'resolved': 'resueltos', 'pending': 'pendientes', 'profit_units': 'unidades_ganancia', 'stake_units': 'unidades_apostadas',
         'ultra80_candidate': 'candidato_ultra80', 'ultra80_profit_mode': 'modo_ultra80_rentable',
         'ultra80_profit_at_80_percent': 'ganancia_al_80_pct', 'ultra80_reasons': 'razones_ultra80',
+        'volume_tier': 'nivel_volumen', 'min_probability': 'probabilidad_minima', 'min_edge': 'ventaja_minima',
+        'min_ev': 'ev_minimo', 'min_books': 'casas_minimas', 'min_api_coverage': 'cobertura_api_minima',
+        'min_agent_score': 'puntaje_agente_minimo', 'false_positive': 'falso_positivo',
     }
     es_values = {
         'win': 'victoria', 'loss': 'derrota', 'void': 'nulo', 'pending': 'pendiente', 'unknown': 'pendiente',
