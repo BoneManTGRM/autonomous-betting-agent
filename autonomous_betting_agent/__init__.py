@@ -23,6 +23,7 @@ APP_TAGLINE = 'Powered by Reparodynamics'
 def _install_streamlit_helpers() -> None:
     """Install global Spanish/English navigation, explainers, and light table translation."""
     try:
+        import inspect
         import io
         import pandas as pd
         import streamlit as st
@@ -30,9 +31,9 @@ def _install_streamlit_helpers() -> None:
     except Exception:
         return
 
-    if getattr(st, '_aba_streamlit_helpers_v8_installed', False):
+    if getattr(st, '_aba_streamlit_helpers_v9_installed', False):
         return
-    st._aba_streamlit_helpers_v8_installed = True
+    st._aba_streamlit_helpers_v9_installed = True
 
     page_language_keys = [
         'global_language', 'app_language', 'language_settings_language', 'start_here_language',
@@ -189,6 +190,15 @@ def _install_streamlit_helpers() -> None:
         except Exception:
             return data
 
+    def called_from_pro_predictor() -> bool:
+        try:
+            return any(str(frame.filename).replace('\\', '/').endswith('pages/pro_predictor.py') for frame in inspect.stack())
+        except Exception:
+            return False
+
+    def label_key(label: Any) -> str:
+        return ' '.join(str(label or '').lower().replace('-', ' ').replace('_', ' ').split())
+
     def render_nav(lang: str) -> None:
         with st.sidebar:
             st.markdown('### :green[ABA] Signal :red[Pro]')
@@ -209,6 +219,8 @@ def _install_streamlit_helpers() -> None:
     real_set_page_config = st.set_page_config
     real_st_selectbox = st.selectbox
     real_dg_selectbox = DeltaGenerator.selectbox
+    real_st_number_input = st.number_input
+    real_dg_number_input = DeltaGenerator.number_input
     real_st_dataframe = st.dataframe
     real_dg_dataframe = DeltaGenerator.dataframe
     real_st_table = st.table
@@ -244,11 +256,27 @@ def _install_streamlit_helpers() -> None:
         render_nav(selected)
         return selected
 
+    def number_input_with_pro_caps(label: Any, args: tuple[Any, ...], kwargs: dict[str, Any], original: Any, target: Any = None) -> Any:
+        if called_from_pro_predictor() and label_key(label) in {'max sports', 'max events per sport', 'max high confidence rows'}:
+            kwargs = dict(kwargs)
+            kwargs['max_value'] = 500
+            if kwargs.get('value', 0) and kwargs['value'] > 500:
+                kwargs['value'] = 500
+        if target is None:
+            return original(label, *args, **kwargs)
+        return original(target, label, *args, **kwargs)
+
     def patched_st_selectbox(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
         return language_selectbox(label, options, args, kwargs, real_st_selectbox)
 
     def patched_dg_selectbox(self: Any, label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
         return language_selectbox(label, options, args, kwargs, real_dg_selectbox, target=self)
+
+    def patched_st_number_input(label: Any, *args: Any, **kwargs: Any) -> Any:
+        return number_input_with_pro_caps(label, args, kwargs, real_st_number_input)
+
+    def patched_dg_number_input(self: Any, label: Any, *args: Any, **kwargs: Any) -> Any:
+        return number_input_with_pro_caps(label, args, kwargs, real_dg_number_input, target=self)
 
     def patched_st_dataframe(data: Any = None, *args: Any, **kwargs: Any) -> Any:
         return real_st_dataframe(translate_frame(data), *args, **kwargs)
@@ -271,6 +299,8 @@ def _install_streamlit_helpers() -> None:
     st.set_page_config = patched_set_page_config
     st.selectbox = patched_st_selectbox
     DeltaGenerator.selectbox = patched_dg_selectbox
+    st.number_input = patched_st_number_input
+    DeltaGenerator.number_input = patched_dg_number_input
     st.dataframe = patched_st_dataframe
     DeltaGenerator.dataframe = patched_dg_dataframe
     st.table = patched_st_table
