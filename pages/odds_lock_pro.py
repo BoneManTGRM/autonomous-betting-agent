@@ -14,13 +14,12 @@ from autonomous_betting_agent.four_tool_orchestrator import page_health_frame
 from autonomous_betting_agent.odds_lock_tools import (
     client_view,
     daily_report,
-    exposure_summary,
     lock_rows,
     performance_by_group,
     prepare_lock_candidates,
     summarize_locked_picks,
 )
-from autonomous_betting_agent.row_normalizer import normalize_frame
+from autonomous_betting_agent.row_normalizer import normalize_frame, safe_text
 
 st.set_page_config(page_title='Odds Lock Pro', layout='wide')
 LANG = 'es' if st.sidebar.selectbox('Language / Idioma', ['English', 'Español'], key='odds_lock_pro_language') == 'Español' else 'en'
@@ -29,15 +28,21 @@ TEXT = {
     'en': {
         'title': 'Odds Lock Pro',
         'caption': 'Timestamped proof ledger, performance dashboard, reports, bankroll controls, and client-ready views.',
-        'info': 'Official locks require a future event start, usable model probability, decimal price, bookmaker, event, and prediction. Already-started rows are blocked from official locking.',
+        'info': 'Official locks require a future event start, usable model probability, decimal price, bookmaker/odds source, event, and prediction. Already-started rows are blocked from official locking.',
         'use_session': 'Use latest rows from session',
-        'upload': 'Upload prediction or locked-ledger CSV',
+        'upload': 'Upload prediction, high-confidence tracker, or locked-ledger CSV',
         'source': 'Input source',
         'analyst': 'Analyst / brand name',
         'max_units': 'Max stake units per pick',
         'daily_limit': 'Daily exposure limit',
         'sport_limit': 'Per-sport exposure limit',
-        'include_watch': 'Include watch-only rows',
+        'include_watch': 'Include watch-only / tracker rows',
+        'shortlist': 'Highest-confidence shortlist',
+        'use_shortlist': 'Use highest-confidence shortlist before locking',
+        'max_shortlist': 'Max shortlist rows',
+        'min_shortlist_prob': 'Minimum model probability',
+        'min_shortlist_score': 'Minimum agent score',
+        'shortlisted': 'Shortlisted',
         'lock': 'Create official future-only proof ledger',
         'save_persistent': 'Save locked rows to persistent proof ledger',
         'saved_persistent': 'Saved to persistent proof ledger',
@@ -64,12 +69,12 @@ TEXT = {
         'download_private': 'Download private audit CSV',
         'no_rows': 'No rows found. Run What Are the Odds first or upload a CSV.',
         'no_locked': 'No locked proof rows yet. Create a locked proof ledger or upload a ledger with proof_id and locked_at_utc.',
-        'no_candidates': 'No official lock candidates found. Rows must be future events with event, prediction, probability, decimal price, and bookmaker.',
-        'no_review_rows': 'No rows reached lock-candidate review. Rows need lock_ready=true or an agent decision such as play_strong/play_small. Turn on watch-only rows only for rows that should be reviewed.',
+        'no_candidates': 'No official lock candidates found. Rows must be future events with event, prediction, probability, decimal price, bookmaker/odds source, and event start time.',
+        'no_review_rows': 'No rows reached lock-candidate review. Turn on watch/tracker rows for legacy tracker files, or send rows from Pro Predictor/What Are the Odds.',
         'lock_created': 'Created official locked proof rows',
         'lock_not_created': 'No official ledger was created.',
-        'lock_not_created_detail': 'The button worked, but every reviewed row was blocked from official locking. Use a fresh future prediction CSV before event start with event, prediction, model probability, decimal price, bookmaker, and event start time.',
-        'lock_not_created_no_review': 'The button worked, but no rows qualified for lock review. The upload is probably a results/graded CSV, a watch-only file, or a file without lock_ready/agent decision fields.',
+        'lock_not_created_detail': 'The button worked, but every reviewed row was blocked from official locking. The diagnostics below show exactly what is missing.',
+        'lock_not_created_no_review': 'The button worked, but no rows qualified for lock review. The upload may be a results-only file or may lack event/prediction fields.',
         'blocker_summary': 'Why rows were blocked',
         'blocked_preview': 'Blocked-row diagnostic preview',
         'public_only': 'Public/client-safe view',
@@ -80,15 +85,21 @@ TEXT = {
     'es': {
         'title': 'Odds Lock Pro',
         'caption': 'Ledger con prueba por timestamp, dashboard de rendimiento, reportes, control de unidades y vista para clientes.',
-        'info': 'Los bloqueos oficiales requieren evento futuro, probabilidad utilizable, cuota decimal, casa, evento y pronóstico. Las filas ya iniciadas se bloquean para prueba oficial.',
+        'info': 'Los bloqueos oficiales requieren evento futuro, probabilidad utilizable, cuota decimal, casa/fuente de odds, evento y pronóstico. Las filas ya iniciadas se bloquean para prueba oficial.',
         'use_session': 'Usar últimas filas de la sesión',
-        'upload': 'Subir CSV de predicciones o ledger bloqueado',
+        'upload': 'Subir CSV de predicciones, tracker de alta confianza o ledger bloqueado',
         'source': 'Fuente de entrada',
         'analyst': 'Analista / marca',
         'max_units': 'Máximo de unidades por pick',
         'daily_limit': 'Límite diario de exposición',
         'sport_limit': 'Límite de exposición por deporte',
-        'include_watch': 'Incluir filas solo vigilar',
+        'include_watch': 'Incluir filas watch/tracker',
+        'shortlist': 'Lista corta de máxima confianza',
+        'use_shortlist': 'Usar lista corta antes de bloquear',
+        'max_shortlist': 'Máximo de filas en lista corta',
+        'min_shortlist_prob': 'Probabilidad mínima del modelo',
+        'min_shortlist_score': 'Puntaje mínimo del agente',
+        'shortlisted': 'Lista corta',
         'lock': 'Crear ledger oficial solo de eventos futuros',
         'save_persistent': 'Guardar filas bloqueadas en ledger persistente',
         'saved_persistent': 'Guardado en ledger persistente',
@@ -114,13 +125,13 @@ TEXT = {
         'download_client': 'Descargar CSV para clientes',
         'download_private': 'Descargar CSV privado de auditoría',
         'no_rows': 'No se encontraron filas. Ejecuta What Are the Odds primero o sube un CSV.',
-        'no_locked': 'Aún no hay filas bloqueadas con prueba. Crea un ledger bloqueado o sube uno con proof_id y locked_at_utc.',
-        'no_candidates': 'No hay candidatos oficiales para bloquear. Las filas deben ser eventos futuros con evento, pronóstico, probabilidad, cuota decimal y casa.',
-        'no_review_rows': 'Ninguna fila llegó a revisión de bloqueo. Las filas necesitan lock_ready=true o una decisión del agente como play_strong/play_small. Activa watch-only solo para filas que deban revisarse.',
+        'no_locked': 'Aún no hay filas bloqueadas con prueba. Crea bloqueos o sube un ledger con proof_id y locked_at_utc.',
+        'no_candidates': 'No hay candidatos oficiales. Las filas deben ser eventos futuros con evento, pronóstico, probabilidad, cuota decimal, casa/fuente y hora de inicio.',
+        'no_review_rows': 'Ninguna fila llegó a revisión. Activa filas watch/tracker para archivos legacy, o envía filas desde Predictor Pro/What Are the Odds.',
         'lock_created': 'Filas oficiales bloqueadas creadas',
         'lock_not_created': 'No se creó ningún ledger oficial.',
-        'lock_not_created_detail': 'El botón funcionó, pero todas las filas revisadas fueron bloqueadas para prueba oficial. Usa un CSV fresco de predicciones futuras antes del inicio con evento, pronóstico, probabilidad del modelo, cuota decimal, casa y hora de inicio.',
-        'lock_not_created_no_review': 'El botón funcionó, pero ninguna fila calificó para revisión. Probablemente es un CSV de resultados/calificado, un archivo watch-only o un archivo sin lock_ready/decisión del agente.',
+        'lock_not_created_detail': 'El botón funcionó, pero todas las filas revisadas fueron bloqueadas. El diagnóstico abajo muestra exactamente qué falta.',
+        'lock_not_created_no_review': 'El botón funcionó, pero ninguna fila calificó para revisión. Probablemente es un archivo solo de resultados o sin evento/pronóstico.',
         'blocker_summary': 'Por qué se bloquearon las filas',
         'blocked_preview': 'Vista diagnóstica de filas bloqueadas',
         'public_only': 'Vista segura para público/clientes',
@@ -181,6 +192,67 @@ def has_proof_fields(frame: pd.DataFrame) -> bool:
     return not frame.empty and {'proof_id', 'locked_at_utc'}.issubset(set(frame.columns))
 
 
+def numeric_best(frame: pd.DataFrame, names: list[str]) -> pd.Series:
+    for name in names:
+        if name in frame.columns:
+            values = pd.to_numeric(frame[name], errors='coerce')
+            if values.notna().any():
+                if 'prob' in name.lower():
+                    values = values.where(values <= 1.0, values / 100.0)
+                return values
+    return pd.Series(index=frame.index, dtype=float)
+
+
+def shortlist_frame(frame: pd.DataFrame, *, use_shortlist: bool, max_rows: int, min_probability: float, min_score: float) -> pd.DataFrame:
+    if frame.empty or not use_shortlist:
+        return frame
+    out = frame.copy()
+    probability = numeric_best(out, ['model_probability', 'model_probability_clean', 'final_probability', 'probability', 'confidence_probability'])
+    score = numeric_best(out, ['agent_score', 'scanner_strength_score', 'confidence_score', 'score'])
+    sortable = False
+    if probability.notna().any():
+        out['_shortlist_probability'] = probability
+        out = out[out['_shortlist_probability'].fillna(0.0) >= float(min_probability)]
+        sortable = True
+    if not out.empty and score.notna().any():
+        score = score.reindex(out.index)
+        out['_shortlist_score'] = score
+        out = out[out['_shortlist_score'].fillna(0.0) >= float(min_score)]
+        sortable = True
+    if out.empty:
+        return out.drop(columns=[col for col in ['_shortlist_probability', '_shortlist_score'] if col in out.columns], errors='ignore')
+    sort_cols = [col for col in ['_shortlist_score', '_shortlist_probability', 'agent_score', 'scanner_strength_score', 'model_edge'] if col in out.columns]
+    if sort_cols:
+        out = out.sort_values(sort_cols, ascending=False, na_position='last')
+    if sortable and int(max_rows) > 0:
+        out = out.head(int(max_rows))
+    return out.drop(columns=[col for col in ['_shortlist_probability', '_shortlist_score'] if col in out.columns], errors='ignore')
+
+
+def exposure_summary(frame: pd.DataFrame, *, daily_limit_units: float, sport_limit_units: float) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame(columns=['scope', 'stake_units', 'limit_units', 'status'])
+    stake = pd.to_numeric(frame.get('stake_units', pd.Series(dtype=float)), errors='coerce').fillna(0.0)
+    rows = [{
+        'scope': 'daily_total',
+        'stake_units': round(float(stake.sum()), 4),
+        'limit_units': float(daily_limit_units),
+        'status': 'ok' if float(stake.sum()) <= float(daily_limit_units) else 'over_limit',
+    }]
+    if 'sport' in frame.columns:
+        tmp = frame.copy()
+        tmp['_stake_units_numeric'] = stake
+        for sport, group in tmp.groupby('sport', dropna=False):
+            total = float(group['_stake_units_numeric'].sum())
+            rows.append({
+                'scope': f'sport:{safe_text(sport) or "unknown"}',
+                'stake_units': round(total, 4),
+                'limit_units': float(sport_limit_units),
+                'status': 'ok' if total <= float(sport_limit_units) else 'over_limit',
+            })
+    return pd.DataFrame(rows)
+
+
 def blocker_summary(frame: pd.DataFrame) -> pd.DataFrame:
     if frame.empty or 'lock_blockers' not in frame.columns:
         return pd.DataFrame()
@@ -200,7 +272,7 @@ def blocker_summary(frame: pd.DataFrame) -> pd.DataFrame:
 def diagnostic_columns(frame: pd.DataFrame) -> list[str]:
     preferred = [
         'event', 'sport', 'market_type', 'prediction', 'model_probability', 'decimal_price',
-        'bookmaker', 'event_start_utc', 'agent_decision', 'decision', 'lock_ready',
+        'bookmaker', 'odds_source', 'event_start_utc', 'agent_decision', 'decision', 'lock_ready',
         'prelock_status', 'lock_blockers', 'result_status', 'source_file',
     ]
     return [col for col in preferred if col in frame.columns]
@@ -217,25 +289,40 @@ if raw.empty:
     st.stop()
 
 normalized = normalize_frame(raw)
-include_watch = st.checkbox(t('include_watch'), value=False)
+include_watch = st.checkbox(t('include_watch'), value=True)
 analyst = st.text_input(t('analyst'), value='Private Analytics')
 max_units = st.number_input(t('max_units'), min_value=0.25, max_value=10.0, value=2.0, step=0.25)
 daily_limit = st.number_input(t('daily_limit'), min_value=0.25, max_value=100.0, value=5.0, step=0.25)
 sport_limit = st.number_input(t('sport_limit'), min_value=0.25, max_value=100.0, value=3.0, step=0.25)
 
-review_rows = prepare_lock_candidates(normalized, include_watch=include_watch, strict=False, require_future=True)
+with st.expander(t('shortlist'), expanded=True):
+    c1, c2, c3, c4 = st.columns(4)
+    use_shortlist = c1.checkbox(t('use_shortlist'), value=True)
+    max_shortlist = c2.number_input(t('max_shortlist'), min_value=1, max_value=250, value=25, step=5)
+    min_shortlist_prob = c3.number_input(t('min_shortlist_prob'), min_value=0.0, max_value=0.99, value=0.58, step=0.01)
+    min_shortlist_score = c4.number_input(t('min_shortlist_score'), min_value=0.0, max_value=100.0, value=60.0, step=1.0)
+
+working = shortlist_frame(
+    normalized,
+    use_shortlist=bool(use_shortlist),
+    max_rows=int(max_shortlist),
+    min_probability=float(min_shortlist_prob),
+    min_score=float(min_shortlist_score),
+)
+review_rows = prepare_lock_candidates(working, include_watch=include_watch, strict=False, require_future=True)
 candidates = review_rows[review_rows.get('official_lock_ready', pd.Series(dtype=bool)).fillna(False)].copy() if not review_rows.empty else pd.DataFrame()
 existing_locked = filter_locked_proof_rows(pd.DataFrame(st.session_state.get('odds_lock_pro_locked_rows', [])))
 uploaded_locked = filter_locked_proof_rows(normalized) if has_proof_fields(normalized) else pd.DataFrame()
 
-status_cols = st.columns(4)
+status_cols = st.columns(5)
 status_cols[0].metric(t('input_rows'), int(len(normalized)))
-status_cols[1].metric(t('reviewed'), int(len(review_rows)))
-status_cols[2].metric(t('official_candidates'), int(len(candidates)))
-status_cols[3].metric(t('uploaded_locked'), int(len(uploaded_locked)))
+status_cols[1].metric(t('shortlisted'), int(len(working)))
+status_cols[2].metric(t('reviewed'), int(len(review_rows)))
+status_cols[3].metric(t('official_candidates'), int(len(candidates)))
+status_cols[4].metric(t('uploaded_locked'), int(len(uploaded_locked)))
 
 if st.button(t('lock'), type='primary', use_container_width=True):
-    locked = lock_rows(normalized, analyst=analyst, max_units=float(max_units), include_watch=include_watch, strict=True, require_future=True)
+    locked = lock_rows(working, analyst=analyst, max_units=float(max_units), include_watch=include_watch, strict=True, require_future=True)
     if locked.empty:
         st.error(t('lock_not_created'))
         st.warning(t('lock_not_created_no_review') if review_rows.empty else t('lock_not_created_detail'))
@@ -288,7 +375,7 @@ with tabs[0]:
             st.subheader(t('blocked_preview'))
             st.dataframe(review_rows[cols] if cols else review_rows, use_container_width=True, hide_index=True)
     else:
-        show_cols = [col for col in ['event', 'sport', 'market_type', 'prediction', 'model_probability', 'decimal_price', 'bookmaker', 'agent_decision', 'agent_score', 'scanner_strength_score', 'model_edge', 'stake_units', 'prelock_status', 'official_lock_ready', 'public_confidence', 'public_reason'] if col in candidates.columns]
+        show_cols = [col for col in ['event', 'sport', 'market_type', 'prediction', 'model_probability', 'decimal_price', 'bookmaker', 'odds_source', 'agent_decision', 'agent_score', 'scanner_strength_score', 'model_edge', 'stake_units', 'prelock_status', 'official_lock_ready', 'public_confidence', 'public_reason'] if col in candidates.columns]
         st.dataframe(candidates[show_cols] if show_cols else candidates, use_container_width=True, hide_index=True)
 
 with tabs[1]:
