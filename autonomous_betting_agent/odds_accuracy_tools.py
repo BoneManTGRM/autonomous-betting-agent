@@ -11,9 +11,20 @@ DISPLAY_COLUMNS = [
     'event', 'sport', 'market_type', 'prediction', 'model_probability', 'decimal_price',
     'bookmaker', 'bookmaker_count', 'books', 'market_implied_probability', 'no_vig_implied_probability',
     'market_hold', 'fair_decimal_price', 'fair_american_price', 'edge_probability', 'edge_percent',
-    'expected_value_per_unit', 'value_rating', 'odds_accuracy_score', 'odds_quality_flags',
+    'expected_value_per_unit', 'expected_value_percent', 'price_vs_fair_percent', 'closing_decimal_price',
+    'closing_value_percent', 'beat_closing_price', 'value_rating', 'odds_trust_grade', 'recommended_action',
+    'odds_accuracy_score', 'odds_quality_flags', 'needed_info', 'manual_context_risk',
     'manual_probability_adjustment', 'manual_context_notes', 'event_start_utc',
 ]
+
+ACTION_ORDER = {
+    'lock_candidate': 1,
+    'shortlist_review': 2,
+    'watch_only': 3,
+    'needs_more_info': 4,
+    'rescan_prices': 5,
+    'skip': 6,
+}
 
 
 def _num(value: Any) -> float | None:
@@ -101,23 +112,95 @@ def _field_score(row: dict[str, Any]) -> tuple[int, list[str]]:
     return score, flags
 
 
-def _value_rating(edge: float | None, ev: float | None, quality: int) -> str:
+def _manual_context_risk(row: dict[str, Any]) -> str:
+    adjustment = _num(row.get('manual_probability_adjustment')) or 0.0
+    confidence = _num(row.get('manual_context_confidence'))
+    notes = safe_text(row.get('manual_context_notes'))
+    adjustment_abs = abs(adjustment)
+    if adjustment_abs > 1.0:
+        adjustment_abs /= 100.0
+    if adjustment_abs >= 0.05 and not notes:
+        return 'large_adjustment_without_notes'
+    if adjustment_abs >= 0.04 and confidence is not None and confidence < 60:
+        return 'large_adjustment_low_confidence'
+    if adjustment_abs >= 0.03 and not notes:
+        return 'manual_notes_recommended'
+    return 'ok' if adjustment_abs > 0 else ''
+
+
+def _needed_info(flags: str, row: dict[str, Any]) -> str:
+    needed: list[str] = []
+    flag_text = safe_text(flags)
+    mapping = {
+        'missing_model_probability': 'model probability',
+        'missing_decimal_price': 'decimal odds/current price',
+        'missing_event_start': 'event start time',
+        'missing_or_invalid_event_start': 'valid event start time',
+        'missing_book_count': 'book count / market depth',
+        'missing_bookmaker': 'bookmaker/source',
+        'event_started_or_finished': 'future event only for locking',
+        'high_market_hold': 'better price or lower-hold market',
+        'wide_price_range': 'confirm best available price',
+    }
+    for key, label in mapping.items():
+        if key in flag_text and label not in needed:
+            needed.append(label)
+    if not safe_text(row.get('manual_context_notes')) and safe_text(row.get('manual_probability_adjustment')):
+        needed.append('manual adjustment notes')
+    return '; '.join(needed)
+
+
+def _value_rating(edge: float | None, ev: float | None, quality: int, manual_risk: str) -> str:
     if edge is None or ev is None:
         return 'insufficient_data'
     if quality < 55:
         return 'data_too_weak'
+    if manual_risk and manual_risk != 'ok':
+        return 'manual_review_needed'
     if edge >= 0.075 and ev >= 0.08 and quality >= 75:
         return 'premium_value'
     if edge >= 0.04 and ev > 0:
         return 'positive_value'
     if edge >= 0.015 and ev > -0.02:
         return 'thin_value_watch'
-    if edge < 0:
+    if edge < 0 or ev < -0.02:
         return 'negative_value'
     return 'fair_or_no_edge'
 
 
-def _quality_score(row: dict[str, Any], implied: float | None, probability: float | None, hold: float | None, now: datetime) -> tuple[int, str]:
+def _trust_grade(quality: int, edge: float | None, ev: float | None, future: bool, manual_risk: str) -> str:
+    if quality < 45 or edge is None or ev is None:
+        return 'D'
+    if manual_risk and manual_risk not in {'ok', ''}:
+        return 'C-manual-review'
+    if quality >= 85 and future and edge >= 0.075 and ev >= 0.08:
+        return 'A+'
+    if quality >= 75 and future and edge >= 0.04 and ev > 0:
+        return 'A'
+    if quality >= 65 and edge >= 0.025 and ev > -0.01:
+        return 'B'
+    if quality >= 55:
+        return 'C'
+    return 'D'
+
+
+def _recommended_action(grade: str, flags: str, value_rating: str, future: bool) -> str:
+    if not future:
+        return 'skip'
+    if grade in {'A+', 'A'} and value_rating in {'premium_value', 'positive_value'}:
+        return 'lock_candidate'
+    if grade == 'B' and value_rating in {'positive_value', 'thin_value_watch'}:
+        return 'shortlist_review'
+    if 'missing_decimal_price' in flags or 'missing_book_count' in flags or 'wide_price_range' in flags:
+        return 'rescan_prices'
+    if 'missing_model_probability' in flags or 'missing_or_invalid_event_start' in flags:
+        return 'needs_more_info'
+    if value_rating in {'negative_value', 'data_too_weak'}:
+        return 'skip'
+    return 'watch_only'
+
+
+def _quality_score(row: dict[str, Any], implied: float | None, probability: float | None, hold: float | None, now: datetime) -> tuple[int, str, bool]:
     score, flags = _field_score(row)
     if probability is not None:
         score += 10
@@ -133,9 +216,11 @@ def _quality_score(row: dict[str, Any], implied: float | None, probability: floa
     else:
         flags.append('missing_book_count')
     start = _parse_time(row.get('event_start_utc'))
+    future = False
     if start is None:
         flags.append('missing_or_invalid_event_start')
     elif start > now:
+        future = True
         score += 8
     else:
         flags.append('event_started_or_finished')
@@ -154,7 +239,11 @@ def _quality_score(row: dict[str, Any], implied: float | None, probability: floa
         score += 4
     if safe_text(row.get('closing_decimal_price')):
         score += 4
-    return int(max(0, min(100, score))), '; '.join(flags)
+    manual_risk = _manual_context_risk(row)
+    if manual_risk and manual_risk not in {'ok', ''}:
+        flags.append(manual_risk)
+        score -= 8
+    return int(max(0, min(100, score))), '; '.join(sorted(set(flags))), future
 
 
 def enrich_odds_accuracy(frame: pd.DataFrame | list[dict[str, Any]]) -> pd.DataFrame:
@@ -177,23 +266,34 @@ def enrich_odds_accuracy(frame: pd.DataFrame | list[dict[str, Any]]) -> pd.DataF
     data['_implied_tmp'] = implied_values
     data['_prob_tmp'] = probabilities
     group_sum = data.groupby('_group_key')['_implied_tmp'].transform(lambda values: pd.to_numeric(values, errors='coerce').sum())
+    group_count = data.groupby('_group_key')['_implied_tmp'].transform(lambda values: pd.to_numeric(values, errors='coerce').notna().sum())
     now = datetime.now(timezone.utc)
     rows: list[dict[str, Any]] = []
     for idx, row in enumerate(data.to_dict(orient='records')):
         item = dict(row)
         price = _price(item.get('decimal_price') or item.get('best_price') or item.get('odds'))
+        closing_price = _price(item.get('closing_decimal_price'))
         probability = item.get('_prob_tmp')
         implied = item.get('_implied_tmp')
         total_implied = float(group_sum.iloc[idx]) if idx < len(group_sum) and pd.notna(group_sum.iloc[idx]) else 0.0
-        no_vig = round(float(implied) / total_implied, 6) if implied is not None and total_implied > 1.0 else None
-        hold = round(total_implied - 1.0, 6) if total_implied > 1.0 else None
+        outcomes_in_group = int(group_count.iloc[idx]) if idx < len(group_count) and pd.notna(group_count.iloc[idx]) else 0
+        no_vig = round(float(implied) / total_implied, 6) if implied is not None and total_implied > 1.0 and outcomes_in_group >= 2 else None
+        hold = round(total_implied - 1.0, 6) if total_implied > 1.0 and outcomes_in_group >= 2 else None
         edge_base = no_vig if no_vig is not None else implied
         edge = round(float(probability) - float(edge_base), 6) if probability is not None and edge_base is not None else None
         ev = round(float(probability) * float(price) - 1.0, 6) if probability is not None and price is not None else None
         fair_decimal = round(1.0 / probability, 4) if probability is not None and probability > 0 else None
-        quality, flags = _quality_score(item, implied, probability, hold, now)
+        price_vs_fair = round(price / fair_decimal - 1.0, 6) if price is not None and fair_decimal is not None and fair_decimal > 0 else None
+        clv = round(price / closing_price - 1.0, 6) if price is not None and closing_price is not None and closing_price > 1.0 else None
+        manual_risk = _manual_context_risk(item)
+        quality, flags, future = _quality_score(item, implied, probability, hold, now)
+        rating = _value_rating(edge, ev, quality, manual_risk)
+        grade = _trust_grade(quality, edge, ev, future, manual_risk)
+        action = _recommended_action(grade, flags, rating, future)
         if price is not None:
             item['decimal_price'] = round(price, 6)
+        if closing_price is not None:
+            item['closing_decimal_price'] = round(closing_price, 6)
         if probability is not None:
             item['model_probability'] = round(float(probability), 6)
             item['model_probability_clean'] = round(float(probability), 6)
@@ -206,15 +306,27 @@ def enrich_odds_accuracy(frame: pd.DataFrame | list[dict[str, Any]]) -> pd.DataF
         item['edge_percent'] = None if edge is None else round(edge * 100.0, 3)
         item['expected_value_per_unit'] = ev
         item['expected_value_percent'] = None if ev is None else round(ev * 100.0, 3)
+        item['price_vs_fair_percent'] = None if price_vs_fair is None else round(price_vs_fair * 100.0, 3)
+        item['closing_value_percent'] = None if clv is None else round(clv * 100.0, 3)
+        item['beat_closing_price'] = None if clv is None else bool(clv > 0)
         item['odds_accuracy_score'] = quality
         item['odds_quality_flags'] = flags
-        item['value_rating'] = _value_rating(edge, ev, quality)
+        item['needed_info'] = _needed_info(flags, item)
+        item['manual_context_risk'] = manual_risk
+        item['value_rating'] = rating
+        item['odds_trust_grade'] = grade
+        item['recommended_action'] = action
+        item['recommended_action_rank'] = ACTION_ORDER.get(action, 99)
         item['book_count_normalized'] = _book_count(item)
         item.pop('_group_key', None)
         item.pop('_implied_tmp', None)
         item.pop('_prob_tmp', None)
         rows.append(item)
-    return pd.DataFrame(rows)
+    out = pd.DataFrame(rows)
+    sort_cols = [col for col in ['recommended_action_rank', 'odds_accuracy_score', 'expected_value_per_unit', 'edge_probability'] if col in out.columns]
+    if sort_cols:
+        out = out.sort_values(sort_cols, ascending=[True, False, False, False]).reset_index(drop=True)
+    return out
 
 
 def odds_accuracy_summary(frame: pd.DataFrame | list[dict[str, Any]]) -> dict[str, Any]:
@@ -225,6 +337,11 @@ def odds_accuracy_summary(frame: pd.DataFrame | list[dict[str, Any]]) -> dict[st
             'avg_odds_accuracy_score': None,
             'positive_ev_rows': 0,
             'premium_value_rows': 0,
+            'positive_value_rows': 0,
+            'lock_candidate_rows': 0,
+            'shortlist_review_rows': 0,
+            'needs_more_info_rows': 0,
+            'rescan_price_rows': 0,
             'missing_price_rows': 0,
             'missing_probability_rows': 0,
             'future_rows': 0,
@@ -232,6 +349,7 @@ def odds_accuracy_summary(frame: pd.DataFrame | list[dict[str, Any]]) -> dict[st
     quality = pd.to_numeric(data.get('odds_accuracy_score', pd.Series(dtype=float)), errors='coerce')
     ev = pd.to_numeric(data.get('expected_value_per_unit', pd.Series(dtype=float)), errors='coerce')
     rating = data.get('value_rating', pd.Series(dtype=str)).astype(str)
+    action = data.get('recommended_action', pd.Series(dtype=str)).astype(str)
     price = pd.to_numeric(data.get('decimal_price', pd.Series(dtype=float)), errors='coerce')
     probability = pd.to_numeric(data.get('model_probability', pd.Series(dtype=float)), errors='coerce')
     now = datetime.now(timezone.utc)
@@ -246,6 +364,10 @@ def odds_accuracy_summary(frame: pd.DataFrame | list[dict[str, Any]]) -> dict[st
         'positive_ev_rows': int((ev > 0).sum()),
         'premium_value_rows': int(rating.eq('premium_value').sum()),
         'positive_value_rows': int(rating.isin(['premium_value', 'positive_value']).sum()),
+        'lock_candidate_rows': int(action.eq('lock_candidate').sum()),
+        'shortlist_review_rows': int(action.eq('shortlist_review').sum()),
+        'needs_more_info_rows': int(action.eq('needs_more_info').sum()),
+        'rescan_price_rows': int(action.eq('rescan_prices').sum()),
         'missing_price_rows': int(price.isna().sum()),
         'missing_probability_rows': int(probability.isna().sum()),
         'future_rows': int(future_rows),
