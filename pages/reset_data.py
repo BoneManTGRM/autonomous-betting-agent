@@ -19,10 +19,15 @@ SESSION_KEYS = [
     'pro_predictor_high_confidence_rows',
     'pro_predictor_latest_rows',
     'what_are_the_odds_latest_rows',
+    'game_intelligence_latest_rows',
+    'command_center_latest_rows',
     'odds_lock_pro_locked_rows',
     'ara_latest_predictions',
     'ara_latest_predictions_source',
     'ara_latest_predictions_saved_at',
+    'buyer_demo_rows',
+    'daily_workflow_locked_rows',
+    'public_proof_dashboard_latest_rows',
 ]
 
 st.set_page_config(page_title='Reset Data', layout='wide')
@@ -34,7 +39,7 @@ TEXT = {
         'caption': 'Clear old session rows, proof ledger rows, or learning memory before starting a cleaner forward test.',
         'warning': 'Use this when the system has changed enough that older rows should not be mixed with the new validation period. Download backups before clearing anything important.',
         'session': 'Clear session rows',
-        'session_help': 'Removes temporary rows from Scanner Pro, Pro Predictor, What Are the Odds, Odds Lock Pro, and handoff state. It does not delete saved CSV files.',
+        'session_help': 'Removes temporary rows from Scanner Pro, Pro Predictor, What Are the Odds, Game Intelligence, Command Center, Odds Lock Pro, and handoff state. It does not delete downloaded CSV files.',
         'clear_session': 'Clear current session rows',
         'session_done': 'Session rows cleared.',
         'ledger': 'Clear persistent proof ledger',
@@ -57,7 +62,7 @@ TEXT = {
         'caption': 'Borra filas viejas de sesión, ledger de prueba o memoria de aprendizaje antes de empezar una validación limpia.',
         'warning': 'Úsalo cuando el sistema cambió bastante y no quieres mezclar filas viejas con el nuevo periodo de validación. Descarga respaldos antes de borrar algo importante.',
         'session': 'Borrar filas de sesión',
-        'session_help': 'Quita filas temporales de Scanner Pro, Predictor Pro, What Are the Odds, Odds Lock Pro y handoff. No borra CSVs descargados.',
+        'session_help': 'Quita filas temporales de Scanner Pro, Predictor Pro, What Are the Odds, Game Intelligence, Command Center, Odds Lock Pro y handoff. No borra CSVs descargados.',
         'clear_session': 'Borrar filas actuales de sesión',
         'session_done': 'Filas de sesión borradas.',
         'ledger': 'Borrar ledger persistente de prueba',
@@ -91,13 +96,26 @@ def read_csv_if_exists(path: Path) -> pd.DataFrame:
     return pd.DataFrame()
 
 
+def session_item_count() -> int:
+    total = 0
+    for key in SESSION_KEYS:
+        value = st.session_state.get(key)
+        if isinstance(value, list):
+            total += len(value)
+        elif isinstance(value, pd.DataFrame):
+            total += len(value)
+        elif value:
+            total += 1
+    return total
+
+
 st.title(t('title'))
 st.caption(t('caption'))
 st.warning(t('warning'))
 
 st.subheader(t('session'))
 st.info(t('session_help'))
-st.metric(t('rows'), sum(len(st.session_state.get(key) or []) if isinstance(st.session_state.get(key), list) else int(bool(st.session_state.get(key))) for key in SESSION_KEYS))
+st.metric(t('rows'), session_item_count())
 if st.button(t('clear_session'), use_container_width=True):
     for key in SESSION_KEYS:
         st.session_state.pop(key, None)
@@ -117,7 +135,8 @@ if st.button(t('clear_ledger'), use_container_width=True, disabled=ledger_confir
     PERSISTENT_LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
     if PERSISTENT_LEDGER_PATH.exists():
         PERSISTENT_LEDGER_PATH.unlink()
-    st.session_state.pop('odds_lock_pro_locked_rows', None)
+    for key in ['odds_lock_pro_locked_rows', 'daily_workflow_locked_rows', 'public_proof_dashboard_latest_rows']:
+        st.session_state.pop(key, None)
     st.success(t('ledger_done'))
 
 st.divider()
