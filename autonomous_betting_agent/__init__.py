@@ -35,34 +35,37 @@ def _install_streamlit_helpers() -> None:
         'global_language', 'app_language', 'language_settings_language', 'start_here_language',
         'tool_command_center_language', 'command_center_language', 'game_intelligence_language',
         'deployment_health_language', 'scanner_pro_language', 'pro_predictor_language',
-        'what_are_the_odds_language', 'what_are_the_odds_pro_language', 'odds_lock_pro_language',
-        'public_proof_dashboard_language', 'auto_result_grading_language', 'daily_workflow_language',
-        'learning_memory_language', 'learn_memory_language', 'monthly_license_readiness_language',
-        'buyer_demo_mode_language', 'daily_operator_checklist_language', 'private_beta_sales_dashboard_language',
-        'reset_data_language',
+        'ultra80_profit_mode_language', 'what_are_the_odds_language', 'what_are_the_odds_pro_language',
+        'odds_lock_pro_language', 'public_proof_dashboard_language', 'auto_result_grading_language',
+        'daily_workflow_language', 'learning_memory_language', 'learn_memory_language',
+        'monthly_license_readiness_language', 'buyer_demo_mode_language',
+        'daily_operator_checklist_language', 'private_beta_sales_dashboard_language', 'reset_data_language',
     ]
 
     tools: tuple[tuple[str, str, str], ...] = (
         ('Scanner Pro', 'Scanner Pro', 'pages/scanner_pro.py'),
         ('Pro Predictor', 'Predictor Pro', 'pages/pro_predictor.py'),
+        ('Ultra 80 Profit Mode', 'Modo Ultra 80 Rentable', 'pages/ultra80_profit_mode.py'),
         ('What Are the Odds', 'Cuotas y Valor', 'pages/what_are_the_odds.py'),
         ('Odds Lock Pro', 'Bloqueo de Cuotas Pro', 'pages/odds_lock_pro.py'),
         ('Public Proof Dashboard', 'Dashboard Público de Prueba', 'pages/public_proof_dashboard.py'),
         ('Learning Memory', 'Memoria de Aprendizaje', 'pages/learn_memory.py'),
     )
     notes_en = (
-        'Commercial workflow: Scanner Pro → Pro Predictor → What Are the Odds → Odds Lock Pro → Public Proof Dashboard → Learning Memory.',
+        'Commercial workflow: Scanner Pro → Pro Predictor → Ultra 80 Profit Mode → What Are the Odds → Odds Lock Pro → Public Proof Dashboard → Learning Memory.',
         'Use Scanner Pro for live market discovery.',
         'Use Pro Predictor for final all-sports prediction scoring.',
+        'Use Ultra 80 Profit Mode for the strict 80%+ and positive-profit shortlist.',
         'Use What Are the Odds for market/value review, CLV, loss autopsy, and lock-ready candidates.',
         'Use Odds Lock Pro to create timestamped proof rows before results are known.',
         'Use Public Proof Dashboard for client-safe metrics, result uploads, persistent ledger storage, and report cards.',
         'Use Learning Memory for durable training and saved model memory.',
     )
     notes_es = (
-        'Flujo comercial: Scanner Pro → Predictor Pro → Cuotas y Valor → Bloqueo de Cuotas Pro → Dashboard Público de Prueba → Memoria de Aprendizaje.',
+        'Flujo comercial: Scanner Pro → Predictor Pro → Modo Ultra 80 Rentable → Cuotas y Valor → Bloqueo de Cuotas Pro → Dashboard Público de Prueba → Memoria de Aprendizaje.',
         'Usa Scanner Pro para descubrir mercados en vivo.',
         'Usa Predictor Pro para la calificación final de predicciones en todos los deportes.',
+        'Usa Modo Ultra 80 Rentable para la lista estricta de 80%+ y ganancia positiva.',
         'Usa Cuotas y Valor para revisar mercado, valor, CLV, autopsia de pérdidas y candidatos listos para bloquear.',
         'Usa Bloqueo de Cuotas Pro para crear filas de prueba con timestamp antes de conocer resultados.',
         'Usa Dashboard Público de Prueba para métricas seguras para clientes, resultados, ledger persistente y tarjetas de reporte.',
@@ -79,6 +82,8 @@ def _install_streamlit_helpers() -> None:
         'closing_decimal_price': 'cuota_cierre_decimal', 'closing_value_percent': 'clv_pct',
         'beat_closing_price': 'supero_cierre', 'hit_rate': 'tasa_acierto', 'wins': 'victorias', 'losses': 'derrotas',
         'resolved': 'resueltos', 'pending': 'pendientes', 'profit_units': 'unidades_ganancia', 'stake_units': 'unidades_apostadas',
+        'ultra80_candidate': 'candidato_ultra80', 'ultra80_profit_mode': 'modo_ultra80_rentable',
+        'ultra80_profit_at_80_percent': 'ganancia_al_80_pct', 'ultra80_reasons': 'razones_ultra80',
     }
     es_values = {
         'win': 'victoria', 'loss': 'derrota', 'void': 'nulo', 'pending': 'pendiente', 'unknown': 'pendiente',
@@ -87,7 +92,7 @@ def _install_streamlit_helpers() -> None:
         'no_action': 'sin_accion', 'review_needed': 'requiere_revision', 'lock_candidate': 'candidato_bloqueo',
         'shortlist_review': 'revisar_lista_corta', 'needs_more_info': 'falta_mas_info', 'rescan_prices': 'reescanear_cuotas',
         'skip': 'omitir', 'rough_learning_memory': 'memoria_inicial', 'usable_learning_memory': 'memoria_utilizable',
-        'strong_learning_memory': 'memoria_fuerte', 'not_ready': 'no_lista',
+        'strong_learning_memory': 'memoria_fuerte', 'not_ready': 'no_lista', 'PASS': 'APROBADO', 'FAIL': 'RECHAZADO',
     }
 
     def normalize_language(value: object) -> str:
