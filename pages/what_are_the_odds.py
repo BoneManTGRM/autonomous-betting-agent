@@ -29,38 +29,40 @@ TEXT = {
     'en': {
         'title': 'What Are the Odds',
         'caption': 'The pro market/value command board. It combines Scanner Pro strength, Pro Predictor probabilities, manual context, odds-quality scoring, EV, CLV, loss review, walk-forward validation, and sport routing.',
-        'info': 'Use this as the single market/value finder. Best Board is the main operating board before Odds Lock. Accuracy improves when rows include probability, price, bookmaker/source, book count, event start, closing price, and manual context notes.',
+        'info': 'For one game, fill out the Single Game Manual Check fields below. For large files or pasted CSVs, open Advanced CSV / bulk input.',
         'workflow': 'Clean path: Scanner Pro → Pro Predictor → What Are the Odds → Odds Lock → Public Proof Dashboard → Learning Memory.',
+        'advanced_bulk': 'Advanced CSV / bulk input',
+        'bulk_help': 'Use this only when you already have a CSV file or want to paste multiple rows. For one game, use the form fields above.',
         'upload': 'Upload CSV file(s)',
         'paste': 'Or paste CSV text',
         'use_session': 'Use latest Scanner Pro / Pro Predictor session rows',
-        'waiting': 'Upload CSVs, paste CSV text, use latest session rows, or submit a single-game manual check.',
+        'waiting': 'Fill and submit the single-game form, use latest session rows, upload CSVs, or paste CSV text.',
         'single_game': 'Single Game Manual Check',
-        'single_game_help': 'Use this when you only want to ask about one game. It creates one auditable row, runs the same odds accuracy/EV/agent decision logic, and can be handed to Odds Lock Pro if the event is still in the future.',
-        'single_enable': 'Use single-game manual mode',
+        'single_game_help': 'Type one game here. The app will create one auditable row, calculate implied probability, EV, edge, odds quality, confidence tier, agent decision, and lock eligibility.',
         'single_event': 'Game / event name',
         'single_sport': 'Sport / league',
         'single_market': 'Market type',
         'single_pick': 'Pick / prediction',
         'single_start': 'Event start UTC',
-        'single_start_help': 'Use ISO format, for example 2026-06-16T23:00:00Z. Future start time is required for official proof locking.',
+        'single_start_help': 'Use ISO format, for example 2026-06-17T23:10:00Z. Future start time is required for official proof locking.',
         'single_decimal': 'Decimal odds',
         'single_american': 'American odds',
-        'single_probability': 'Model probability',
+        'single_probability': 'Model probability %',
         'single_bookmaker': 'Bookmaker / source',
         'single_books': 'Book count',
         'single_closing': 'Closing decimal price, if known',
-        'single_manual_adj': 'Single-game manual probability adjustment, percentage points',
-        'single_notes': 'Single-game notes: injuries, lineup, weather, rest, travel, motivation, market news',
+        'single_manual_adj': 'Manual probability adjustment, percentage points',
+        'single_notes': 'Notes: injuries, lineup, weather, rest, travel, motivation, market news',
         'single_submit': 'Analyze this single game',
         'single_loaded': 'Single-game manual row added to this analysis.',
-        'single_missing': 'Single-game mode is on, but the row was not submitted or is missing event, pick, odds, or probability.',
+        'single_missing': 'Missing required fields. Enter at least event, pick, model probability, and decimal or American odds.',
+        'single_tip': 'Minimum needed: event, pick, model probability, odds, bookmaker/source, and future start time if you want official proof.',
         'min_edge': 'Minimum model-vs-market edge',
         'strong_edge': 'Strong edge threshold',
         'min_strength': 'Minimum scanner strength',
         'min_train_rows': 'Walk-forward minimum training rows',
         'manual_context': 'Manual context / expert override',
-        'manual_help': 'Use this when the APIs are missing information such as injuries, lineup confirmation, weather, travel, rest, motivation, or market news. Positive values increase model probability; negative values reduce it. Keep adjustments small unless you have strong evidence.',
+        'manual_help': 'Optional global adjustment for all loaded rows. Positive values increase model probability; negative values reduce it. Keep adjustments small unless you have strong evidence.',
         'apply_manual': 'Apply manual context to model probability',
         'global_adj': 'Global probability adjustment, percentage points',
         'manual_confidence': 'Manual context confidence',
@@ -104,24 +106,25 @@ TEXT = {
     'es': {
         'title': 'What Are the Odds',
         'caption': 'Tablero pro de mercado/valor. Combina fuerza de Scanner Pro, probabilidades de Predictor Pro, contexto manual, calidad de cuotas, EV, CLV, revisión de pérdidas, walk-forward y rutas por deporte.',
-        'info': 'Usa esta como la única página para buscar mercado/valor. Best Board es el tablero principal antes de Odds Lock. La precisión mejora cuando las filas incluyen probabilidad, cuota, casa/fuente, número de casas, inicio del evento, cierre y notas manuales.',
+        'info': 'Para un solo juego, llena los campos de Revisión Manual abajo. Para archivos grandes o CSV pegado, abre Entrada CSV / masiva avanzada.',
         'workflow': 'Ruta limpia: Scanner Pro → Predictor Pro → What Are the Odds → Odds Lock → Dashboard Público → Memoria.',
+        'advanced_bulk': 'Entrada CSV / masiva avanzada',
+        'bulk_help': 'Usa esto solo cuando ya tienes un archivo CSV o quieres pegar varias filas. Para un juego, usa los campos de arriba.',
         'upload': 'Subir archivo(s) CSV',
         'paste': 'O pegar texto CSV',
         'use_session': 'Usar filas recientes de Scanner Pro / Pro Predictor',
-        'waiting': 'Sube CSVs, pega texto CSV, usa filas recientes o analiza un solo juego manualmente.',
+        'waiting': 'Llena y envía el formulario de un juego, usa filas recientes, sube CSVs o pega CSV.',
         'single_game': 'Revisión Manual de Un Solo Juego',
-        'single_game_help': 'Usa esto cuando solo quieres revisar un juego. Crea una fila auditable, corre la misma lógica de cuotas/EV/decisión y puede pasar a Odds Lock Pro si el evento todavía es futuro.',
-        'single_enable': 'Usar modo manual de un solo juego',
+        'single_game_help': 'Escribe un juego aquí. La app crea una fila auditable y calcula probabilidad implícita, EV, ventaja, calidad de cuotas, tier, decisión del agente y elegibilidad de bloqueo.',
         'single_event': 'Juego / evento',
         'single_sport': 'Deporte / liga',
         'single_market': 'Tipo de mercado',
         'single_pick': 'Pick / pronóstico',
         'single_start': 'Inicio del evento UTC',
-        'single_start_help': 'Usa formato ISO, por ejemplo 2026-06-16T23:00:00Z. La hora futura es obligatoria para prueba oficial.',
+        'single_start_help': 'Usa formato ISO, por ejemplo 2026-06-17T23:10:00Z. La hora futura es obligatoria para prueba oficial.',
         'single_decimal': 'Cuota decimal',
         'single_american': 'Cuota americana',
-        'single_probability': 'Probabilidad del modelo',
+        'single_probability': 'Probabilidad del modelo %',
         'single_bookmaker': 'Casa / fuente',
         'single_books': 'Número de casas',
         'single_closing': 'Cuota decimal de cierre, si existe',
@@ -129,13 +132,14 @@ TEXT = {
         'single_notes': 'Notas: lesiones, alineación, clima, descanso, viaje, motivación, mercado',
         'single_submit': 'Analizar este juego',
         'single_loaded': 'Fila manual de un solo juego agregada al análisis.',
-        'single_missing': 'Modo de un solo juego activado, pero no se envió la fila o falta evento, pick, cuota o probabilidad.',
+        'single_missing': 'Faltan campos. Ingresa evento, pick, probabilidad y cuota decimal o americana.',
+        'single_tip': 'Mínimo necesario: evento, pick, probabilidad, cuota, casa/fuente e inicio futuro si quieres prueba oficial.',
         'min_edge': 'Ventaja mínima modelo-vs-mercado',
         'strong_edge': 'Umbral de ventaja fuerte',
         'min_strength': 'Fuerza mínima del escáner',
         'min_train_rows': 'Mínimo de filas de entrenamiento walk-forward',
         'manual_context': 'Contexto manual / ajuste experto',
-        'manual_help': 'Usa esto cuando las APIs no tengan información como lesiones, alineación, clima, viaje, descanso, motivación o noticias del mercado. Valores positivos suben la probabilidad; negativos la bajan. Mantén ajustes pequeños salvo evidencia fuerte.',
+        'manual_help': 'Ajuste global opcional para todas las filas. Valores positivos suben la probabilidad; negativos la bajan. Mantén ajustes pequeños salvo evidencia fuerte.',
         'apply_manual': 'Aplicar contexto manual a la probabilidad del modelo',
         'global_adj': 'Ajuste global de probabilidad, puntos porcentuales',
         'manual_confidence': 'Confianza del contexto manual',
@@ -260,92 +264,92 @@ def session_rows() -> tuple[str, list[dict]]:
 
 def read_inputs() -> tuple[str, pd.DataFrame]:
     label, rows = session_rows()
-    use_session = st.checkbox(t('use_session'), value=bool(rows))
     frames: list[pd.DataFrame] = []
     names: list[str] = []
+    use_session = st.checkbox(t('use_session'), value=bool(rows))
     if use_session and rows:
         frames.append(pd.DataFrame(rows))
         names.append(label or 'session_rows')
-    uploads = st.file_uploader(t('upload'), type=['csv'], accept_multiple_files=True)
-    pasted = st.text_area(t('paste'), height=120)
-    if uploads:
-        for upload in uploads:
+    with st.expander(t('advanced_bulk'), expanded=False):
+        st.caption(t('bulk_help'))
+        uploads = st.file_uploader(t('upload'), type=['csv'], accept_multiple_files=True)
+        pasted = st.text_area(t('paste'), height=120)
+        if uploads:
+            for upload in uploads:
+                try:
+                    frame = pd.read_csv(upload)
+                    frame['source_file'] = upload.name
+                    frames.append(frame)
+                    names.append(upload.name)
+                except Exception as exc:
+                    st.warning(f'Could not read {upload.name}: {exc}')
+        if pasted.strip():
             try:
-                frame = pd.read_csv(upload)
-                frame['source_file'] = upload.name
+                frame = pd.read_csv(StringIO(pasted.strip()))
+                frame['source_file'] = 'pasted_csv'
                 frames.append(frame)
-                names.append(upload.name)
+                names.append('pasted_csv')
             except Exception as exc:
-                st.warning(f'Could not read {upload.name}: {exc}')
-    if pasted.strip():
-        try:
-            frame = pd.read_csv(StringIO(pasted.strip()))
-            frame['source_file'] = 'pasted_csv'
-            frames.append(frame)
-            names.append('pasted_csv')
-        except Exception as exc:
-            st.warning(f'Could not read pasted CSV: {exc}')
+                st.warning(f'Could not read pasted CSV: {exc}')
     if not frames:
         return '', pd.DataFrame()
     return ', '.join(names), pd.concat(frames, ignore_index=True, sort=False)
 
 
 def single_game_manual_frame() -> tuple[str, pd.DataFrame]:
-    with st.expander(t('single_game'), expanded=True):
-        st.info(t('single_game_help'))
-        enabled = st.checkbox(t('single_enable'), value=False)
-        if not enabled:
-            return '', pd.DataFrame()
-        with st.form('single_game_manual_form', clear_on_submit=False):
-            top = st.columns(2)
-            event = top[0].text_input(t('single_event'), value='')
-            sport = top[1].text_input(t('single_sport'), value='')
-            mid = st.columns(4)
-            market_type = mid[0].selectbox(t('single_market'), ['h2h', 'spreads', 'totals', 'prop', 'other'])
-            prediction = mid[1].text_input(t('single_pick'), value='')
-            event_start = mid[2].text_input(t('single_start'), value='', help=t('single_start_help'))
-            bookmaker = mid[3].text_input(t('single_bookmaker'), value='')
-            odds_cols = st.columns(5)
-            decimal_odds = odds_cols[0].number_input(t('single_decimal'), min_value=0.0, max_value=1000.0, value=0.0, step=0.01)
-            american_odds = odds_cols[1].number_input(t('single_american'), min_value=-5000.0, max_value=5000.0, value=0.0, step=5.0)
-            model_probability = odds_cols[2].number_input(t('single_probability'), min_value=0.0, max_value=100.0, value=0.0, step=0.5)
-            book_count = odds_cols[3].number_input(t('single_books'), min_value=0, max_value=100, value=1, step=1)
-            closing_price = odds_cols[4].number_input(t('single_closing'), min_value=0.0, max_value=1000.0, value=0.0, step=0.01)
-            manual_adj = st.slider(t('single_manual_adj'), min_value=-15.0, max_value=15.0, value=0.0, step=0.5)
-            notes = st.text_area(t('single_notes'), height=120)
-            submitted = st.form_submit_button(t('single_submit'), use_container_width=True)
-        if not submitted:
-            return '', pd.DataFrame()
-        price = float(decimal_odds) if float(decimal_odds) > 1.0 else decimal_from_american(american_odds)
-        probability = float(model_probability)
-        if probability > 1.0:
-            probability = probability / 100.0
-        if not event.strip() or not prediction.strip() or price is None or not (0.0 < probability < 1.0):
-            st.warning(t('single_missing'))
-            return '', pd.DataFrame()
-        row = {
-            'event': event.strip(),
-            'sport': sport.strip() or 'manual_single_game',
-            'market_type': market_type,
-            'prediction': prediction.strip(),
-            'event_start_utc': event_start.strip(),
-            'model_probability': round(probability, 6),
-            'model_probability_clean': round(probability, 6),
-            'decimal_price': round(float(price), 6),
-            'bookmaker': bookmaker.strip() or 'manual_source',
-            'odds_source': bookmaker.strip() or 'manual_single_game',
-            'bookmaker_count': int(book_count),
-            'books': int(book_count),
-            'closing_decimal_price': round(float(closing_price), 6) if float(closing_price) > 1.0 else '',
-            'manual_probability_adjustment': round(float(manual_adj) / 100.0, 6),
-            'manual_context_notes': notes.strip(),
-            'single_game_manual': True,
-            'source_file': 'single_game_manual_check',
-            'decision': 'manual_single_game_review',
-            'result_status': 'pending',
-        }
-        st.success(t('single_loaded'))
-        return 'single_game_manual_check', pd.DataFrame([row])
+    st.subheader(t('single_game'))
+    st.info(t('single_game_help'))
+    st.caption(t('single_tip'))
+    with st.form('single_game_manual_form', clear_on_submit=False):
+        top = st.columns(2)
+        event = top[0].text_input(t('single_event'), value='', placeholder='Los Angeles Dodgers at San Diego Padres')
+        sport = top[1].text_input(t('single_sport'), value='', placeholder='MLB, NBA, WNBA, Soccer, Tennis')
+        mid = st.columns(4)
+        market_type = mid[0].selectbox(t('single_market'), ['h2h', 'spreads', 'totals', 'prop', 'other'])
+        prediction = mid[1].text_input(t('single_pick'), value='', placeholder='Los Angeles Dodgers')
+        event_start = mid[2].text_input(t('single_start'), value='', help=t('single_start_help'), placeholder='2026-06-17T23:10:00Z')
+        bookmaker = mid[3].text_input(t('single_bookmaker'), value='', placeholder='DraftKings / FanDuel / Bet365')
+        odds_cols = st.columns(5)
+        decimal_odds = odds_cols[0].number_input(t('single_decimal'), min_value=0.0, max_value=1000.0, value=0.0, step=0.01, help='Example: 1.91')
+        american_odds = odds_cols[1].number_input(t('single_american'), min_value=-5000.0, max_value=5000.0, value=0.0, step=5.0, help='Example: -110 or +135. Used only if decimal odds is blank.')
+        model_probability = odds_cols[2].number_input(t('single_probability'), min_value=0.0, max_value=100.0, value=0.0, step=0.5, help='Example: 62 means 62%.')
+        book_count = odds_cols[3].number_input(t('single_books'), min_value=0, max_value=100, value=1, step=1)
+        closing_price = odds_cols[4].number_input(t('single_closing'), min_value=0.0, max_value=1000.0, value=0.0, step=0.01)
+        manual_adj = st.slider(t('single_manual_adj'), min_value=-15.0, max_value=15.0, value=0.0, step=0.5)
+        notes = st.text_area(t('single_notes'), height=120, placeholder='Example: starting pitcher confirmed, no major injuries, weather normal, price still playable')
+        submitted = st.form_submit_button(t('single_submit'), use_container_width=True)
+    if not submitted:
+        return '', pd.DataFrame()
+    price = float(decimal_odds) if float(decimal_odds) > 1.0 else decimal_from_american(american_odds)
+    probability = float(model_probability)
+    if probability > 1.0:
+        probability = probability / 100.0
+    if not event.strip() or not prediction.strip() or price is None or not (0.0 < probability < 1.0):
+        st.warning(t('single_missing'))
+        return '', pd.DataFrame()
+    row = {
+        'event': event.strip(),
+        'sport': sport.strip() or 'manual_single_game',
+        'market_type': market_type,
+        'prediction': prediction.strip(),
+        'event_start_utc': event_start.strip(),
+        'model_probability': round(probability, 6),
+        'model_probability_clean': round(probability, 6),
+        'decimal_price': round(float(price), 6),
+        'bookmaker': bookmaker.strip() or 'manual_source',
+        'odds_source': bookmaker.strip() or 'manual_single_game',
+        'bookmaker_count': int(book_count),
+        'books': int(book_count),
+        'closing_decimal_price': round(float(closing_price), 6) if float(closing_price) > 1.0 else '',
+        'manual_probability_adjustment': round(float(manual_adj) / 100.0, 6),
+        'manual_context_notes': notes.strip(),
+        'single_game_manual': True,
+        'source_file': 'single_game_manual_check',
+        'decision': 'manual_single_game_review',
+        'result_status': 'pending',
+    }
+    st.success(t('single_loaded'))
+    return 'single_game_manual_check', pd.DataFrame([row])
 
 
 def read_manual_patch(text: str) -> pd.DataFrame:
@@ -450,14 +454,14 @@ st.title(t('title'))
 st.caption(t('caption'))
 st.info(t('info'))
 st.caption(t('workflow'))
-source, raw = read_inputs()
 single_source, single_game = single_game_manual_frame()
+source, raw = read_inputs()
 if raw.empty and not single_game.empty:
     source = single_source
     raw = single_game
 elif not raw.empty and not single_game.empty:
     source = ', '.join([part for part in [source, single_source] if part])
-    raw = pd.concat([raw, single_game], ignore_index=True, sort=False)
+    raw = pd.concat([single_game, raw], ignore_index=True, sort=False)
 if raw.empty:
     st.warning(t('waiting'))
     st.stop()
@@ -467,7 +471,7 @@ strong_edge = st.slider(t('strong_edge'), min_value=0.0, max_value=0.30, value=0
 min_strength = st.slider(t('min_strength'), min_value=0.0, max_value=100.0, value=35.0, step=1.0)
 min_train_rows = st.number_input(t('min_train_rows'), min_value=1, max_value=500, value=10, step=1)
 
-with st.expander(t('manual_context'), expanded=True):
+with st.expander(t('manual_context'), expanded=False):
     st.info(t('manual_help'))
     c1, c2, c3, c4 = st.columns(4)
     apply_manual = c1.checkbox(t('apply_manual'), value=True)
