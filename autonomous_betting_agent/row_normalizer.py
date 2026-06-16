@@ -7,29 +7,39 @@ import pandas as pd
 from .audit import parse_float
 
 ALIASES = {
-    'event': ('event', 'event_name', 'game', 'match', 'fixture'),
-    'sport': ('sport', 'sport_title', 'league', 'competition'),
-    'market_type': ('market_type', 'market', 'bet_type', 'prop_type'),
-    'prediction': ('prediction', 'pick', 'selection', 'predicted_side', 'predicted_winner', 'favorite'),
-    'model_probability': ('model_probability', 'final_probability', 'final_probability_value', 'calibrated_probability', 'probability', 'pick_probability', 'confidence_probability', 'model_probability_clean'),
-    'decimal_price': ('decimal_price', 'best_price', 'decimal_odds', 'odds_decimal', 'odds', 'price', 'sportsbook_odds', 'average_price', 'avg_price'),
+    'event': ('event', 'event_name', 'game', 'match', 'fixture', 'partido'),
+    'sport': ('sport', 'sport_title', 'sport_key', 'league', 'competition', 'deporte'),
+    'market_type': ('market_type', 'market', 'bet_type', 'prop_type', 'tipo_mercado'),
+    'prediction': ('prediction', 'pick', 'selection', 'predicted_side', 'predicted_winner', 'favorite', 'prediccion', 'pronostico'),
+    'model_probability': ('model_probability', 'final_probability', 'final_probability_value', 'calibrated_probability', 'probability', 'pick_probability', 'confidence_probability', 'model_probability_clean', 'probabilidad', 'prob_final'),
+    'decimal_price': ('decimal_price', 'best_price', 'decimal_odds', 'odds_decimal', 'odds', 'price', 'sportsbook_odds', 'average_price', 'avg_price', 'cuota', 'mejor_cuota'),
     'american_odds': ('american_odds', 'american_price', 'moneyline'),
-    'bookmaker': ('bookmaker', 'best_bookmaker', 'sportsbook'),
+    'bookmaker': ('bookmaker', 'best_bookmaker', 'sportsbook', 'book'),
     'odds_source': ('odds_source', 'source', 'source_file'),
     'prediction_timestamp': ('prediction_timestamp', 'locked_at_utc', 'odds_timestamp', 'created_at', 'scan_timestamp'),
     'event_start_utc': ('event_start_utc', 'known_start_utc', 'start', 'commence_time', 'game_start', 'match_start', 'scheduled_start'),
     'odds_timestamp': ('odds_timestamp', 'price_timestamp', 'last_odds_update', 'last_update'),
-    'result_status': ('result_status', 'outcome', 'result', 'win_loss', 'graded_result', 'status'),
-    'winner': ('winner', 'actual_winner', 'winning_side', 'final_winner'),
+    'result_status': ('result_status', 'outcome', 'result', 'win_loss', 'graded_result', 'status', 'resultado'),
+    'winner': ('winner', 'actual_winner', 'winning_side', 'final_winner', 'ganador'),
     'final_score': ('final_score', 'score', 'actual_score', 'result_note'),
     'stake_units': ('stake_units', 'stake'),
+    'recommended_stake_units': ('recommended_stake_units', 'suggested_stake_units'),
     'profit_units': ('profit_units', 'units'),
     'decision': ('decision', 'agent_decision'),
     'confidence_tier': ('confidence_tier', 'confidence', 'confidence_bucket', 'public_confidence'),
+    'volume_tier': ('volume_tier', 'tier', 'ultra80_tier'),
+    'ultra80_candidate': ('ultra80_candidate', 'strict_ultra80_candidate'),
     'api_coverage_score': ('api_coverage_score', 'api_coverage'),
     'books': ('books', 'bookmaker_count', 'source_count', 'bookmakers'),
-    'computed_ev_decimal': ('computed_ev_decimal', 'estimated_ev_decimal', 'estimated_ev_value', 'estimated_ev'),
+    'agent_score': ('agent_score', 'decision_score'),
+    'scanner_strength_score': ('scanner_strength_score', 'scanner_score'),
+    'model_edge': ('model_edge', 'model_market_edge', 'edge_probability', 'edge'),
+    'computed_ev_decimal': ('computed_ev_decimal', 'estimated_ev_decimal', 'estimated_ev_value', 'estimated_ev', 'expected_value_per_unit', 'ev'),
     'closing_decimal_price': ('closing_decimal_price', 'closing_price', 'close_decimal', 'closing_odds'),
+    '_robust_decimal_price': ('_robust_decimal_price', 'robust_decimal_price', 'worst_price'),
+    '_robust_expected_value': ('_robust_expected_value', 'robust_expected_value'),
+    '_robust_profit_at_80_percent': ('_robust_profit_at_80_percent', 'robust_profit_at_80_percent'),
+    '_price_range_risk': ('_price_range_risk', 'price_range_risk', 'price_range'),
 }
 
 RESULT_MAP = {
@@ -41,6 +51,12 @@ RESULT_MAP = {
     'true': 'win',
     'yes': 'win',
     '1': 'win',
+    '1.0': 'win',
+    'ganada': 'win',
+    'gano': 'win',
+    'ganó': 'win',
+    'victoria': 'win',
+    'acierto': 'win',
     'lost': 'loss',
     'loss': 'loss',
     'l': 'loss',
@@ -49,6 +65,12 @@ RESULT_MAP = {
     'false': 'loss',
     'no': 'loss',
     '0': 'loss',
+    '0.0': 'loss',
+    'perdida': 'loss',
+    'perdio': 'loss',
+    'perdió': 'loss',
+    'derrota': 'loss',
+    'fallo': 'loss',
     'void': 'void',
     'push': 'void',
     'cancelled': 'void',
@@ -128,12 +150,17 @@ def normalize_row(row: Mapping[str, Any]) -> dict[str, Any]:
     prob = probability_value(row, 'model_probability')
     if prob is not None:
         out['model_probability'] = round(prob, 6)
-    price = numeric_value(row, 'decimal_price')
-    if price is not None:
-        out['decimal_price'] = round(price, 6)
-    coverage = numeric_value(row, 'api_coverage_score')
-    if coverage is not None:
-        out['api_coverage_score'] = round(coverage / 100.0 if coverage > 1.0 else coverage, 6)
+    for field in (
+        'decimal_price', 'api_coverage_score', 'books', 'agent_score', 'scanner_strength_score',
+        'model_edge', 'computed_ev_decimal', 'closing_decimal_price', '_robust_decimal_price',
+        '_robust_expected_value', '_robust_profit_at_80_percent', '_price_range_risk',
+        'recommended_stake_units', 'stake_units',
+    ):
+        value = numeric_value(row, field)
+        if value is not None:
+            if field == 'api_coverage_score' and value > 1.0:
+                value /= 100.0
+            out[field] = round(value, 6)
     out['result_status'] = result_status(row)
     return out
 
