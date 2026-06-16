@@ -4,6 +4,28 @@ import streamlit as st
 
 SESSION_KEY = 'app_language'
 OPTIONS = ['English', 'Español']
+PAGE_LANGUAGE_KEYS = [
+    'language_settings_language',
+    'tool_command_center_language',
+    'command_center_language',
+    'game_intelligence_language',
+    'deployment_health_language',
+    'scanner_pro_language',
+    'pro_predictor_language',
+    'what_are_the_odds_language',
+    'what_are_the_odds_pro_language',
+    'odds_lock_pro_language',
+    'public_proof_dashboard_language',
+    'auto_result_grading_language',
+    'daily_workflow_language',
+    'learning_memory_language',
+    'learn_memory_language',
+    'monthly_license_readiness_language',
+    'buyer_demo_mode_language',
+    'daily_operator_checklist_language',
+    'private_beta_sales_dashboard_language',
+    'reset_data_language',
+]
 
 
 def _code(value: object) -> str:
@@ -31,6 +53,8 @@ def set_global_language(selected: object) -> str:
     normalized = label(selected)
     st.session_state[SESSION_KEY] = normalized
     st.session_state['global_language'] = normalized
+    for key in PAGE_LANGUAGE_KEYS:
+        st.session_state[key] = normalized
     try:
         st.query_params['lang'] = 'es' if normalized == 'Español' else 'en'
     except Exception:
@@ -38,9 +62,19 @@ def set_global_language(selected: object) -> str:
     return normalized
 
 
+def current_language_label(default: object = 'English') -> str:
+    return label(query_param_language() or st.session_state.get('global_language') or st.session_state.get(SESSION_KEY) or default)
+
+
 def render_language_selector(*, key: str) -> str:
-    current = query_param_language() or st.session_state.get(key) or st.session_state.get('global_language') or st.session_state.get(SESSION_KEY, 'English')
-    current = label(current)
-    selected = st.sidebar.selectbox('Language / Idioma', OPTIONS, index=OPTIONS.index(current), key=key)
+    current = current_language_label()
+    # This intentionally overrides stale page-specific keys. Without this, a page that once defaulted
+    # to English can flip the whole app back to English when the user navigates to it.
+    st.session_state[key] = current
+
+    def _sync_language() -> None:
+        set_global_language(st.session_state.get(key, current))
+
+    selected = st.sidebar.selectbox('Language / Idioma', OPTIONS, index=OPTIONS.index(current), key=key, on_change=_sync_language)
     set_global_language(selected)
     return _code(selected)
