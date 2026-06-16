@@ -96,9 +96,9 @@ def field_coverage_score(row: dict[str, Any]) -> float:
     return round(present / len(fields), 6)
 
 
-def can_lock_candidate(row: dict[str, Any]) -> bool:
+def can_lock_candidate(row: dict[str, Any], *, now_utc: datetime | None = None) -> bool:
     required = ['event', 'prediction', 'model_probability', 'decimal_price', 'event_start_utc']
-    status = event_timing_status(row)
+    status = event_timing_status(row, now_utc=now_utc)
     if status not in {'future_event_not_locked_yet', 'prediction_before_start'}:
         return False
     return all(safe_text(row.get(field)) for field in required)
@@ -149,7 +149,7 @@ def evaluate_row(
     timing = event_timing_status(row, now_utc=now_utc)
     has_lock_time = bool(safe_text(row.get('prediction_timestamp')))
     result_status = safe_text(row.get('result_status')).lower()
-    lock_ready = can_lock_candidate(row)
+    lock_ready = can_lock_candidate(row, now_utc=now_utc)
     odds_ctx = odds_quality_context(row)
     odds_quality = odds_ctx['odds_accuracy_score']
     expected_ev = odds_ctx['expected_value_per_unit']
