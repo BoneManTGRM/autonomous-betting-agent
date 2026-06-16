@@ -7,9 +7,12 @@ from autonomous_betting_agent.commercial_platform_tools import (
     apply_result_updates,
     dashboard_metrics,
     daily_locked_report,
+    demo_ledger,
     filter_locked_proof_rows,
     load_persistent_ledger,
     merge_ledgers,
+    proof_audit_frame,
+    proof_audit_summary,
     public_dashboard_table,
     report_card_html,
     report_card_markdown,
@@ -24,7 +27,8 @@ TEXT = {
     'en': {
         'title': 'Public Proof Dashboard',
         'caption': 'No-login proof dashboard for locked picks, auto-grading uploads, client-safe tables, and shareable report cards.',
-        'info': 'This page does not call sports APIs. It only uses real locked proof rows from the persistent ledger, Odds Lock Pro session rows, or uploaded CSVs with proof_id and locked_at_utc.',
+        'info': 'This page does not call sports APIs. It only uses real locked proof rows from the persistent ledger, Odds Lock Pro session rows, uploaded CSVs with proof_id and locked_at_utc, or demo rows when demo mode is on.',
+        'use_demo': 'Use demo ledger when no real ledger exists',
         'use_db': 'Use persistent ledger database',
         'use_session': 'Use Odds Lock Pro session rows',
         'upload_ledger': 'Upload locked ledger CSV',
@@ -39,6 +43,8 @@ TEXT = {
         'roi': 'ROI',
         'units': 'Units',
         'pending': 'Pending',
+        'clv': 'Avg CLV',
+        'proof_quality': 'Proof quality',
         'valid': 'Valid proof rows',
         'filtered': 'Filtered rows',
         'filters': 'Dashboard filters',
@@ -47,6 +53,7 @@ TEXT = {
         'status_filter': 'Result status filter',
         'table': 'Public ledger table',
         'dashboard': 'Breakdowns',
+        'audit': 'Proof audit',
         'cards': 'Report cards',
         'markdown_card': 'Markdown card',
         'html_card': 'HTML card',
@@ -55,6 +62,7 @@ TEXT = {
         'card_title': 'Card title',
         'download_public': 'Download public proof CSV',
         'download_private': 'Download private audit CSV',
+        'download_audit': 'Download proof audit CSV',
         'download_markdown': 'Download Markdown card',
         'download_html': 'Download HTML card',
         'download_report': 'Download daily report TXT',
@@ -65,7 +73,8 @@ TEXT = {
     'es': {
         'title': 'Dashboard Público de Prueba',
         'caption': 'Dashboard sin contraseña para picks bloqueados, autocalificación por CSV, tablas para clientes y tarjetas compartibles.',
-        'info': 'Esta página no llama APIs deportivas. Solo usa filas bloqueadas reales desde el ledger persistente, filas de Odds Lock Pro en sesión o CSVs con proof_id y locked_at_utc.',
+        'info': 'Esta página no llama APIs deportivas. Solo usa filas bloqueadas reales desde el ledger persistente, filas de Odds Lock Pro en sesión, CSVs con proof_id y locked_at_utc, o filas demo cuando el modo demo está activo.',
+        'use_demo': 'Usar ledger demo si no hay ledger real',
         'use_db': 'Usar base CSV persistente',
         'use_session': 'Usar filas de Odds Lock Pro en sesión',
         'upload_ledger': 'Subir CSV de ledger bloqueado',
@@ -80,6 +89,8 @@ TEXT = {
         'roi': 'ROI',
         'units': 'Unidades',
         'pending': 'Pendientes',
+        'clv': 'CLV prom.',
+        'proof_quality': 'Calidad prueba',
         'valid': 'Filas de prueba válidas',
         'filtered': 'Filas filtradas',
         'filters': 'Filtros del dashboard',
@@ -88,6 +99,7 @@ TEXT = {
         'status_filter': 'Filtro de resultado',
         'table': 'Tabla pública del ledger',
         'dashboard': 'Desgloses',
+        'audit': 'Auditoría de prueba',
         'cards': 'Tarjetas de reporte',
         'markdown_card': 'Tarjeta Markdown',
         'html_card': 'Tarjeta HTML',
@@ -96,6 +108,7 @@ TEXT = {
         'card_title': 'Título de tarjeta',
         'download_public': 'Descargar CSV público',
         'download_private': 'Descargar CSV privado',
+        'download_audit': 'Descargar CSV de auditoría',
         'download_markdown': 'Descargar tarjeta Markdown',
         'download_html': 'Descargar tarjeta HTML',
         'download_report': 'Descargar reporte diario TXT',
@@ -110,8 +123,8 @@ def t(key: str) -> str:
     return TEXT[LANG].get(key, TEXT['en'].get(key, key))
 
 
-def pct(value: float | None) -> str:
-    return 'N/A' if value is None else f'{value * 100:.1f}%'
+def pct(value: float | None, digits: int = 1) -> str:
+    return 'N/A' if value is None else f'{value * 100:.{digits}f}%'
 
 
 def read_sources() -> tuple[str, pd.DataFrame, int]:
@@ -143,6 +156,9 @@ def read_sources() -> tuple[str, pd.DataFrame, int]:
             except Exception as exc:
                 st.warning(f'{upload.name}: {exc}')
     if not frames:
+        if st.checkbox(t('use_demo'), value=True):
+            demo = demo_ledger()
+            return 'demo_ledger', demo, len(demo)
         return '', pd.DataFrame(), 0
     return ', '.join(names), merge_ledgers(*frames), raw_count
 
@@ -186,7 +202,7 @@ if results_upload is not None and not ledger.empty:
     except Exception as exc:
         st.warning(str(exc))
 
-if not ledger.empty and st.button(t('save_db'), use_container_width=True):
+if not ledger.empty and source != 'demo_ledger' and st.button(t('save_db'), use_container_width=True):
     ledger = save_persistent_ledger(ledger)
     st.success('Saved persistent ledger.' if LANG == 'en' else 'Ledger persistente guardado.')
 
@@ -198,11 +214,13 @@ if ledger.empty:
 ledger = update_profit_columns(ledger)
 filtered_ledger = filter_dashboard(ledger)
 metrics = dashboard_metrics(filtered_ledger)
-raw_cols = st.columns(2)
+audit_summary = proof_audit_summary(filtered_ledger)
+raw_cols = st.columns(3)
 raw_cols[0].metric(t('valid'), len(ledger))
 raw_cols[1].metric('Ignored raw/non-proof rows' if LANG == 'en' else 'Filas crudas/no-prueba ignoradas', max(0, raw_count - len(ledger)))
+raw_cols[2].metric(t('proof_quality'), f"{audit_summary['proof_quality_score']}/100")
 
-cols = st.columns(7)
+cols = st.columns(9)
 cols[0].metric(t('rows'), metrics['locked_picks'])
 cols[1].metric(t('resolved'), metrics['resolved_picks'])
 cols[2].metric(t('record'), f"{metrics['wins']}-{metrics['losses']}")
@@ -210,8 +228,10 @@ cols[3].metric(t('hit_rate'), pct(metrics['hit_rate']))
 cols[4].metric(t('roi'), pct(metrics['roi']))
 cols[5].metric(t('units'), metrics['profit_units'])
 cols[6].metric(t('pending'), metrics['pending_picks'])
+cols[7].metric(t('clv'), pct(metrics.get('avg_clv_percent'), 2))
+cols[8].metric('Beat close' if LANG == 'en' else 'Superó cierre', pct(metrics.get('beat_close_rate')))
 
-tabs = st.tabs([t('table'), t('dashboard'), t('cards')])
+tabs = st.tabs([t('table'), t('dashboard'), t('audit'), t('cards')])
 
 with tabs[0]:
     public = public_dashboard_table(filtered_ledger)
@@ -231,18 +251,24 @@ with tabs[1]:
         st.dataframe(by_market, use_container_width=True, hide_index=True)
 
 with tabs[2]:
+    st.json(audit_summary)
+    audit = proof_audit_frame(filtered_ledger)
+    st.dataframe(audit, use_container_width=True, hide_index=True)
+    st.download_button(t('download_audit'), audit.to_csv(index=False), file_name='proof_audit.csv', mime='text/csv')
+
+with tabs[3]:
     brand = st.text_input(t('brand'), value='Private Analytics')
     title = st.text_input(t('card_title'), value='Proof Dashboard')
     markdown = report_card_markdown(filtered_ledger, title=title, brand=brand)
     html = report_card_html(filtered_ledger, title=title, brand=brand)
     report = daily_locked_report(filtered_ledger, language='Español' if LANG == 'es' else 'English')
     st.subheader(t('markdown_card'))
-    st.text_area(t('markdown_card'), value=markdown, height=220)
+    st.text_area(t('markdown_card'), value=markdown, height=240)
     st.download_button(t('download_markdown'), markdown, file_name='proof_dashboard_card.md', mime='text/markdown')
     st.subheader(t('html_card'))
     st.markdown(html, unsafe_allow_html=True)
-    st.text_area(t('html_card'), value=html, height=260)
+    st.text_area(t('html_card'), value=html, height=280)
     st.download_button(t('download_html'), html, file_name='proof_dashboard_card.html', mime='text/html')
     st.subheader(t('daily_report'))
-    st.text_area(t('daily_report'), value=report, height=320)
+    st.text_area(t('daily_report'), value=report, height=340)
     st.download_button(t('download_report'), report, file_name='daily_locked_report.txt', mime='text/plain')
