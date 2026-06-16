@@ -20,7 +20,7 @@ from autonomous_betting_agent.commercial_platform_tools import (
     save_persistent_ledger,
 )
 from autonomous_betting_agent.odds_lock_tools import performance_by_group, update_profit_columns
-from autonomous_betting_agent.row_normalizer import normalize_frame, safe_text
+from autonomous_betting_agent.row_normalizer import normalize_frame
 
 st.set_page_config(page_title='Public Proof Dashboard', layout='wide')
 LANG = 'es' if st.sidebar.selectbox('Language / Idioma', ['English', 'Español'], key='public_proof_dashboard_language') == 'Español' else 'en'
@@ -33,7 +33,7 @@ TEXT = {
         'test_window': 'Test Window ID',
         'test_window_help': 'Use the same ID as Odds Lock Pro, such as test_01. Each ID reads/writes its own proof ledger.',
         'active_test_window': 'Active test ledger',
-        'use_demo': 'Use demo ledger when no real ledger exists',
+        'use_demo': 'Show demo ledger if no real ledger exists',
         'use_db': 'Use this test ledger database',
         'use_session': 'Use Odds Lock Pro session rows',
         'upload_ledger': 'Upload locked ledger or historical tracker CSV',
@@ -86,7 +86,7 @@ TEXT = {
         'test_window': 'ID de ventana de prueba',
         'test_window_help': 'Usa el mismo ID que Odds Lock Pro, como test_01. Cada ID lee/guarda su propio ledger de prueba.',
         'active_test_window': 'Ledger de prueba activo',
-        'use_demo': 'Usar ledger demo si no hay ledger real',
+        'use_demo': 'Mostrar ledger demo si no hay ledger real',
         'use_db': 'Usar esta base de prueba',
         'use_session': 'Usar filas de Odds Lock Pro en sesión',
         'upload_ledger': 'Subir CSV de ledger bloqueado o tracker histórico',
@@ -178,7 +178,7 @@ def read_sources(workspace_id: str) -> tuple[str, pd.DataFrame, pd.DataFrame, in
             except Exception as exc:
                 st.warning(f'{upload.name}: {exc}')
     if not raw_frames:
-        if st.checkbox(t('use_demo'), value=True):
+        if st.checkbox(t('use_demo'), value=False, key='public_proof_use_demo'):
             demo = demo_ledger()
             return 'demo_ledger', demo, demo, len(demo)
         return '', pd.DataFrame(), pd.DataFrame(), 0
