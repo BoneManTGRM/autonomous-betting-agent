@@ -31,9 +31,9 @@ def _install_streamlit_helpers() -> None:
     except Exception:
         return
 
-    if getattr(st, '_aba_streamlit_helpers_v9_installed', False):
+    if getattr(st, '_aba_streamlit_helpers_v10_installed', False):
         return
-    st._aba_streamlit_helpers_v9_installed = True
+    st._aba_streamlit_helpers_v10_installed = True
 
     page_language_keys = [
         'global_language', 'app_language', 'language_settings_language', 'start_here_language',
@@ -50,7 +50,7 @@ def _install_streamlit_helpers() -> None:
     tools: tuple[tuple[str, str, str], ...] = (
         ('Scanner Pro', 'Scanner Pro', 'pages/scanner_pro.py'),
         (APP_NAME, APP_NAME, 'pages/pro_predictor.py'),
-        ('Ultra 80 Profit Mode', 'Modo Ultra 80 Rentable', 'pages/ultra80_profit_mode.py'),
+        ('Ultra 70 Profit Mode', 'Ultra 70 Profit Mode', 'pages/ultra80_profit_mode.py'),
         ('Simulation Lab', 'Laboratorio de Simulación', 'pages/simulation_lab.py'),
         ('Threshold Optimizer', 'Optimizador de Umbrales', 'pages/threshold_optimizer.py'),
         ('What Are the Odds', 'Cuotas y Valor', 'pages/what_are_the_odds.py'),
@@ -60,10 +60,10 @@ def _install_streamlit_helpers() -> None:
         ('Learning Memory', 'Memoria de Aprendizaje', 'pages/learn_memory.py'),
     )
     notes_en = (
-        'Commercial workflow: Scanner Pro → ABA Signal Pro → Ultra 80 Profit Mode → Simulation Lab → Odds Lock Pro → Public Proof Dashboard → Threshold Optimizer → Learning Memory.',
+        'Commercial workflow: Scanner Pro → ABA Signal Pro → Ultra 70 Profit Mode → Odds Lock Pro → Public Proof Dashboard → Threshold Optimizer → Learning Memory.',
         'Use Scanner Pro for live market discovery.',
         'Use ABA Signal Pro for final all-sports prediction scoring.',
-        'Use Ultra 80 Profit Mode for the strict 80%+ and positive-profit shortlist.',
+        'Use Ultra 70 Profit Mode to send 70%+ lockable rows to Odds Lock Pro while keeping strict 80 proof separate.',
         'Use Simulation Lab to stress-test ROI, hit rate, drawdown, and overconfidence risk before locking.',
         'Use Odds Lock Pro to create timestamped proof rows before results are known.',
         'Use Public Proof Dashboard for client-safe metrics, result uploads, persistent ledger storage, and report cards.',
@@ -72,10 +72,10 @@ def _install_streamlit_helpers() -> None:
         'Use Learning Memory for durable training and saved model memory.',
     )
     notes_es = (
-        'Flujo comercial: Scanner Pro → ABA Signal Pro → Modo Ultra 80 Rentable → Laboratorio de Simulación → Bloqueo de Cuotas Pro → Dashboard Público de Prueba → Optimizador de Umbrales → Memoria de Aprendizaje.',
+        'Flujo comercial: Scanner Pro → ABA Signal Pro → Ultra 70 Profit Mode → Bloqueo de Cuotas Pro → Dashboard Público de Prueba → Optimizador de Umbrales → Memoria de Aprendizaje.',
         'Usa Scanner Pro para descubrir mercados en vivo.',
         'Usa ABA Signal Pro para la calificación final de predicciones en todos los deportes.',
-        'Usa Modo Ultra 80 Rentable para la lista estricta de 80%+ y ganancia positiva.',
+        'Usa Ultra 70 Profit Mode para enviar filas bloqueables 70%+ a Odds Lock Pro y mantener la prueba estricta 80 separada.',
         'Usa Laboratorio de Simulación para probar ROI, acierto, drawdown y riesgo de sobreconfianza antes de bloquear.',
         'Usa Bloqueo de Cuotas Pro para crear filas de prueba con timestamp antes de conocer resultados.',
         'Usa Dashboard Público de Prueba para métricas seguras para clientes, resultados, ledger persistente y tarjetas de reporte.',
@@ -109,6 +109,7 @@ def _install_streamlit_helpers() -> None:
         'shortlist_review': 'revisar_lista_corta', 'needs_more_info': 'falta_mas_info', 'rescan_prices': 'reescanear_cuotas',
         'skip': 'omitir', 'rough_learning_memory': 'memoria_inicial', 'usable_learning_memory': 'memoria_utilizable',
         'strong_learning_memory': 'memoria_fuerte', 'not_ready': 'no_lista', 'PASS': 'APROBADO', 'FAIL': 'RECHAZADO',
+        'B_ultra70_lockable': 'B_ultra70_bloqueable', 'A_strict_80_proof': 'A_prueba_80_estricta',
     }
 
     def normalize_language(value: object) -> str:
