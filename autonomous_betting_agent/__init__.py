@@ -27,9 +27,9 @@ def _install_streamlit_helpers() -> None:
     except Exception:
         return
 
-    if getattr(st, '_aba_streamlit_helpers_v3_installed', False):
+    if getattr(st, '_aba_streamlit_helpers_v4_installed', False):
         return
-    st._aba_streamlit_helpers_v3_installed = True
+    st._aba_streamlit_helpers_v4_installed = True
 
     page_language_keys = [
         'global_language', 'app_language', 'language_settings_language', 'start_here_language',
@@ -107,10 +107,18 @@ def _install_streamlit_helpers() -> None:
         except Exception:
             return ''
 
+    def safe_set_state(key: str, value: str) -> None:
+        try:
+            st.session_state[key] = value
+        except Exception:
+            # Streamlit blocks mutating a widget key after that widget is created.
+            # The active widget already stores the selected value, so this can be skipped.
+            pass
+
     def save_language(value: object) -> str:
         selected = normalize_language(value) or 'Español'
         for key in page_language_keys:
-            st.session_state[key] = selected
+            safe_set_state(key, selected)
         try:
             st.query_params['lang'] = 'es' if selected == 'Español' else 'en'
         except Exception:
@@ -135,8 +143,7 @@ def _install_streamlit_helpers() -> None:
     def translate_value(value: Any) -> Any:
         if language_value() != 'Español' or value is None:
             return value
-        text = es_values.get(str(value), str(value))
-        return text
+        return es_values.get(str(value), str(value))
 
     def translate_frame(data: Any) -> Any:
         if language_value() != 'Español' or not isinstance(data, pd.DataFrame):
