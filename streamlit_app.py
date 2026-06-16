@@ -9,6 +9,7 @@ from autonomous_betting_agent.memory_read_patch import install_memory_read_merge
 
 APP_NAME = "ABA Signal Pro"
 APP_TAGLINE = "Powered by Reparodynamics"
+PREDICTOR_TOOL_NAME = "Pro Predictor"
 BRANDED_REPORT_PREFIX = f"{APP_NAME}\n{APP_TAGLINE}"
 REPO_ROOT = Path(__file__).resolve().parent
 LOGO_PATH = REPO_ROOT / "assets" / "aba_signal_pro_logo.svg"
@@ -61,7 +62,7 @@ DEFAULT_TOGGLE_VALUES = {
 
 CORE_PAGES = [
     st.Page("pages/scanner_pro.py", title="Scanner Pro"),
-    st.Page("pages/pro_predictor.py", title=APP_NAME),
+    st.Page("pages/pro_predictor.py", title=PREDICTOR_TOOL_NAME),
     st.Page("pages/ultra80_profit_mode.py", title="Ultra 70 Profit Mode"),
     st.Page("pages/simulation_lab.py", title="Simulation Lab"),
     st.Page("pages/threshold_optimizer.py", title="Threshold Optimizer"),
