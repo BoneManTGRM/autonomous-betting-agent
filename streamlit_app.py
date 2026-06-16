@@ -114,11 +114,9 @@ def render_sidebar_brand() -> None:
     if st.session_state.get("aba_sidebar_brand_rendered"):
         return
     st.session_state["aba_sidebar_brand_rendered"] = True
-    st.sidebar.markdown("## ABA Signal Pro")
-    st.sidebar.success("ABA")
-    st.sidebar.markdown("### Signal")
-    st.sidebar.error("Pro")
+    st.sidebar.markdown("### ABA Signal Pro")
     st.sidebar.caption(APP_TAGLINE)
+    st.sidebar.caption("green / white / red")
     st.sidebar.divider()
 
 
