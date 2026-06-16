@@ -5,11 +5,15 @@ from pathlib import Path
 import pandas as pd
 
 from autonomous_betting_agent.commercial_platform_tools import (
+    add_clv_columns,
     apply_result_updates,
     dashboard_metrics,
+    demo_ledger,
     filter_locked_proof_rows,
     load_persistent_ledger,
     merge_ledgers,
+    proof_audit_frame,
+    proof_audit_summary,
     public_dashboard_table,
     report_card_html,
     report_card_markdown,
@@ -35,11 +39,12 @@ class CommercialPlatformToolsTests(unittest.TestCase):
         locked = lock_rows(pd.DataFrame([
             {'event': 'A at B', 'prediction': 'B', 'model_probability': 0.64, 'decimal_price': 2.0, 'agent_decision': 'play_small'}
         ]))
-        results = pd.DataFrame([{'proof_id': locked.iloc[0]['proof_id'], 'result_status': 'win'}])
+        results = pd.DataFrame([{'proof_id': locked.iloc[0]['proof_id'], 'result_status': 'win', 'closing_decimal_price': 1.9}])
         updated, stats = apply_result_updates(locked, results)
         self.assertEqual(stats['updated_rows'], 1)
         self.assertEqual(updated.iloc[0]['result_status'], 'win')
         self.assertGreater(float(updated.iloc[0]['profit_units']), 0)
+        self.assertGreater(float(updated.iloc[0]['clv_percent']), 0)
 
     def test_merge_ledgers_dedupes_proof_id(self):
         locked = lock_rows(pd.DataFrame([
@@ -67,9 +72,33 @@ class CommercialPlatformToolsTests(unittest.TestCase):
         self.assertEqual(len(merged), 1)
         self.assertEqual(merged.iloc[0]['proof_id'], locked.iloc[0]['proof_id'])
 
+    def test_clv_columns_are_added(self):
+        locked = lock_rows(pd.DataFrame([
+            {'event': 'A at B', 'prediction': 'B', 'model_probability': 0.64, 'decimal_price': 2.0, 'closing_decimal_price': 1.8, 'agent_decision': 'play_small'}
+        ]))
+        with_clv = add_clv_columns(locked)
+        self.assertIn('clv_percent', with_clv.columns)
+        self.assertGreater(float(with_clv.iloc[0]['clv_percent']), 0)
+        self.assertTrue(bool(with_clv.iloc[0]['beat_close']))
+
+    def test_proof_audit_detects_hash_match(self):
+        locked = lock_rows(pd.DataFrame([
+            {'event': 'A at B', 'prediction': 'B', 'model_probability': 0.64, 'decimal_price': 2.0, 'agent_decision': 'play_small', 'event_start_utc': '2099-01-01T00:00:00Z'}
+        ]))
+        audit = proof_audit_frame(locked)
+        summary = proof_audit_summary(locked)
+        self.assertEqual(audit.iloc[0]['hash_status'], 'hash_match')
+        self.assertGreater(summary['proof_quality_score'], 0)
+
+    def test_demo_ledger_is_buyer_ready(self):
+        demo = demo_ledger()
+        self.assertGreaterEqual(len(demo), 3)
+        self.assertFalse(public_dashboard_table(demo).empty)
+        self.assertGreater(dashboard_metrics(demo)['proof_quality_score'], 0)
+
     def test_dashboard_and_report_cards(self):
         locked = lock_rows(pd.DataFrame([
-            {'event': 'A at B', 'prediction': 'B', 'model_probability': 0.64, 'decimal_price': 2.0, 'agent_decision': 'play_small', 'result_status': 'win'}
+            {'event': 'A at B', 'prediction': 'B', 'model_probability': 0.64, 'decimal_price': 2.0, 'closing_decimal_price': 1.9, 'agent_decision': 'play_small', 'result_status': 'win'}
         ]))
         metrics = dashboard_metrics(locked)
         public = public_dashboard_table(locked)
@@ -78,6 +107,7 @@ class CommercialPlatformToolsTests(unittest.TestCase):
         self.assertEqual(metrics['wins'], 1)
         self.assertFalse(public.empty)
         self.assertIn('Proof Dashboard', markdown)
+        self.assertIn('Avg CLV', markdown)
         self.assertIn('<div', html)
 
 
