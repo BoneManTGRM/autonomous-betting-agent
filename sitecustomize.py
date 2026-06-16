@@ -233,18 +233,31 @@ def _report_signature(data: Any) -> str:
         return 'unknown'
 
 
+def _label_key(label: Any) -> str:
+    return ' '.join(str(label or '').lower().replace('%', '').replace('±', '').split())
+
+
+def _slider_should_use_number_input(label: Any) -> bool:
+    key = _label_key(label)
+    return 'agent score' in key or 'puntaje agente' in key
+
+
 def _install_page_helpers() -> None:
     try:
         import streamlit as st
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, '_aba_page_helpers_installed', False):
+    if getattr(st, '_aba_page_helpers_installed_v2', False):
         return
-    st._aba_page_helpers_installed = True
+    st._aba_page_helpers_installed_v2 = True
     real_st_dataframe = st.dataframe
     real_dg_dataframe = DeltaGenerator.dataframe
     real_subheader = st.subheader
+    real_st_slider = st.slider
+    real_dg_slider = DeltaGenerator.slider
+    real_st_number_input = st.number_input
+    real_dg_number_input = DeltaGenerator.number_input
 
     def capture(data: Any) -> Any:
         if _called_from_pro_predictor() and _looks_like_predictor_report(data):
@@ -278,6 +291,16 @@ def _install_page_helpers() -> None:
         capture(data)
         return real_dg_dataframe(self, data, *args, **kwargs)
 
+    def patched_st_slider(label: Any, *args: Any, **kwargs: Any) -> Any:
+        if _called_from_pro_predictor() and _slider_should_use_number_input(label):
+            return real_st_number_input(label, *args, **kwargs)
+        return real_st_slider(label, *args, **kwargs)
+
+    def patched_dg_slider(self: Any, label: Any, *args: Any, **kwargs: Any) -> Any:
+        if _called_from_pro_predictor() and _slider_should_use_number_input(label):
+            return real_dg_number_input(self, label, *args, **kwargs)
+        return real_dg_slider(self, label, *args, **kwargs)
+
     def render_learning_reader_once() -> None:
         if st.session_state.get('_aba_learning_report_reader_rendered'):
             return
@@ -298,6 +321,8 @@ def _install_page_helpers() -> None:
 
     st.dataframe = patched_st_dataframe
     DeltaGenerator.dataframe = patched_dg_dataframe
+    st.slider = patched_st_slider
+    DeltaGenerator.slider = patched_dg_slider
     st.subheader = patched_subheader
 
 
