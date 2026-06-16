@@ -18,7 +18,7 @@ from autonomous_betting_agent.live_odds import list_sports, scan_market
 from autonomous_betting_agent.multi_source_fusion import fuse_row
 from autonomous_betting_agent.scanner_strength import score_scanner_frame, scanner_strength_summary
 
-APP_VERSION = 'four-tool-pro-v14'
+APP_VERSION = 'four-tool-pro-v15-high-confidence-handoff'
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REPO_MEMORY_PATH = REPO_ROOT / 'data' / 'ara_learning_memory.csv'
 LEARNED_STATE_PATH = REPO_ROOT / 'learned_state.json'
@@ -30,27 +30,33 @@ LANG = 'es' if st.sidebar.selectbox('Language / Idioma', ['English', 'Español']
 TEXT = {
     'en': {
         'title': 'Pro Predictor',
-        'caption': 'Main all-sports prediction engine. It scans live markets, applies learned memory, builds model probabilities, scores agent decisions, and forwards rows to What Are the Odds.',
-        'workflow': 'Clean path: Scanner Pro → Pro Predictor → What Are the Odds → Learning Memory.',
+        'caption': 'Main all-sports prediction engine. It scans live markets, applies learned memory, builds model probabilities, scores agent decisions, and forwards the highest-confidence rows to Odds Lock Pro.',
+        'workflow': 'Clean path: Scanner Pro → Pro Predictor → Highest Confidence → Odds Lock Pro → Public Proof Dashboard → Learning Memory.',
         'version': 'App version', 'learned_events': 'Learned events', 'raw_accuracy': 'Raw accuracy', 'calibrated_accuracy': 'Calibrated accuracy', 'brier_after': 'Brier after',
         'api_sources': 'API sources', 'odds_key': 'Odds API key', 'sports_key': 'SportsDataIO key', 'weather_key': 'WeatherAPI key', 'enabled': 'Enabled', 'missing': 'Missing',
         'setup': 'Prediction setup', 'scan_scope': 'Scan scope', 'all_sports': 'All active sports', 'one_sport': 'One sport/league', 'team_player': 'One team/player', 'manual_sports': 'Manual sport keys only',
         'sport_search': 'Sport/feed search', 'team_filter': 'Team/player filter', 'manual_keys': 'Manual sport keys', 'regions': 'Bookmaker regions', 'markets': 'Markets', 'max_sports': 'Max sports', 'max_events': 'Max events per sport', 'latest_date': 'Latest event date',
         'min_books': 'Minimum books', 'min_model_prob': 'Minimum model probability', 'min_edge': 'Minimum edge', 'strong_edge': 'Strong edge threshold', 'min_strength': 'Minimum scanner strength', 'run': 'Run Pro Predictor',
-        'api_error': 'Could not load sports list. Check API key/quota or use manual sport keys.', 'no_rows': 'No prediction rows passed the filters.', 'skipped': 'Skipped feeds / API errors', 'saved': 'Prediction rows saved for What Are the Odds, Odds Lock, and Learning Memory review.',
-        'ranked': 'Ranked prediction board', 'lock_ready': 'Lock-ready candidates', 'all_rows': 'All rows', 'download': 'Download Pro Predictor CSV', 'rows': 'Rows', 'playable': 'Playable', 'lock_ready_metric': 'Lock ready', 'avg_strength': 'Avg strength', 'premium': 'Premium scans', 'strong': 'Strong plays', 'small': 'Small plays', 'memory_source': 'Memory source', 'next': 'Next', 'handoff': 'Four-tool handoff health',
+        'api_error': 'Could not load sports list. Check API key/quota or use manual sport keys.', 'no_rows': 'No prediction rows passed the filters.', 'skipped': 'Skipped feeds / API errors', 'saved': 'Prediction rows saved. Highest-confidence rows are now the default handoff to Odds Lock Pro.',
+        'ranked': 'Ranked prediction board', 'high_conf': 'Highest-confidence picks', 'lock_ready': 'Lock-ready candidates', 'all_rows': 'All rows', 'download': 'Download Pro Predictor CSV', 'download_high': 'Download highest-confidence CSV',
+        'rows': 'Rows', 'playable': 'Playable', 'lock_ready_metric': 'Lock ready', 'avg_strength': 'Avg strength', 'premium': 'Premium scans', 'strong': 'Strong plays', 'small': 'Small plays', 'memory_source': 'Memory source', 'next': 'Next', 'handoff': 'Four-tool handoff health',
+        'high_conf_setup': 'Highest-confidence output', 'use_high_conf': 'Send only highest-confidence rows to Odds Lock Pro', 'max_high_conf': 'Max high-confidence rows', 'min_high_prob': 'High-confidence min probability', 'min_high_edge': 'High-confidence min edge', 'min_high_strength': 'High-confidence min scanner strength', 'min_high_agent': 'High-confidence min agent score',
+        'high_conf_count': 'High confidence', 'all_count': 'All passed', 'handoff_note': 'Odds Lock Pro will use this high-confidence session list first. The full scanned list remains downloadable in All rows.',
     },
     'es': {
         'title': 'Predictor Pro',
-        'caption': 'Motor principal de predicción para todos los deportes. Escanea mercados en vivo, aplica memoria aprendida, crea probabilidades del modelo, califica decisiones del agente y envía filas a What Are the Odds.',
-        'workflow': 'Ruta limpia: Scanner Pro → Predictor Pro → What Are the Odds → Memoria de Aprendizaje.',
+        'caption': 'Motor principal de predicción. Escanea mercados, aplica memoria, crea probabilidades, califica decisiones y envía las filas de máxima confianza a Odds Lock Pro.',
+        'workflow': 'Ruta limpia: Scanner Pro → Predictor Pro → Máxima Confianza → Odds Lock Pro → Dashboard Público → Memoria.',
         'version': 'Versión de la app', 'learned_events': 'Eventos aprendidos', 'raw_accuracy': 'Precisión bruta', 'calibrated_accuracy': 'Precisión calibrada', 'brier_after': 'Brier después',
         'api_sources': 'Fuentes API', 'odds_key': 'Clave de Odds API', 'sports_key': 'Clave de SportsDataIO', 'weather_key': 'Clave de WeatherAPI', 'enabled': 'Activada', 'missing': 'Falta',
         'setup': 'Configuración de predicción', 'scan_scope': 'Alcance del escaneo', 'all_sports': 'Todos los deportes activos', 'one_sport': 'Un deporte/liga', 'team_player': 'Un equipo/jugador', 'manual_sports': 'Solo claves manuales',
         'sport_search': 'Buscar deporte/feed', 'team_filter': 'Filtro de equipo/jugador', 'manual_keys': 'Claves manuales de deporte', 'regions': 'Regiones de casas de apuestas', 'markets': 'Mercados', 'max_sports': 'Máximo de deportes', 'max_events': 'Máximo de eventos por deporte', 'latest_date': 'Fecha máxima del evento',
         'min_books': 'Mínimo de casas', 'min_model_prob': 'Probabilidad mínima del modelo', 'min_edge': 'Ventaja mínima', 'strong_edge': 'Umbral de ventaja fuerte', 'min_strength': 'Fuerza mínima del escáner', 'run': 'Ejecutar Predictor Pro',
-        'api_error': 'No se pudo cargar la lista de deportes. Revisa la clave/cuota API o usa claves manuales.', 'no_rows': 'Ninguna fila de predicción pasó los filtros.', 'skipped': 'Feeds omitidos / errores API', 'saved': 'Las filas de predicción se guardaron para What Are the Odds, Odds Lock y Memoria de Aprendizaje.',
-        'ranked': 'Tablero de predicciones clasificadas', 'lock_ready': 'Candidatos listos para bloquear', 'all_rows': 'Todas las filas', 'download': 'Descargar CSV de Predictor Pro', 'rows': 'Filas', 'playable': 'Jugables', 'lock_ready_metric': 'Listas para bloquear', 'avg_strength': 'Fuerza promedio', 'premium': 'Escaneos premium', 'strong': 'Jugadas fuertes', 'small': 'Jugadas pequeñas', 'memory_source': 'Fuente de memoria', 'next': 'Siguiente', 'handoff': 'Salud del traspaso entre herramientas',
+        'api_error': 'No se pudo cargar la lista de deportes. Revisa la clave/cuota API o usa claves manuales.', 'no_rows': 'Ninguna fila de predicción pasó los filtros.', 'skipped': 'Feeds omitidos / errores API', 'saved': 'Filas guardadas. Las filas de máxima confianza pasan por defecto a Odds Lock Pro.',
+        'ranked': 'Tablero de predicciones clasificadas', 'high_conf': 'Picks de máxima confianza', 'lock_ready': 'Candidatos listos para bloquear', 'all_rows': 'Todas las filas', 'download': 'Descargar CSV de Predictor Pro', 'download_high': 'Descargar CSV de máxima confianza',
+        'rows': 'Filas', 'playable': 'Jugables', 'lock_ready_metric': 'Listas para bloquear', 'avg_strength': 'Fuerza promedio', 'premium': 'Escaneos premium', 'strong': 'Jugadas fuertes', 'small': 'Jugadas pequeñas', 'memory_source': 'Fuente de memoria', 'next': 'Siguiente', 'handoff': 'Salud del traspaso entre herramientas',
+        'high_conf_setup': 'Salida de máxima confianza', 'use_high_conf': 'Enviar solo filas de máxima confianza a Odds Lock Pro', 'max_high_conf': 'Máximo de filas de máxima confianza', 'min_high_prob': 'Probabilidad mínima máxima confianza', 'min_high_edge': 'Ventaja mínima máxima confianza', 'min_high_strength': 'Fuerza mínima máxima confianza', 'min_high_agent': 'Puntaje agente mínimo',
+        'high_conf_count': 'Máxima confianza', 'all_count': 'Todas aprobadas', 'handoff_note': 'Odds Lock Pro usará primero esta lista de máxima confianza. La lista completa queda descargable en Todas las filas.',
     },
 }
 
@@ -177,6 +183,51 @@ def event_match_score(event: Any, query: str) -> float:
     return similarity(query, text)
 
 
+def numeric_series(frame: pd.DataFrame, names: list[str]) -> pd.Series:
+    for name in names:
+        if name in frame.columns:
+            values = pd.to_numeric(frame[name], errors='coerce')
+            if values.notna().any():
+                if 'prob' in name.lower():
+                    values = values.where(values <= 1.0, values / 100.0)
+                return values
+    return pd.Series(index=frame.index, dtype=float)
+
+
+def high_confidence_shortlist(frame: pd.DataFrame, *, max_rows: int, min_probability: float, min_edge: float, min_strength: float, min_agent_score: float) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame()
+    out = frame.copy()
+    probability = numeric_series(out, ['model_probability_clean', 'model_probability', 'final_probability_value', 'probability'])
+    edge = numeric_series(out, ['model_market_edge', 'model_edge', 'computed_ev_decimal', 'estimated_ev_decimal'])
+    strength = numeric_series(out, ['scanner_strength_score'])
+    agent_score = numeric_series(out, ['agent_score'])
+    if probability.notna().any():
+        out['_hc_probability'] = probability
+        out = out[out['_hc_probability'].fillna(0.0) >= float(min_probability)]
+    if not out.empty and edge.notna().any():
+        out['_hc_edge'] = edge.reindex(out.index)
+        out = out[out['_hc_edge'].fillna(-999.0) >= float(min_edge)]
+    if not out.empty and strength.notna().any():
+        out['_hc_strength'] = strength.reindex(out.index)
+        out = out[out['_hc_strength'].fillna(0.0) >= float(min_strength)]
+    if not out.empty and agent_score.notna().any():
+        out['_hc_agent_score'] = agent_score.reindex(out.index)
+        out = out[out['_hc_agent_score'].fillna(0.0) >= float(min_agent_score)]
+    if not out.empty:
+        decision = out.get('agent_decision', pd.Series(index=out.index, dtype=str)).astype(str).str.lower()
+        lock_ready = out.get('lock_ready', pd.Series(index=out.index, dtype=str)).astype(str).str.lower().isin(['true', '1', 'yes', 'y'])
+        playable = decision.isin(['play_strong', 'play_small']) | lock_ready
+        if playable.any():
+            out = out[playable]
+    sort_cols = [col for col in ['agent_score', 'scanner_strength_score', 'model_market_edge', 'model_probability_clean', '_hc_probability'] if col in out.columns]
+    if sort_cols:
+        out = out.sort_values(sort_cols, ascending=False, na_position='last')
+    if int(max_rows) > 0:
+        out = out.head(int(max_rows))
+    return out.drop(columns=[col for col in ['_hc_probability', '_hc_edge', '_hc_strength', '_hc_agent_score'] if col in out.columns], errors='ignore').reset_index(drop=True)
+
+
 def build_rows(events: list[Any], sport: Any, *, context_builder: LiveAPIContextBuilder, odds_key: str, sports_key: str, weather_key: str, team_filter: str, latest_event_date: date, memory_edge: float, min_books: int) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for event in events:
@@ -269,6 +320,15 @@ with st.expander('Filters' if LANG == 'en' else 'Filtros', expanded=True):
     strong_edge = f4.number_input(t('strong_edge'), min_value=0.0, max_value=0.50, value=0.075, step=0.005, format='%.3f')
     min_strength = f5.number_input(t('min_strength'), min_value=0.0, max_value=100.0, value=35.0, step=1.0)
 
+with st.expander(t('high_conf_setup'), expanded=True):
+    h1, h2, h3, h4, h5 = st.columns(5)
+    use_high_conf = h1.checkbox(t('use_high_conf'), value=True)
+    max_high_conf = h2.number_input(t('max_high_conf'), min_value=1, max_value=100, value=25, step=5)
+    min_high_prob = h3.number_input(t('min_high_prob'), min_value=0.0, max_value=0.99, value=0.58, step=0.01)
+    min_high_edge = h4.number_input(t('min_high_edge'), min_value=-0.25, max_value=0.50, value=0.04, step=0.005, format='%.3f')
+    min_high_strength = h5.number_input(t('min_high_strength'), min_value=0.0, max_value=100.0, value=60.0, step=1.0)
+    min_high_agent = st.slider(t('min_high_agent'), min_value=0.0, max_value=100.0, value=60.0, step=1.0)
+
 if st.button(t('run'), type='primary', use_container_width=True):
     if not odds_key:
         st.error('Odds API key is required.' if LANG == 'en' else 'La clave de Odds API es obligatoria.')
@@ -322,41 +382,50 @@ if st.button(t('run'), type='primary', use_container_width=True):
     sort_cols = [col for col in ['agent_score', 'scanner_strength_score', 'model_market_edge', 'model_probability_clean'] if col in decisions.columns]
     if sort_cols:
         decisions = decisions.sort_values(sort_cols, ascending=False).reset_index(drop=True)
+    high_conf = high_confidence_shortlist(decisions, max_rows=int(max_high_conf), min_probability=float(min_high_prob), min_edge=float(min_high_edge), min_strength=float(min_high_strength), min_agent_score=float(min_high_agent))
+    handoff = high_conf if use_high_conf and not high_conf.empty else decisions
     summary = agent_decision_summary(decisions, min_edge=float(min_edge), strong_edge=float(strong_edge))
     strength = scanner_strength_summary(decisions)
-    health = page_health(decisions, page='pro_predictor')
+    health = page_health(handoff, page='pro_predictor')
     lock_ready = lock_ready_candidates(decisions, min_edge=float(min_edge), strong_edge=float(strong_edge))
     playable = int(summary['play_strong'] + summary['play_small'])
     st.session_state['pro_predictor_latest_rows'] = decisions.to_dict('records')
-    st.session_state['ara_latest_predictions'] = decisions.to_dict('records')
-    st.session_state['ara_latest_predictions_source'] = 'Pro Predictor'
+    st.session_state['pro_predictor_high_confidence_rows'] = high_conf.to_dict('records')
+    st.session_state['ara_latest_predictions'] = handoff.to_dict('records')
+    st.session_state['ara_latest_predictions_source'] = 'Pro Predictor high-confidence' if use_high_conf else 'Pro Predictor all rows'
     st.session_state['ara_latest_predictions_saved_at'] = pd.Timestamp.utcnow().isoformat()
     st.success(t('saved'))
-    metrics = st.columns(8)
-    metrics[0].metric(t('rows'), len(decisions))
-    metrics[1].metric(t('playable'), playable)
-    metrics[2].metric(t('strong'), summary['play_strong'])
-    metrics[3].metric(t('small'), summary['play_small'])
-    metrics[4].metric(t('lock_ready_metric'), health['lock_ready_rows'])
-    metrics[5].metric(t('avg_strength'), 'N/A' if strength['avg_score'] is None else strength['avg_score'])
-    metrics[6].metric(t('premium'), strength['premium_scan'])
-    metrics[7].metric(t('next'), health['next_action'])
+    st.info(t('handoff_note'))
+    metrics = st.columns(9)
+    metrics[0].metric(t('all_count'), len(decisions))
+    metrics[1].metric(t('high_conf_count'), len(high_conf))
+    metrics[2].metric(t('playable'), playable)
+    metrics[3].metric(t('strong'), summary['play_strong'])
+    metrics[4].metric(t('small'), summary['play_small'])
+    metrics[5].metric(t('lock_ready_metric'), health['lock_ready_rows'])
+    metrics[6].metric(t('avg_strength'), 'N/A' if strength['avg_score'] is None else strength['avg_score'])
+    metrics[7].metric(t('premium'), strength['premium_scan'])
+    metrics[8].metric(t('next'), health['next_action'])
     st.subheader(t('handoff'))
-    st.dataframe(page_health_frame(decisions, page='pro_predictor'), use_container_width=True, hide_index=True)
-    tabs = st.tabs([t('ranked'), t('lock_ready'), t('all_rows'), t('skipped')])
+    st.dataframe(page_health_frame(handoff, page='pro_predictor'), use_container_width=True, hide_index=True)
+    tabs = st.tabs([t('high_conf'), t('ranked'), t('lock_ready'), t('all_rows'), t('skipped')])
     display_cols = [col for col in ['event', 'sport', 'market_type', 'prediction', 'model_probability_clean', 'market_implied_probability', 'model_market_edge', 'decimal_price', 'bookmaker', 'agent_decision', 'agent_score', 'scanner_strength_score', 'scanner_strength_tier', 'lock_ready', 'decision_reasons'] if col in decisions.columns]
     with tabs[0]:
-        st.dataframe(decisions[display_cols].head(100) if display_cols else decisions.head(100), use_container_width=True, hide_index=True)
+        if high_conf.empty:
+            st.info(t('no_rows'))
+        else:
+            st.dataframe(high_conf[display_cols] if display_cols else high_conf, use_container_width=True, hide_index=True)
+            st.download_button(t('download_high'), high_conf.to_csv(index=False), file_name='pro_predictor_high_confidence.csv', mime='text/csv')
     with tabs[1]:
-        st.dataframe(lock_ready, use_container_width=True, hide_index=True)
+        st.dataframe(decisions[display_cols].head(100) if display_cols else decisions.head(100), use_container_width=True, hide_index=True)
     with tabs[2]:
+        st.dataframe(lock_ready, use_container_width=True, hide_index=True)
+    with tabs[3]:
         st.dataframe(decisions, use_container_width=True, hide_index=True)
         st.download_button(t('download'), decisions.to_csv(index=False), file_name='pro_predictor_max_predictions.csv', mime='text/csv')
-    with tabs[3]:
+    with tabs[4]:
         if skipped:
             for item in skipped[:100]:
                 st.write(f'- {item}')
         else:
             st.caption('No skipped feeds.' if LANG == 'en' else 'No hubo feeds omitidos.')
-else:
-    st.info('Enter API keys and run Pro Predictor.' if LANG == 'en' else 'Ingresa las claves API y ejecuta Predictor Pro.')
