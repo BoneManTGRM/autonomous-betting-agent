@@ -30,12 +30,7 @@ NAV_NOTES_ES = (
 
 
 def get_secret(*names: str) -> str:
-    """Read a Streamlit secret or environment variable by one of several names.
-
-    Some older pages call get_secret directly. Registering this helper in
-    builtins keeps those pages working without duplicating the same function in
-    every Streamlit page.
-    """
+    """Read a Streamlit secret or environment variable by one of several names."""
     try:
         import streamlit as st
     except Exception:
@@ -45,28 +40,22 @@ def get_secret(*names: str) -> str:
             continue
         if st is not None:
             try:
-                value = str(st.secrets.get(name, "")).strip()
+                value = str(st.secrets.get(name, '')).strip()
                 if value:
                     return value
             except Exception:
                 pass
-        value = os.getenv(name, "").strip()
+        value = os.getenv(name, '').strip()
         if value:
             return value
-    return ""
+    return ''
 
 
 builtins.get_secret = get_secret
 
-# Python imports sitecustomize automatically at interpreter startup when this
-# repository is on sys.path. Importing the package installs the global Streamlit
-# language/sidebar/report translator before any page renders. A lightweight
-# fallback below covers pages that run before that package import succeeds.
 try:
     import autonomous_betting_agent  # noqa: F401
 except Exception:
-    # Keep app startup safe even if a non-Streamlit command imports Python with a
-    # partially installed environment.
     pass
 
 
@@ -79,21 +68,38 @@ def _normal_language(value: object) -> str:
     return 'English'
 
 
+def _sidebar_language() -> str:
+    try:
+        import streamlit as st
+        for key in (
+            'global_language', 'app_language', 'simulation_lab_language', 'pro_predictor_language',
+            'odds_lock_pro_language', 'public_proof_dashboard_language', 'reset_lock_file_language',
+            'learn_memory_language', 'learning_memory_language', 'threshold_optimizer_language',
+            'what_are_the_odds_language',
+        ):
+            value = st.session_state.get(key)
+            if value:
+                return _normal_language(value)
+    except Exception:
+        pass
+    return 'English'
+
+
 def _install_sidebar_nav_fallback() -> None:
     try:
         import streamlit as st
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, '_aba_streamlit_helpers_v5_installed', False):
+    if getattr(st, '_aba_sidebar_nav_fallback_installed_v2', False):
         return
-    if getattr(st, '_aba_sidebar_nav_fallback_installed', False):
-        return
-    st._aba_sidebar_nav_fallback_installed = True
+    st._aba_sidebar_nav_fallback_installed_v2 = True
     real_st_selectbox = st.selectbox
     real_dg_selectbox = DeltaGenerator.selectbox
+    real_set_page_config = st.set_page_config
 
-    def render_nav(lang: str) -> None:
+    def render_nav(lang: str | None = None) -> None:
+        lang = lang or _sidebar_language()
         with st.sidebar:
             st.markdown('---')
             st.markdown('### Herramientas' if lang == 'Español' else '### Tools')
@@ -116,18 +122,36 @@ def _install_sidebar_nav_fallback() -> None:
         label_text = str(label or '').lower()
         return ('language' in label_text or 'idioma' in label_text) and 'English' in opts and 'Español' in opts
 
+    def patched_set_page_config(*args: Any, **kwargs: Any) -> Any:
+        result = real_set_page_config(*args, **kwargs)
+        # Render after page config because Streamlit requires set_page_config to be first.
+        # This makes the tools visible even on pages that do not import the package root
+        # or whose language selector is rendered before the normal nav patch loads.
+        try:
+            render_nav(_sidebar_language())
+        except Exception:
+            pass
+        return result
+
     def patched_st_selectbox(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
         value = real_st_selectbox(label, options, *args, **kwargs)
         if is_language_selector(label, options):
-            render_nav(_normal_language(value))
+            try:
+                render_nav(_normal_language(value))
+            except Exception:
+                pass
         return value
 
     def patched_dg_selectbox(self: Any, label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
         value = real_dg_selectbox(self, label, options, *args, **kwargs)
         if is_language_selector(label, options):
-            render_nav(_normal_language(value))
+            try:
+                render_nav(_normal_language(value))
+            except Exception:
+                pass
         return value
 
+    st.set_page_config = patched_set_page_config
     st.selectbox = patched_st_selectbox
     DeltaGenerator.selectbox = patched_dg_selectbox
 
@@ -147,18 +171,18 @@ except Exception:
 
 def _called_from_page(page_name: str) -> bool:
     try:
-        suffix = f"pages/{page_name}".replace("\\", "/")
-        return any(str(frame.filename).replace("\\", "/").endswith(suffix) for frame in inspect.stack())
+        suffix = f'pages/{page_name}'.replace('\\', '/')
+        return any(str(frame.filename).replace('\\', '/').endswith(suffix) for frame in inspect.stack())
     except Exception:
         return False
 
 
 def _called_from_pro_predictor() -> bool:
-    return _called_from_page("pro_predictor.py")
+    return _called_from_page('pro_predictor.py')
 
 
 def _called_from_learning_memory() -> bool:
-    return _called_from_page("learn_memory.py")
+    return _called_from_page('learn_memory.py')
 
 
 def _looks_like_predictor_report(data: Any) -> bool:
@@ -168,21 +192,21 @@ def _looks_like_predictor_report(data: Any) -> bool:
         return False
     if not isinstance(data, pd.DataFrame) or data.empty:
         return False
-    keys = {str(col).strip().lower().replace(" ", "_") for col in data.columns}
+    keys = {str(col).strip().lower().replace(' ', '_') for col in data.columns}
     return bool(
-        {"event", "prediction", "best_price"}.issubset(keys)
-        or {"evento", "pronostico", "mejor_cuota"}.issubset(keys)
-        or "target_70_mode" in keys
-        or "modo_objetivo_70" in keys
+        {'event', 'prediction', 'best_price'}.issubset(keys)
+        or {'evento', 'pronostico', 'mejor_cuota'}.issubset(keys)
+        or 'target_70_mode' in keys
+        or 'modo_objetivo_70' in keys
     )
 
 
 def _report_signature(data: Any) -> str:
     try:
-        columns = ",".join(str(col) for col in data.columns[:12])
-        return f"{len(data)}:{columns}:{str(data.head(1).to_dict())[:160]}"
+        columns = ','.join(str(col) for col in data.columns[:12])
+        return f'{len(data)}:{columns}:{str(data.head(1).to_dict())[:160]}'
     except Exception:
-        return "unknown"
+        return 'unknown'
 
 
 def _install_page_helpers() -> None:
@@ -191,7 +215,7 @@ def _install_page_helpers() -> None:
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, "_aba_page_helpers_installed", False):
+    if getattr(st, '_aba_page_helpers_installed', False):
         return
     st._aba_page_helpers_installed = True
     real_st_dataframe = st.dataframe
@@ -204,7 +228,7 @@ def _install_page_helpers() -> None:
                 captured = data.copy()
                 if enrich_prediction_frame is not None:
                     captured = enrich_prediction_frame(captured)
-                st.session_state["_aba_pro_predictor_latest_report"] = captured
+                st.session_state['_aba_pro_predictor_latest_report'] = captured
                 return captured
             except Exception:
                 pass
@@ -214,7 +238,7 @@ def _install_page_helpers() -> None:
         if not (_called_from_pro_predictor() and _looks_like_predictor_report(data)):
             return False
         signature = _report_signature(data)
-        rendered = st.session_state.setdefault("_aba_mobile_report_signatures", set())
+        rendered = st.session_state.setdefault('_aba_mobile_report_signatures', set())
         if signature in rendered:
             return False
         rendered.add(signature)
@@ -231,20 +255,20 @@ def _install_page_helpers() -> None:
         return real_dg_dataframe(self, data, *args, **kwargs)
 
     def render_learning_reader_once() -> None:
-        if st.session_state.get("_aba_learning_report_reader_rendered"):
+        if st.session_state.get('_aba_learning_report_reader_rendered'):
             return
-        st.session_state["_aba_learning_report_reader_rendered"] = True
+        st.session_state['_aba_learning_report_reader_rendered'] = True
         try:
             from autonomous_betting_agent.learning_report_reader import render_learning_report_reader
 
             render_learning_report_reader()
         except Exception as exc:
-            real_subheader(f"Odds report reader could not load: {exc}")
+            real_subheader(f'Odds report reader could not load: {exc}')
 
     def patched_subheader(body: Any, *args: Any, **kwargs: Any) -> Any:
         result = real_subheader(body, *args, **kwargs)
         text = str(body)
-        if _called_from_learning_memory() and ("Train from finished games" in text or "Entrenar con partidos terminados" in text):
+        if _called_from_learning_memory() and ('Train from finished games' in text or 'Entrenar con partidos terminados' in text):
             render_learning_reader_once()
         return result
 
