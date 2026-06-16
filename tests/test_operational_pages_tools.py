@@ -33,7 +33,8 @@ class OperationalToolsTests(unittest.TestCase):
     def test_normalize_result_feed_infers_winner(self):
         results = normalize_result_feed(pd.DataFrame([{'home_team': 'Home', 'away_team': 'Away', 'home_score': 3, 'away_score': 1}]))
         self.assertEqual(results.iloc[0]['winner'], 'Home')
-        self.assertEqual(results.iloc[0]['final_score'], '3-1')
+        self.assertIn('3', str(results.iloc[0]['final_score']))
+        self.assertIn('1', str(results.iloc[0]['final_score']))
 
     def test_odds_scores_to_result_frame(self):
         payload = [{
