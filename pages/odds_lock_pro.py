@@ -7,6 +7,7 @@ from autonomous_betting_agent.commercial_platform_tools import (
     filter_locked_proof_rows,
     load_persistent_ledger,
     merge_ledgers,
+    normalize_workspace_id,
     proof_audit_summary,
     save_persistent_ledger,
 )
@@ -29,6 +30,9 @@ TEXT = {
         'title': 'Odds Lock Pro',
         'caption': 'Timestamped proof ledger, performance dashboard, reports, bankroll controls, and client-ready views.',
         'info': 'Official locks require a future event start, usable model probability, decimal price, bookmaker/odds source, event, and prediction. Already-started rows are blocked from official locking.',
+        'test_window': 'Test Window ID',
+        'test_window_help': 'Use a simple ID such as test_01, test_02, etc. Each ID saves to its own persistent proof ledger.',
+        'active_test_window': 'Active test ledger',
         'use_session': 'Use latest rows from session',
         'upload': 'Upload prediction, high-confidence tracker, or locked-ledger CSV',
         'source': 'Input source',
@@ -44,8 +48,8 @@ TEXT = {
         'min_shortlist_score': 'Minimum agent score',
         'shortlisted': 'Shortlisted',
         'lock': 'Create official future-only proof ledger',
-        'save_persistent': 'Save locked rows to persistent proof ledger',
-        'saved_persistent': 'Saved to persistent proof ledger',
+        'save_persistent': 'Save locked rows to this test ledger',
+        'saved_persistent': 'Saved to persistent test ledger',
         'candidates': 'Official lock candidates',
         'locked': 'Locked proof ledger',
         'dashboard': 'Proof dashboard',
@@ -86,6 +90,9 @@ TEXT = {
         'title': 'Odds Lock Pro',
         'caption': 'Ledger con prueba por timestamp, dashboard de rendimiento, reportes, control de unidades y vista para clientes.',
         'info': 'Los bloqueos oficiales requieren evento futuro, probabilidad utilizable, cuota decimal, casa/fuente de odds, evento y pronóstico. Las filas ya iniciadas se bloquean para prueba oficial.',
+        'test_window': 'ID de ventana de prueba',
+        'test_window_help': 'Usa un ID simple como test_01, test_02, etc. Cada ID guarda su propio ledger persistente.',
+        'active_test_window': 'Ledger de prueba activo',
         'use_session': 'Usar últimas filas de la sesión',
         'upload': 'Subir CSV de predicciones, tracker de alta confianza o ledger bloqueado',
         'source': 'Fuente de entrada',
@@ -101,8 +108,8 @@ TEXT = {
         'min_shortlist_score': 'Puntaje mínimo del agente',
         'shortlisted': 'Lista corta',
         'lock': 'Crear ledger oficial solo de eventos futuros',
-        'save_persistent': 'Guardar filas bloqueadas en ledger persistente',
-        'saved_persistent': 'Guardado en ledger persistente',
+        'save_persistent': 'Guardar filas bloqueadas en este ledger de prueba',
+        'saved_persistent': 'Guardado en ledger persistente de prueba',
         'candidates': 'Candidatos oficiales para bloquear',
         'locked': 'Ledger bloqueado',
         'dashboard': 'Dashboard de prueba',
@@ -282,8 +289,18 @@ st.title(t('title'))
 st.caption(t('caption'))
 st.info(t('info'))
 
+workspace_input = st.sidebar.text_input(
+    t('test_window'),
+    value=st.session_state.get('aba_test_window_id', 'test_01'),
+    help=t('test_window_help'),
+)
+workspace_id = normalize_workspace_id(workspace_input)
+st.session_state['aba_test_window_id'] = workspace_id
+st.sidebar.caption(f"{t('active_test_window')}: {workspace_id}")
+
 source_name, raw = read_inputs()
 st.caption(f"{t('source')}: {source_name or 'none'}")
+st.caption(f"{t('active_test_window')}: {workspace_id}")
 if raw.empty:
     st.warning(t('no_rows'))
     st.stop()
@@ -335,9 +352,10 @@ if st.button(t('lock'), type='primary', use_container_width=True):
             st.subheader(t('blocked_preview'))
             st.dataframe(review_rows[cols] if cols else review_rows, use_container_width=True, hide_index=True)
     else:
+        locked['test_window_id'] = workspace_id
         st.session_state['odds_lock_pro_locked_rows'] = locked.to_dict('records')
         st.session_state['ara_latest_predictions'] = locked.to_dict('records')
-        st.session_state['ara_latest_predictions_source'] = 'Odds Lock Pro'
+        st.session_state['ara_latest_predictions_source'] = f'Odds Lock Pro:{workspace_id}'
         existing_locked = filter_locked_proof_rows(locked)
         st.success(f"{t('lock_created')}: {len(locked)}")
 
@@ -383,12 +401,12 @@ with tabs[1]:
         st.warning(t('no_locked'))
     else:
         st.dataframe(active_locked, use_container_width=True, hide_index=True)
-        st.download_button(t('download_locked'), active_locked.to_csv(index=False), file_name='odds_lock_pro_locked_ledger.csv', mime='text/csv')
+        st.download_button(t('download_locked'), active_locked.to_csv(index=False), file_name=f'odds_lock_pro_locked_ledger_{workspace_id}.csv', mime='text/csv')
         if st.button(t('save_persistent'), use_container_width=True):
-            combined = merge_ledgers(load_persistent_ledger(), active_locked)
-            saved = save_persistent_ledger(combined)
+            combined = merge_ledgers(load_persistent_ledger(workspace_id=workspace_id), active_locked)
+            saved = save_persistent_ledger(combined, workspace_id=workspace_id)
             st.session_state['odds_lock_pro_locked_rows'] = saved.to_dict('records')
-            st.success(f"{t('saved_persistent')}: {len(saved)} rows")
+            st.success(f"{t('saved_persistent')}: {workspace_id} / {len(saved)} rows")
 
 with tabs[2]:
     st.json({**summary, **audit})
@@ -415,4 +433,4 @@ with tabs[5]:
     public_only_client = st.checkbox(t('public_only'), value=True, key='client_public_only')
     client = client_view(active_locked, public_only=public_only_client)
     st.dataframe(client, use_container_width=True, hide_index=True)
-    st.download_button(t('download_client') if public_only_client else t('download_private'), client.to_csv(index=False), file_name='odds_lock_pro_client_view.csv' if public_only_client else 'odds_lock_pro_private_audit.csv', mime='text/csv')
+    st.download_button(t('download_client') if public_only_client else t('download_private'), client.to_csv(index=False), file_name=f'odds_lock_pro_client_view_{workspace_id}.csv' if public_only_client else f'odds_lock_pro_private_audit_{workspace_id}.csv', mime='text/csv')
