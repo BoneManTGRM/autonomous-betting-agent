@@ -11,6 +11,7 @@ from autonomous_betting_agent.api_snapshot_memory import build_api_snapshots, sn
 from autonomous_betting_agent.clv_intelligence import build_clv_intelligence, clv_by_segment, clv_summary
 from autonomous_betting_agent.four_tool_orchestrator import page_health, page_health_frame
 from autonomous_betting_agent.mobile_report import compact_report_frame
+from autonomous_betting_agent.odds_accuracy_tools import enrich_odds_accuracy, odds_accuracy_display_columns, odds_accuracy_summary
 from autonomous_betting_agent.odds_breakdown import build_odds_breakdown
 from autonomous_betting_agent.performance_segments import build_segment_frame, top_segments
 from autonomous_betting_agent.post_loss_autopsy import autopsy_summary, build_loss_autopsies, future_rules
@@ -25,8 +26,8 @@ LANG = 'es' if st.sidebar.selectbox('Language / Idioma', ['English', 'Español']
 TEXT = {
     'en': {
         'title': 'What Are the Odds',
-        'caption': 'The pro market/value command board. It combines Scanner Pro strength, Pro Predictor probabilities, manual context, agent decisions, CLV, loss review, walk-forward validation, and sport routing.',
-        'info': 'Use this as the single market/value finder. Best Board is the main operating board before Odds Lock.',
+        'caption': 'The pro market/value command board. It combines Scanner Pro strength, Pro Predictor probabilities, manual context, odds-quality scoring, EV, CLV, loss review, walk-forward validation, and sport routing.',
+        'info': 'Use this as the single market/value finder. Best Board is the main operating board before Odds Lock. Accuracy improves when rows include probability, price, bookmaker/source, book count, event start, closing price, and manual context notes.',
         'workflow': 'Clean path: Scanner Pro → Pro Predictor → What Are the Odds → Odds Lock → Public Proof Dashboard → Learning Memory.',
         'upload': 'Upload CSV file(s)',
         'paste': 'Or paste CSV text',
@@ -46,7 +47,12 @@ TEXT = {
         'manual_csv': 'Optional per-row manual CSV patch',
         'manual_csv_help': 'Optional columns: event,prediction,manual_probability_adjustment,decimal_price,bookmaker,closing_decimal_price,injury_note,weather_note,lineup_note,market_note,manual_context_notes',
         'manual_audit': 'Manual audit',
+        'accuracy_center': 'Odds accuracy center',
+        'accuracy_help': 'This section checks whether the row has enough market information to trust the price/value calculation. It adds implied probability, no-vig probability when multiple outcomes exist, fair price, EV per unit, data-quality flags, and a value rating.',
         'manual_rows': 'Manual rows matched',
+        'odds_quality': 'Odds quality',
+        'positive_ev': 'Positive EV',
+        'premium_value': 'Premium value',
         'source': 'Source',
         'rows': 'Rows',
         'playable': 'Playable',
@@ -75,8 +81,8 @@ TEXT = {
     },
     'es': {
         'title': 'What Are the Odds',
-        'caption': 'Tablero pro de mercado/valor. Combina fuerza de Scanner Pro, probabilidades de Predictor Pro, contexto manual, decisiones del agente, CLV, revisión de pérdidas, walk-forward y rutas por deporte.',
-        'info': 'Usa esta como la única página para buscar mercado/valor. Best Board es el tablero principal antes de Odds Lock.',
+        'caption': 'Tablero pro de mercado/valor. Combina fuerza de Scanner Pro, probabilidades de Predictor Pro, contexto manual, calidad de cuotas, EV, CLV, revisión de pérdidas, walk-forward y rutas por deporte.',
+        'info': 'Usa esta como la única página para buscar mercado/valor. Best Board es el tablero principal antes de Odds Lock. La precisión mejora cuando las filas incluyen probabilidad, cuota, casa/fuente, número de casas, inicio del evento, cierre y notas manuales.',
         'workflow': 'Ruta limpia: Scanner Pro → Predictor Pro → What Are the Odds → Odds Lock → Dashboard Público → Memoria.',
         'upload': 'Subir archivo(s) CSV',
         'paste': 'O pegar texto CSV',
@@ -96,7 +102,12 @@ TEXT = {
         'manual_csv': 'CSV manual opcional por fila',
         'manual_csv_help': 'Columnas opcionales: event,prediction,manual_probability_adjustment,decimal_price,bookmaker,closing_decimal_price,injury_note,weather_note,lineup_note,market_note,manual_context_notes',
         'manual_audit': 'Auditoría manual',
+        'accuracy_center': 'Centro de precisión de cuotas',
+        'accuracy_help': 'Esta sección revisa si la fila tiene suficiente información de mercado para confiar en el cálculo de precio/valor. Agrega probabilidad implícita, sin margen cuando hay varios resultados, cuota justa, EV por unidad, banderas de calidad y rating de valor.',
         'manual_rows': 'Filas manuales encontradas',
+        'odds_quality': 'Calidad cuotas',
+        'positive_ev': 'EV positivo',
+        'premium_value': 'Valor premium',
         'source': 'Fuente',
         'rows': 'Filas',
         'playable': 'Jugables',
@@ -127,10 +138,11 @@ TEXT = {
 
 PRIORITY_COLUMNS = [
     'event', 'sport', 'market_type', 'prediction', 'model_probability_clean', 'manual_adjusted_probability',
-    'market_implied_probability', 'model_market_edge', 'model_market_edge_percent', 'decimal_price', 'best_price', 'bookmaker',
-    'agent_decision', 'agent_score', 'scanner_strength_score', 'scanner_strength_tier', 'scanner_recommendation',
-    'recommended_stake_units', 'event_timing_status', 'lock_ready', 'line_value_signal', 'manual_probability_adjustment',
-    'manual_context_notes', 'decision_reasons',
+    'market_implied_probability', 'no_vig_implied_probability', 'model_market_edge', 'edge_percent',
+    'expected_value_per_unit', 'value_rating', 'odds_accuracy_score', 'decimal_price', 'fair_decimal_price',
+    'best_price', 'bookmaker', 'agent_decision', 'agent_score', 'scanner_strength_score', 'scanner_strength_tier',
+    'scanner_recommendation', 'recommended_stake_units', 'event_timing_status', 'lock_ready', 'line_value_signal',
+    'manual_probability_adjustment', 'manual_context_notes', 'odds_quality_flags', 'decision_reasons',
 ]
 
 MANUAL_PATCH_COLUMNS = [
@@ -309,14 +321,14 @@ def max_board(decisions: pd.DataFrame, min_strength: float) -> pd.DataFrame:
         out = out[pd.to_numeric(out['scanner_strength_score'], errors='coerce').fillna(0) >= float(min_strength)]
     if out.empty:
         return out
-    for col in ['lock_ready', 'agent_score', 'scanner_strength_score', 'model_market_edge', 'model_probability_clean']:
+    for col in ['lock_ready', 'agent_score', 'scanner_strength_score', 'model_market_edge', 'model_probability_clean', 'expected_value_per_unit', 'odds_accuracy_score']:
         if col not in out.columns:
             continue
         if col == 'lock_ready':
             out[col] = out[col].astype(bool)
         else:
             out[col] = pd.to_numeric(out[col], errors='coerce').fillna(0)
-    sort_cols = [col for col in ['lock_ready', 'agent_score', 'scanner_strength_score', 'model_market_edge', 'model_probability_clean'] if col in out.columns]
+    sort_cols = [col for col in ['lock_ready', 'odds_accuracy_score', 'agent_score', 'expected_value_per_unit', 'scanner_strength_score', 'model_market_edge', 'model_probability_clean'] if col in out.columns]
     if sort_cols:
         out = out.sort_values(sort_cols, ascending=False)
     return compact_columns(out).head(75)
@@ -357,6 +369,8 @@ normalized = apply_manual_context(
     source_override=source_override,
     notes=manual_notes,
 )
+normalized = enrich_odds_accuracy(normalized)
+accuracy_stats = odds_accuracy_summary(normalized)
 scored_input = score_scanner_frame(normalized)
 decisions = build_agent_decisions(scored_input, min_edge=float(min_edge), strong_edge=float(strong_edge))
 decisions = score_scanner_frame(decisions)
@@ -394,23 +408,25 @@ st.success(t('session_saved'))
 if apply_manual:
     st.caption(t('manual_saved'))
 st.caption(f"{t('source')}: {source}")
-cols = st.columns(11)
+cols = st.columns(13)
 cols[0].metric(t('rows'), len(normalized))
 cols[1].metric(t('manual_rows'), int(pd.Series(normalized.get('manual_patch_matched', pd.Series(dtype=bool))).astype(str).str.lower().eq('true').sum()))
-cols[2].metric(t('playable'), summary['play_strong'] + summary['play_small'])
-cols[3].metric(t('lock_ready'), health['lock_ready_rows'])
-cols[4].metric(t('watch'), summary['watch_only'])
-cols[5].metric(t('review'), summary['review_needed'])
-cols[6].metric(t('avg_strength'), 'N/A' if strength['avg_score'] is None else strength['avg_score'])
-cols[7].metric(t('premium'), strength['premium_scan'])
-cols[8].metric(t('clv_ready'), clv_stats['ready'])
-cols[9].metric('WF rows', walk_stats['tested_rows'])
-cols[10].metric(t('next'), health['next_action'])
+cols[2].metric(t('odds_quality'), 'N/A' if accuracy_stats['avg_odds_accuracy_score'] is None else accuracy_stats['avg_odds_accuracy_score'])
+cols[3].metric(t('positive_ev'), accuracy_stats['positive_ev_rows'])
+cols[4].metric(t('premium_value'), accuracy_stats['premium_value_rows'])
+cols[5].metric(t('playable'), summary['play_strong'] + summary['play_small'])
+cols[6].metric(t('lock_ready'), health['lock_ready_rows'])
+cols[7].metric(t('watch'), summary['watch_only'])
+cols[8].metric(t('review'), summary['review_needed'])
+cols[9].metric(t('avg_strength'), 'N/A' if strength['avg_score'] is None else strength['avg_score'])
+cols[10].metric(t('premium'), strength['premium_scan'])
+cols[11].metric(t('clv_ready'), clv_stats['ready'])
+cols[12].metric(t('next'), health['next_action'])
 
 st.subheader(t('handoff'))
 st.dataframe(page_health_frame(decisions, page='what_are_the_odds'), use_container_width=True, hide_index=True)
 
-tabs = st.tabs([t('best_board'), t('all_decisions'), t('lock_candidates'), t('scanner_rank'), t('manual_audit'), t('odds_breakdown'), t('segments'), t('clv'), t('loss_autopsy'), t('walk_lab'), t('sport_models'), t('exports')])
+tabs = st.tabs([t('best_board'), t('all_decisions'), t('lock_candidates'), t('scanner_rank'), t('manual_audit'), t('accuracy_center'), t('odds_breakdown'), t('segments'), t('clv'), t('loss_autopsy'), t('walk_lab'), t('sport_models'), t('exports')])
 with tabs[0]:
     if best.empty:
         st.info(t('no_best'))
@@ -427,35 +443,41 @@ with tabs[4]:
     manual_cols = [col for col in ['event', 'prediction', 'model_probability_before_manual', 'manual_probability_adjustment', 'manual_adjusted_probability', 'manual_context_confidence', 'manual_patch_matched', 'injury_note', 'weather_note', 'lineup_note', 'market_note', 'manual_context_notes'] if col in normalized.columns]
     st.dataframe(normalized[manual_cols].head(500) if manual_cols else normalized.head(500), use_container_width=True, hide_index=True)
 with tabs[5]:
+    st.info(t('accuracy_help'))
+    st.json(accuracy_stats)
+    accuracy_cols = odds_accuracy_display_columns(normalized)
+    st.dataframe(normalized[accuracy_cols].head(800) if accuracy_cols else normalized.head(800), use_container_width=True, hide_index=True)
+with tabs[6]:
     st.dataframe(compact_report_frame(odds_main).head(500) if not odds_main.empty else odds_main, use_container_width=True, hide_index=True)
     if not odds_props.empty:
         st.subheader('Props / Scores' if LANG == 'en' else 'Props / Marcadores')
         st.dataframe(odds_props.head(300), use_container_width=True, hide_index=True)
-with tabs[6]:
+with tabs[7]:
     st.subheader('Top segments' if LANG == 'en' else 'Mejores segmentos')
     st.dataframe(top, use_container_width=True, hide_index=True)
     st.subheader('All segments' if LANG == 'en' else 'Todos los segmentos')
     st.dataframe(segments, use_container_width=True, hide_index=True)
-with tabs[7]:
+with tabs[8]:
     st.json(clv_stats)
     st.dataframe(clv.head(500), use_container_width=True, hide_index=True)
     st.subheader('CLV by sport' if LANG == 'en' else 'CLV por deporte')
     st.dataframe(clv_sport, use_container_width=True, hide_index=True)
-with tabs[8]:
+with tabs[9]:
     st.json(loss_stats)
     st.dataframe(losses.head(300), use_container_width=True, hide_index=True)
     st.subheader('Future rules' if LANG == 'en' else 'Reglas futuras')
     st.dataframe(rules, use_container_width=True, hide_index=True)
-with tabs[9]:
+with tabs[10]:
     st.json(walk_stats)
     st.dataframe(walk.head(500), use_container_width=True, hide_index=True)
-with tabs[10]:
+with tabs[11]:
     st.dataframe(sport_stats, use_container_width=True, hide_index=True)
     st.dataframe(sport_decisions.head(500), use_container_width=True, hide_index=True)
-with tabs[11]:
+with tabs[12]:
     st.download_button('Download all decisions' if LANG == 'en' else 'Descargar todas las decisiones', decisions.to_csv(index=False), file_name='what_are_the_odds_decisions.csv', mime='text/csv')
     st.download_button('Download best board' if LANG == 'en' else 'Descargar Best Board', best.to_csv(index=False), file_name='what_are_the_odds_best_board.csv', mime='text/csv')
     st.download_button('Download lock-ready' if LANG == 'en' else 'Descargar listas para bloquear', lock_ready.to_csv(index=False), file_name='what_are_the_odds_lock_ready.csv', mime='text/csv')
+    st.download_button('Download odds accuracy' if LANG == 'en' else 'Descargar precisión de cuotas', normalized.to_csv(index=False), file_name='what_are_the_odds_accuracy_center.csv', mime='text/csv')
     st.download_button('Download manual audit' if LANG == 'en' else 'Descargar auditoría manual', normalized.to_csv(index=False), file_name='what_are_the_odds_manual_audit.csv', mime='text/csv')
     st.download_button('Download scanner rank' if LANG == 'en' else 'Descargar ranking del escáner', decisions.to_csv(index=False), file_name='what_are_the_odds_scanner_rank.csv', mime='text/csv')
     st.download_button('Download CLV' if LANG == 'en' else 'Descargar CLV', clv.to_csv(index=False), file_name='what_are_the_odds_clv.csv', mime='text/csv')
