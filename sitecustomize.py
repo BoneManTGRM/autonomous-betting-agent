@@ -6,6 +6,29 @@ import os
 from typing import Any
 
 
+NAV_TOOLS: tuple[tuple[str, str, str], ...] = (
+    ('Scanner Pro', 'Scanner Pro', 'pages/scanner_pro.py'),
+    ('Pro Predictor', 'Predictor Pro', 'pages/pro_predictor.py'),
+    ('Ultra 80 Profit Mode', 'Modo Ultra 80 Rentable', 'pages/ultra80_profit_mode.py'),
+    ('Simulation Lab', 'Laboratorio de Simulación', 'pages/simulation_lab.py'),
+    ('Threshold Optimizer', 'Optimizador de Umbrales', 'pages/threshold_optimizer.py'),
+    ('What Are the Odds', 'Cuotas y Valor', 'pages/what_are_the_odds.py'),
+    ('Odds Lock Pro', 'Bloqueo de Cuotas Pro', 'pages/odds_lock_pro.py'),
+    ('Public Proof Dashboard', 'Dashboard Público de Prueba', 'pages/public_proof_dashboard.py'),
+    ('Reset Lock File', 'Reiniciar Archivo de Bloqueo', 'pages/reset_lock_file.py'),
+    ('Learning Memory', 'Memoria de Aprendizaje', 'pages/learn_memory.py'),
+)
+
+NAV_NOTES_EN = (
+    'Workflow: Scanner Pro → Pro Predictor → Ultra 80 Profit Mode → Simulation Lab → Odds Lock Pro → Public Proof Dashboard → Threshold Optimizer → Learning Memory.',
+    'Use Reset Lock File to clear one test-window proof ledger without touching other windows.',
+)
+NAV_NOTES_ES = (
+    'Flujo: Scanner Pro → Predictor Pro → Modo Ultra 80 Rentable → Laboratorio de Simulación → Bloqueo de Cuotas Pro → Dashboard Público de Prueba → Optimizador de Umbrales → Memoria de Aprendizaje.',
+    'Usa Reiniciar Archivo de Bloqueo para borrar el ledger de una ventana de prueba sin tocar las demás.',
+)
+
+
 def get_secret(*names: str) -> str:
     """Read a Streamlit secret or environment variable by one of several names.
 
@@ -37,13 +60,79 @@ builtins.get_secret = get_secret
 
 # Python imports sitecustomize automatically at interpreter startup when this
 # repository is on sys.path. Importing the package installs the global Streamlit
-# language/sidebar/report translator before any page renders.
+# language/sidebar/report translator before any page renders. A lightweight
+# fallback below covers pages that run before that package import succeeds.
 try:
     import autonomous_betting_agent  # noqa: F401
 except Exception:
     # Keep app startup safe even if a non-Streamlit command imports Python with a
     # partially installed environment.
     pass
+
+
+def _normal_language(value: object) -> str:
+    text = str(value or '').strip().lower()
+    if text.startswith('es') or 'español' in text or 'espanol' in text:
+        return 'Español'
+    if text.startswith('en') or 'english' in text:
+        return 'English'
+    return 'English'
+
+
+def _install_sidebar_nav_fallback() -> None:
+    try:
+        import streamlit as st
+        from streamlit.delta_generator import DeltaGenerator
+    except Exception:
+        return
+    if getattr(st, '_aba_streamlit_helpers_v5_installed', False):
+        return
+    if getattr(st, '_aba_sidebar_nav_fallback_installed', False):
+        return
+    st._aba_sidebar_nav_fallback_installed = True
+    real_st_selectbox = st.selectbox
+    real_dg_selectbox = DeltaGenerator.selectbox
+
+    def render_nav(lang: str) -> None:
+        with st.sidebar:
+            st.markdown('---')
+            st.markdown('### Herramientas' if lang == 'Español' else '### Tools')
+            for english, spanish, path in NAV_TOOLS:
+                label = spanish if lang == 'Español' else english
+                try:
+                    st.page_link(path, label=label)
+                except Exception:
+                    st.caption(label)
+            st.markdown('---')
+            st.markdown('### Flujo' if lang == 'Español' else '### Workflow')
+            for note in (NAV_NOTES_ES if lang == 'Español' else NAV_NOTES_EN):
+                st.caption(note)
+
+    def is_language_selector(label: Any, options: Any) -> bool:
+        try:
+            opts = list(options)
+        except Exception:
+            return False
+        label_text = str(label or '').lower()
+        return ('language' in label_text or 'idioma' in label_text) and 'English' in opts and 'Español' in opts
+
+    def patched_st_selectbox(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
+        value = real_st_selectbox(label, options, *args, **kwargs)
+        if is_language_selector(label, options):
+            render_nav(_normal_language(value))
+        return value
+
+    def patched_dg_selectbox(self: Any, label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
+        value = real_dg_selectbox(self, label, options, *args, **kwargs)
+        if is_language_selector(label, options):
+            render_nav(_normal_language(value))
+        return value
+
+    st.selectbox = patched_st_selectbox
+    DeltaGenerator.selectbox = patched_dg_selectbox
+
+
+_install_sidebar_nav_fallback()
 
 try:
     from autonomous_betting_agent.audit import enrich_prediction_frame, install_live_api_audit_context
