@@ -11,6 +11,7 @@ from autonomous_betting_agent.commercial_platform_tools import (
     filter_locked_proof_rows,
     load_persistent_ledger,
     merge_ledgers,
+    normalize_workspace_id,
     proof_audit_frame,
     proof_audit_summary,
     public_dashboard_table,
@@ -29,12 +30,15 @@ TEXT = {
         'title': 'Public Proof Dashboard',
         'caption': 'No-login proof dashboard for locked picks, auto-grading uploads, client-safe tables, shareable report cards, and historical tracker review.',
         'info': 'Official proof mode uses locked proof rows with proof_id and locked_at_utc. Historical tracker mode can display older result CSVs, but those rows are clearly marked non-proof and do not count as official future-locked proof.',
+        'test_window': 'Test Window ID',
+        'test_window_help': 'Use the same ID as Odds Lock Pro, such as test_01. Each ID reads/writes its own proof ledger.',
+        'active_test_window': 'Active test ledger',
         'use_demo': 'Use demo ledger when no real ledger exists',
-        'use_db': 'Use persistent ledger database',
+        'use_db': 'Use this test ledger database',
         'use_session': 'Use Odds Lock Pro session rows',
         'upload_ledger': 'Upload locked ledger or historical tracker CSV',
         'upload_results': 'Upload finished results CSV for auto-grading',
-        'save_db': 'Save merged ledger to persistent CSV database',
+        'save_db': 'Save merged ledger to this test ledger',
         'apply_results': 'Apply result updates',
         'source': 'Source',
         'rows': 'Locked',
@@ -79,12 +83,15 @@ TEXT = {
         'title': 'Dashboard Público de Prueba',
         'caption': 'Dashboard sin contraseña para picks bloqueados, autocalificación por CSV, tablas para clientes, tarjetas compartibles y revisión histórica.',
         'info': 'El modo de prueba oficial usa filas bloqueadas con proof_id y locked_at_utc. El modo histórico puede mostrar CSVs viejos de resultados, pero se marcan como no-prueba y no cuentan como prueba oficial futura.',
+        'test_window': 'ID de ventana de prueba',
+        'test_window_help': 'Usa el mismo ID que Odds Lock Pro, como test_01. Cada ID lee/guarda su propio ledger de prueba.',
+        'active_test_window': 'Ledger de prueba activo',
         'use_demo': 'Usar ledger demo si no hay ledger real',
-        'use_db': 'Usar base CSV persistente',
+        'use_db': 'Usar esta base de prueba',
         'use_session': 'Usar filas de Odds Lock Pro en sesión',
         'upload_ledger': 'Subir CSV de ledger bloqueado o tracker histórico',
         'upload_results': 'Subir CSV de resultados finalizados para autocalificar',
-        'save_db': 'Guardar ledger combinado en base CSV persistente',
+        'save_db': 'Guardar ledger combinado en este ledger de prueba',
         'apply_results': 'Aplicar resultados',
         'source': 'Fuente',
         'rows': 'Bloqueados',
@@ -122,7 +129,7 @@ TEXT = {
         'updated': 'Resumen de actualización de resultados',
         'safety': 'Chequeo de seguridad de prueba',
         'tracker_mode': 'Modo tracker histórico — no es prueba oficial',
-        'tracker_warning': 'Este archivo sirve para revisar récord, pero no es prueba oficial porque no tiene proof_id ni locked_at_utc. Usa Odds Lock Pro antes del inicio para prueba oficial mensual.',
+        'tracker_warning': 'Este archivo sirve para revisar récord, pero no es prueba oficial porque no tiene proof_id y locked_at_utc. Usa Odds Lock Pro antes del inicio para prueba oficial mensual.',
         'ignored_nonproof': 'Filas crudas/no-prueba ignoradas',
     },
 }
@@ -136,18 +143,18 @@ def pct(value: float | None, digits: int = 1) -> str:
     return 'N/A' if value is None else f'{value * 100:.{digits}f}%'
 
 
-def read_sources() -> tuple[str, pd.DataFrame, pd.DataFrame, int]:
+def read_sources(workspace_id: str) -> tuple[str, pd.DataFrame, pd.DataFrame, int]:
     raw_frames: list[pd.DataFrame] = []
     ledger_frames: list[pd.DataFrame] = []
     raw_count = 0
     names: list[str] = []
     if st.checkbox(t('use_db'), value=True):
-        db = load_persistent_ledger()
+        db = load_persistent_ledger(workspace_id=workspace_id)
         if not db.empty:
             raw_frames.append(db)
             ledger_frames.append(db)
             raw_count += len(db)
-            names.append('persistent_ledger')
+            names.append(f'persistent_ledger:{workspace_id}')
     if st.checkbox(t('use_session'), value=True):
         rows = st.session_state.get('odds_lock_pro_locked_rows') or []
         if rows:
@@ -238,7 +245,17 @@ st.title(t('title'))
 st.caption(t('caption'))
 st.info(t('info'))
 
-source, ledger, raw_input, raw_count = read_sources()
+workspace_input = st.sidebar.text_input(
+    t('test_window'),
+    value=st.session_state.get('aba_test_window_id', 'test_01'),
+    help=t('test_window_help'),
+)
+workspace_id = normalize_workspace_id(workspace_input)
+st.session_state['aba_test_window_id'] = workspace_id
+st.sidebar.caption(f"{t('active_test_window')}: {workspace_id}")
+st.caption(f"{t('active_test_window')}: {workspace_id}")
+
+source, ledger, raw_input, raw_count = read_sources(workspace_id)
 st.caption(f"{t('source')}: {source or 'none'}")
 
 results_upload = st.file_uploader(t('upload_results'), type=['csv'], accept_multiple_files=False, key='proof_results_upload')
@@ -247,14 +264,16 @@ if results_upload is not None and not ledger.empty:
         result_frame = pd.read_csv(results_upload)
         if st.button(t('apply_results'), type='primary', use_container_width=True):
             ledger, update_stats = apply_result_updates(ledger, result_frame)
+            ledger['test_window_id'] = workspace_id
             st.session_state['odds_lock_pro_locked_rows'] = ledger.to_dict('records')
             st.json({t('updated'): update_stats})
     except Exception as exc:
         st.warning(str(exc))
 
 if not ledger.empty and source != 'demo_ledger' and st.button(t('save_db'), use_container_width=True):
-    ledger = save_persistent_ledger(ledger)
-    st.success('Saved persistent ledger.' if LANG == 'en' else 'Ledger persistente guardado.')
+    ledger['test_window_id'] = workspace_id
+    ledger = save_persistent_ledger(ledger, workspace_id=workspace_id)
+    st.success(('Saved persistent ledger: ' if LANG == 'en' else 'Ledger persistente guardado: ') + workspace_id)
 
 ledger = filter_locked_proof_rows(ledger)
 if ledger.empty:
@@ -288,8 +307,8 @@ tabs = st.tabs([t('table'), t('dashboard'), t('audit'), t('cards')])
 with tabs[0]:
     public = public_dashboard_table(filtered_ledger)
     st.dataframe(public, use_container_width=True, hide_index=True)
-    st.download_button(t('download_public'), public.to_csv(index=False), file_name='public_proof_dashboard.csv', mime='text/csv')
-    st.download_button(t('download_private'), filtered_ledger.to_csv(index=False), file_name='private_proof_audit.csv', mime='text/csv')
+    st.download_button(t('download_public'), public.to_csv(index=False), file_name=f'public_proof_dashboard_{workspace_id}.csv', mime='text/csv')
+    st.download_button(t('download_private'), filtered_ledger.to_csv(index=False), file_name=f'private_proof_audit_{workspace_id}.csv', mime='text/csv')
 
 with tabs[1]:
     st.json(metrics)
@@ -306,21 +325,21 @@ with tabs[2]:
     st.json(audit_summary)
     audit = proof_audit_frame(filtered_ledger)
     st.dataframe(audit, use_container_width=True, hide_index=True)
-    st.download_button(t('download_audit'), audit.to_csv(index=False), file_name='proof_audit.csv', mime='text/csv')
+    st.download_button(t('download_audit'), audit.to_csv(index=False), file_name=f'proof_audit_{workspace_id}.csv', mime='text/csv')
 
 with tabs[3]:
-    brand = st.text_input(t('brand'), value='Private Analytics')
+    brand = st.text_input(t('brand'), value='ReparoEdge · Powered by Reparodynamics')
     title = st.text_input(t('card_title'), value='Proof Dashboard')
     markdown = report_card_markdown(filtered_ledger, title=title, brand=brand)
     html = report_card_html(filtered_ledger, title=title, brand=brand)
     report = daily_locked_report(filtered_ledger, language='Español' if LANG == 'es' else 'English')
     st.subheader(t('markdown_card'))
     st.text_area(t('markdown_card'), value=markdown, height=240)
-    st.download_button(t('download_markdown'), markdown, file_name='proof_dashboard_card.md', mime='text/markdown')
+    st.download_button(t('download_markdown'), markdown, file_name=f'proof_dashboard_card_{workspace_id}.md', mime='text/markdown')
     st.subheader(t('html_card'))
     st.markdown(html, unsafe_allow_html=True)
     st.text_area(t('html_card'), value=html, height=280)
-    st.download_button(t('download_html'), html, file_name='proof_dashboard_card.html', mime='text/html')
+    st.download_button(t('download_html'), html, file_name=f'proof_dashboard_card_{workspace_id}.html', mime='text/html')
     st.subheader(t('daily_report'))
     st.text_area(t('daily_report'), value=report, height=340)
-    st.download_button(t('download_report'), report, file_name='daily_locked_report.txt', mime='text/plain')
+    st.download_button(t('download_report'), report, file_name=f'daily_locked_report_{workspace_id}.txt', mime='text/plain')
