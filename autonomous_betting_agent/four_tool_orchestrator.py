@@ -30,6 +30,15 @@ VALUE_REQUIREMENTS = {
     'decimal_price': ['decimal_price', 'best_price', 'average_price', 'odds', 'price'],
     'agent_decision': ['agent_decision', 'decision'],
 }
+ULTRA80_REQUIREMENTS = {
+    'event': ['event', 'game', 'match'],
+    'prediction': ['prediction', 'pick', 'selection'],
+    'model_probability': ['model_probability', 'model_probability_clean', 'probability', 'predicted_probability'],
+    'decimal_price': ['decimal_price', 'best_price', 'average_price', 'odds', 'price'],
+    'expected_value': ['expected_value_per_unit', 'computed_ev_decimal', 'estimated_ev_decimal'],
+    'ultra80_candidate': ['ultra80_candidate'],
+    'event_start_utc': ['event_start_utc', 'known_start_utc', 'start', 'commence_time'],
+}
 LEARNING_REQUIREMENTS = {
     'event': ['event', 'game', 'match'],
     'prediction': ['prediction', 'pick', 'selection'],
@@ -87,7 +96,7 @@ def _bool_count(frame: pd.DataFrame, column: str) -> int:
     if frame is None or frame.empty or column not in frame.columns:
         return 0
     values = frame[column].astype(str).str.lower().str.strip()
-    return int(values.isin(['true', '1', 'yes', 'y']).sum())
+    return int(values.isin(['true', '1', 'yes', 'y', 'pass']).sum())
 
 
 def _numeric_mean(frame: pd.DataFrame, column: str) -> float | None:
@@ -141,10 +150,6 @@ def _resolved_with_probability_count(frame: pd.DataFrame) -> int:
     return int((_result_mask(frame) & _probability_mask(frame)).sum())
 
 
-def _has_any(frame: pd.DataFrame, aliases: list[str]) -> bool:
-    return _group_present_rate(frame, aliases) > 0
-
-
 def page_health(frame: pd.DataFrame | list[dict[str, Any]], *, page: str) -> dict[str, Any]:
     raw = pd.DataFrame(frame) if isinstance(frame, list) else frame
     normalized = normalize_frame(raw) if raw is not None and not raw.empty else pd.DataFrame()
@@ -154,6 +159,7 @@ def page_health(frame: pd.DataFrame | list[dict[str, Any]], *, page: str) -> dic
     scanner_coverage = _requirement_coverage(normalized, SCANNER_REQUIREMENTS)
     predictor_coverage = _requirement_coverage(normalized, PREDICTOR_REQUIREMENTS)
     value_coverage = _requirement_coverage(normalized, VALUE_REQUIREMENTS)
+    ultra80_coverage = _requirement_coverage(normalized, ULTRA80_REQUIREMENTS)
     learning_coverage = _requirement_coverage(normalized, LEARNING_REQUIREMENTS)
     resolved = _resolved_count(normalized)
     probabilities = _probability_count(normalized)
@@ -162,6 +168,7 @@ def page_health(frame: pd.DataFrame | list[dict[str, Any]], *, page: str) -> dic
     avg_scanner_strength = _numeric_mean(normalized, 'scanner_strength_score')
     playable = _count(normalized, 'agent_decision', 'play_strong') + _count(normalized, 'agent_decision', 'play_small')
     lock_ready = _bool_count(normalized, 'lock_ready')
+    ultra80 = _bool_count(normalized, 'ultra80_candidate')
 
     if rows == 0:
         status = 'empty'
@@ -173,8 +180,12 @@ def page_health(frame: pd.DataFrame | list[dict[str, Any]], *, page: str) -> dic
         next_action = 'send_to_pro_predictor' if status == 'ready_for_pro_predictor' else 'rescan_with_more_books_or_sport_keys'
     elif page_key == 'pro_predictor':
         blockers = _missing_requirements(normalized, PREDICTOR_REQUIREMENTS)
-        status = 'ready_for_what_are_the_odds' if predictor_coverage >= 0.80 else 'needs_prediction_fields'
-        next_action = 'send_to_what_are_the_odds' if status == 'ready_for_what_are_the_odds' else 'rerun_with_odds_and_event_times'
+        status = 'ready_for_ultra80_or_value_review' if predictor_coverage >= 0.80 else 'needs_prediction_fields'
+        next_action = 'send_to_ultra80_profit_mode' if status == 'ready_for_ultra80_or_value_review' else 'rerun_with_odds_and_event_times'
+    elif page_key == 'ultra80_profit_mode':
+        blockers = _missing_requirements(normalized, ULTRA80_REQUIREMENTS)
+        status = 'ready_for_odds_lock_pro' if ultra80 > 0 and ultra80_coverage >= 0.80 else 'no_ultra80_rows_ready'
+        next_action = 'lock_before_start_and_track_roi' if status == 'ready_for_odds_lock_pro' else 'review_blockers_or_collect_more_value'
     elif page_key == 'what_are_the_odds':
         blockers = _missing_requirements(normalized, VALUE_REQUIREMENTS)
         status = 'ready_for_lock_or_learning' if playable > 0 or value_coverage >= 0.80 else 'needs_value_review_fields'
@@ -201,10 +212,12 @@ def page_health(frame: pd.DataFrame | list[dict[str, Any]], *, page: str) -> dic
     score = 0.0
     if rows > 0:
         score += min(30.0, rows / 10.0)
-        score += scanner_coverage * 15.0
-        score += predictor_coverage * 20.0
-        score += value_coverage * 20.0
+        score += scanner_coverage * 12.0
+        score += predictor_coverage * 18.0
+        score += value_coverage * 15.0
+        score += ultra80_coverage * 15.0
         score += min(10.0, playable * 2.0)
+        score += min(10.0, ultra80 * 5.0)
         score += min(5.0, resolved_with_probability)
     return {
         'page': page,
@@ -215,36 +228,19 @@ def page_health(frame: pd.DataFrame | list[dict[str, Any]], *, page: str) -> dic
         'scanner_coverage': scanner_coverage,
         'predictor_coverage': predictor_coverage,
         'value_coverage': value_coverage,
+        'ultra80_coverage': ultra80_coverage,
         'learning_coverage': learning_coverage,
         'playable_rows': playable,
+        'ultra80_rows': ultra80,
         'lock_ready_rows': lock_ready,
         'resolved_rows': resolved,
         'probability_rows': probabilities,
-        'resolved_probability_rows': resolved_with_probability,
+        'resolved_with_probability_rows': resolved_with_probability,
         'avg_agent_score': avg_agent_score,
         'avg_scanner_strength': avg_scanner_strength,
-        'blockers': blockers,
+        'missing_or_blocking_fields': blockers,
     }
 
 
 def page_health_frame(frame: pd.DataFrame | list[dict[str, Any]], *, page: str) -> pd.DataFrame:
-    health = page_health(frame, page=page)
-    flat = dict(health)
-    flat['blockers'] = ' | '.join(health.get('blockers', []))
-    return pd.DataFrame([flat])
-
-
-def four_tool_recommendation(frame: pd.DataFrame | list[dict[str, Any]]) -> str:
-    raw = pd.DataFrame(frame) if isinstance(frame, list) else frame
-    normalized = normalize_frame(raw) if raw is not None and not raw.empty else pd.DataFrame()
-    if normalized.empty:
-        return 'start_with_scanner_pro_or_upload_csv'
-    if _resolved_with_probability_count(normalized) >= 5:
-        return 'learning_memory'
-    if 'agent_decision' in normalized.columns and (_count(normalized, 'agent_decision', 'play_strong') + _count(normalized, 'agent_decision', 'play_small')) > 0:
-        return 'what_are_the_odds_or_odds_lock'
-    if _has_any(normalized, VALUE_REQUIREMENTS['model_probability']) and _has_any(normalized, VALUE_REQUIREMENTS['decimal_price']):
-        return 'what_are_the_odds'
-    if _has_any(normalized, SCANNER_REQUIREMENTS['decimal_price']):
-        return 'pro_predictor'
-    return 'scanner_pro'
+    return pd.DataFrame([page_health(frame, page=page)])
