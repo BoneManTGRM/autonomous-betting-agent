@@ -29,7 +29,8 @@ IMPLIED_PROBABILITY_ALIASES = (
     'price_implied_probability',
 )
 
-AMERICAN_PRICE_ALIASES = ('american_odds', 'american_price', 'moneyline')
+
+MISSING_TEXT = {'', 'nan', 'none', 'null', 'unknown', 'missing', 'n/a', 'na'}
 
 
 def clean_key(value: Any) -> str:
@@ -43,7 +44,7 @@ def parse_probability(value: Any) -> float | None:
     if value is None:
         return None
     text = str(value).strip().replace(',', '')
-    if not text or text.lower() in {'nan', 'none', 'null', 'unknown', 'missing', 'n/a', 'na'}:
+    if not text or text.lower() in MISSING_TEXT:
         return None
     is_percent = text.endswith('%')
     if is_percent:
@@ -61,7 +62,7 @@ def parse_price(value: Any) -> float | None:
     if value is None:
         return None
     text = str(value).strip().replace(',', '')
-    if not text or text.lower() in {'nan', 'none', 'null', 'unknown', 'missing', 'n/a', 'na'}:
+    if not text or text.lower() in MISSING_TEXT:
         return None
     try:
         number = float(text)
@@ -98,6 +99,10 @@ def _series_has_values(series: pd.Series) -> bool:
     return bool(series.fillna('').astype(str).str.strip().replace({'nan': '', 'None': '', 'missing': '', 'unknown': ''}).astype(bool).any())
 
 
+def _missing_mask(series: pd.Series) -> pd.Series:
+    return series.fillna('').astype(str).str.strip().str.lower().isin(MISSING_TEXT)
+
+
 def _copy_if_missing(frame: pd.DataFrame, target: str, aliases: Iterable[str]) -> None:
     if target in frame.columns and _series_has_values(frame[target]):
         return
@@ -110,13 +115,14 @@ def _normalize_best_price(frame: pd.DataFrame) -> None:
     if 'best_price' not in frame.columns:
         return
     frame['best_price'] = frame['best_price'].map(lambda value: '' if parse_price(value) is None else parse_price(value))
-    if 'decimal_price' not in frame.columns or not _series_has_values(frame['decimal_price']):
+    if 'decimal_price' not in frame.columns:
         frame['decimal_price'] = frame['best_price']
+    else:
+        mask = _missing_mask(frame['decimal_price'])
+        frame.loc[mask, 'decimal_price'] = frame.loc[mask, 'best_price']
 
 
 def _derive_price_from_implied_probability(frame: pd.DataFrame) -> None:
-    if 'best_price' in frame.columns and _series_has_values(frame['best_price']):
-        return
     source = _find_column(frame, IMPLIED_PROBABILITY_ALIASES)
     if source is None:
         return
@@ -125,9 +131,17 @@ def _derive_price_from_implied_probability(frame: pd.DataFrame) -> None:
         probability = parse_probability(value)
         return '' if probability is None else round(1.0 / probability, 4)
 
-    frame['best_price'] = frame[source].map(convert)
-    if 'decimal_price' not in frame.columns or not _series_has_values(frame['decimal_price']):
+    derived = frame[source].map(convert)
+    if 'best_price' not in frame.columns:
+        frame['best_price'] = derived
+    else:
+        mask = _missing_mask(frame['best_price'])
+        frame.loc[mask, 'best_price'] = derived.loc[mask]
+    if 'decimal_price' not in frame.columns:
         frame['decimal_price'] = frame['best_price']
+    else:
+        mask = _missing_mask(frame['decimal_price'])
+        frame.loc[mask, 'decimal_price'] = frame.loc[mask, 'best_price']
 
 
 def normalize_odds_input(frame: pd.DataFrame) -> pd.DataFrame:
