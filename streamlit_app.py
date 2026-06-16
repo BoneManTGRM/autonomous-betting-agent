@@ -110,6 +110,14 @@ def render_brand_header() -> None:
     c3.success("High Confidence")
 
 
+def render_sidebar_brand() -> None:
+    st.sidebar.success("ABA")
+    st.sidebar.markdown("### Signal")
+    st.sidebar.error("Pro")
+    st.sidebar.caption(APP_TAGLINE)
+    st.sidebar.divider()
+
+
 def mobile_safe_file_uploader(label, *args, **kwargs):
     label_text = str(label).lower()
     if "memory" in label_text or "ara" in label_text:
@@ -192,6 +200,7 @@ DeltaGenerator.number_input = defaulted_dg_number_input
 DeltaGenerator.slider = defaulted_dg_slider
 DeltaGenerator.text_input = defaulted_dg_text_input
 DeltaGenerator.toggle = defaulted_dg_toggle
+render_sidebar_brand()
 
 try:
     current_page = st.navigation(CORE_PAGES, position="sidebar")
