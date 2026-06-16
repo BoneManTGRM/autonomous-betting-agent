@@ -97,6 +97,11 @@ def _apply_slider_default(label, kwargs):
     return kwargs
 
 
+def _slider_should_use_number_input(label) -> bool:
+    key = _label_key(label)
+    return "agent score" in key or "puntaje agente" in key
+
+
 def _apply_text_default(label, kwargs):
     key = _label_key(label)
     if key in DEFAULT_TEXT_INPUT_VALUES:
@@ -137,6 +142,8 @@ def defaulted_st_number_input(label, *args, **kwargs):
 
 
 def defaulted_st_slider(label, *args, **kwargs):
+    if _slider_should_use_number_input(label):
+        return _REAL_ST_NUMBER_INPUT(label, *args, **_apply_slider_default(label, kwargs))
     return _REAL_ST_SLIDER(label, *args, **_apply_slider_default(label, kwargs))
 
 
@@ -153,6 +160,8 @@ def defaulted_dg_number_input(self, label, *args, **kwargs):
 
 
 def defaulted_dg_slider(self, label, *args, **kwargs):
+    if _slider_should_use_number_input(label):
+        return _REAL_DG_NUMBER_INPUT(self, label, *args, **_apply_slider_default(label, kwargs))
     return _REAL_DG_SLIDER(self, label, *args, **_apply_slider_default(label, kwargs))
 
 
