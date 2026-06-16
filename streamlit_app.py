@@ -98,7 +98,11 @@ def _apply_toggle_default(label, kwargs):
 
 
 def render_brand_header() -> None:
-    _REAL_ST_TITLE(APP_NAME)
+    st.caption("Sports Market Intelligence")
+    name_cols = st.columns(3)
+    name_cols[0].success("ABA")
+    name_cols[1].info("Signal")
+    name_cols[2].warning("Pro")
     st.success(APP_TAGLINE)
     c1, c2, c3 = st.columns(3)
     c1.info("Odds Signals")
