@@ -24,6 +24,8 @@ OPTIONAL_PAGES = [
     'pages/02_daily_operator_checklist.py',
     'pages/03_private_beta_sales_dashboard.py',
     'pages/04_game_intelligence_center.py',
+    'pages/language_settings.py',
+    'pages/reset_data.py',
     'pages/deployment_health.py',
     'pages/auto_result_grading.py',
     'pages/daily_workflow.py',
