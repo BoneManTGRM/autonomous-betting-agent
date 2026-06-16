@@ -11,12 +11,13 @@ from .row_normalizer import safe_text
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ARA_MEMORY_PATH = REPO_ROOT / 'data' / 'ara_learning_memory.csv'
 
-SPORT_SOCCER_TERMS = ('soccer', 'football', 'fifa', 'world cup', 'uefa', 'liga', 'epl', 'mls', '1x2')
-SPORT_TENNIS_TERMS = ('tennis', 'atp', 'wta', 'halle', 'queen', 'stuttgart', 'berlin', 'wimbledon')
+SPORT_SOCCER_TERMS = ('soccer', 'football', 'fifa', 'world cup', 'uefa', 'liga', 'epl', 'mls', 'champions league', 'concacaf')
+SPORT_TENNIS_TERMS = ('tennis', 'atp', 'wta', 'halle', 'queen', 'stuttgart', 'berlin', 'wimbledon', 'eastbourne', 'mallorca')
 SPORT_BASEBALL_TERMS = ('mlb', 'baseball', 'ncaa baseball')
 SPORT_BASKETBALL_TERMS = ('nba', 'wnba', 'basketball', 'ncaab')
-GRASS_TERMS = ('grass', 'halle', "queen", 'stuttgart', 'wimbledon', 'mallorca', 'eastbourne', 'nottingham', 's-hertogenbosch')
-TENNIS_VOLATILITY_TERMS = ('tiebreak', 'tie-break', 'ace', 'serve', 'big server', 'three sets', '3 sets', 'long match', 'withdrawal', 'retirement', 'fatigue')
+GRASS_TERMS = ('grass', 'halle', "queen", 'stuttgart', 'wimbledon', 'mallorca', 'eastbourne', 'nottingham', 's-hertogenbosch', 'den bosch')
+CLAY_TERMS = ('clay', 'roland garros', 'french open', 'monte carlo', 'madrid open', 'rome masters')
+HARD_TERMS = ('hard', 'australian open', 'us open', 'indian wells', 'miami open', 'cincinnati')
 
 
 def _num(value: Any) -> float | None:
@@ -38,6 +39,13 @@ def _prob(value: Any) -> float | None:
     return parsed if 0.0 < parsed < 1.0 else None
 
 
+def _price_to_prob(value: Any) -> float | None:
+    price = _num(value)
+    if price is None or price <= 1.0:
+        return None
+    return 1.0 / price
+
+
 def _text(row: dict[str, Any], *keys: str) -> str:
     return ' '.join(safe_text(row.get(key)) for key in keys if safe_text(row.get(key))).lower()
 
@@ -46,14 +54,14 @@ def _contains(text: str, terms: tuple[str, ...]) -> bool:
     return any(term in text for term in terms)
 
 
-def _column(frame: pd.DataFrame, column: str) -> pd.Series:
+def _series(frame: pd.DataFrame, column: str) -> pd.Series:
     if column in frame.columns:
         return frame[column].astype(str)
-    return pd.Series('', index=frame.index, dtype=str)
+    return pd.Series([''] * len(frame), index=frame.index, dtype=str)
 
 
 def sport_family(row: dict[str, Any]) -> str:
-    text = _text(row, 'sport', 'league', 'sport_title', 'event', 'competition', 'tournament', 'market_type')
+    text = _text(row, 'sport', 'league', 'sport_title', 'event', 'competition', 'tournament', 'sport_key')
     if _contains(text, SPORT_SOCCER_TERMS):
         return 'soccer'
     if _contains(text, SPORT_TENNIS_TERMS):
@@ -79,8 +87,8 @@ def probability_bucket(probability: float | None) -> str:
 
 
 def projected_scores(row: dict[str, Any]) -> tuple[float, float] | None:
-    for key in ['projected_score', 'estimated_score', 'predicted_score', 'score_projection', 'projected_final_score']:
-        text = safe_text(row.get(key))
+    for key in ['projected_score', 'estimated_score', 'predicted_score', 'score_projection', 'projected_final_score', 'result_note']:
+        text = safe_text(row.get(key)).replace('–', '-').replace('—', '-').replace('to', '-')
         if not text:
             continue
         numbers = [float(value) for value in re.findall(r'\d+(?:\.\d+)?', text)]
@@ -109,23 +117,18 @@ def projected_total(row: dict[str, Any]) -> float | None:
 
 
 def set_projection_risk(row: dict[str, Any]) -> str:
-    text = _text(row, 'projected_score', 'estimated_score', 'predicted_score', 'score_projection')
-    if re.search(r'\b2\s*[-:]\s*1\b', text) or re.search(r'\b1\s*[-:]\s*2\b', text):
+    text = _text(row, 'projected_score', 'estimated_score', 'predicted_score', 'score_projection', 'result_note').replace('–', '-').replace('—', '-')
+    if re.search(r'\b2\s*[-:]\s*1\b', text) or re.search(r'\b1\s*[-:]\s*2\b', text) or '2 sets to 1' in text:
         return 'projected_2_1_close_match'
     if re.search(r'\b5\s*[-:]\s*4\b', text) or re.search(r'\b4\s*[-:]\s*5\b', text):
         return 'projected_5_4_one_run_game'
-    if re.search(r'\b7\s*[-:]\s*6\b', text) or re.search(r'\b6\s*[-:]\s*7\b', text):
+    if re.search(r'\b7\s*[-:]\s*6\b', text) or re.search(r'\b6\s*[-:]\s*7\b', text) or 'tiebreak' in text or 'tie-break' in text:
         return 'projected_tiebreak_margin'
     return ''
 
 
 def market_type(row: dict[str, Any]) -> str:
     return safe_text(row.get('market_type') or row.get('market') or row.get('bet_type')).lower()
-
-
-def is_moneyline_like(row: dict[str, Any]) -> bool:
-    market = market_type(row)
-    return market in {'', 'h2h', 'moneyline', 'winner', '1x2'} or 'moneyline' in market or 'h2h' in market
 
 
 def edge_value(row: dict[str, Any]) -> float | None:
@@ -135,7 +138,7 @@ def edge_value(row: dict[str, Any]) -> float | None:
     edge_percent = _num(row.get('edge_percent') or row.get('model_market_edge_percent'))
     if edge_percent is not None:
         return edge_percent / 100.0
-    model = _prob(row.get('memory_adjusted_probability') or row.get('model_probability') or row.get('model_probability_clean'))
+    model = _prob(row.get('memory_adjusted_probability') or row.get('model_probability_clean') or row.get('model_probability'))
     implied = _prob(row.get('market_implied_probability'))
     if implied is None:
         price = _num(row.get('decimal_price'))
@@ -161,8 +164,8 @@ def _memory_rows_for(row: dict[str, Any], memory: pd.DataFrame, probability: flo
     sport = safe_text(row.get('sport') or row.get('sport_title') or row.get('league'))
     market = safe_text(row.get('market_type') or row.get('market'))
     bucket = probability_bucket(probability)
-    area_type = _column(memory, 'area_type')
-    group_value = _column(memory, 'group_value').str.lower()
+    area_type = _series(memory, 'area_type')
+    group_value = _series(memory, 'group_value').str.lower()
     candidates: list[pd.DataFrame] = []
     if sport:
         candidates.append(memory[(area_type == 'sport') & (group_value == sport.lower())])
@@ -172,7 +175,8 @@ def _memory_rows_for(row: dict[str, Any], memory: pd.DataFrame, probability: flo
     if sport and market:
         candidates.append(memory[(area_type == 'sport_market') & (group_value == f'{sport}|{market}'.lower())])
     candidates.append(memory[(area_type == 'probability_bucket') & (group_value == bucket.lower())])
-    out = pd.concat([c for c in candidates if c is not None and not c.empty], ignore_index=True) if any(c is not None and not c.empty for c in candidates) else pd.DataFrame()
+    valid = [candidate for candidate in candidates if candidate is not None and not candidate.empty]
+    out = pd.concat(valid, ignore_index=True) if valid else pd.DataFrame()
     return out.drop_duplicates() if not out.empty else out
 
 
@@ -209,33 +213,95 @@ def memory_adjustment(row: dict[str, Any], probability: float | None = None, mem
     return {'raw_model_probability': round(base, 6), 'memory_adjustment': round(adjustment, 6), 'memory_adjusted_probability': round(adjusted, 6), 'memory_influence_strength': strength, 'memory_direction': direction, 'memory_similar_patterns': int(len(matched)), 'memory_max_records': similar, 'memory_reason': reason}
 
 
-def soccer_draw_estimate(row: dict[str, Any], model: float | None, margin: float | None) -> tuple[float | None, str]:
-    explicit = _prob(row.get('draw_probability') or row.get('model_draw_probability') or row.get('draw_prob'))
-    if explicit is not None:
-        return explicit, 'explicit'
-    total = projected_total(row)
-    if margin is not None and margin <= 0.5:
-        return 0.32, 'estimated_close_margin'
-    if margin is not None and margin <= 1.0:
-        return 0.29, 'estimated_one_goal_margin'
-    if total is not None and total <= 2.25:
-        return 0.28, 'estimated_low_total'
+def soccer_draw_probability(row: dict[str, Any], model: float | None, margin: float | None, total: float | None) -> tuple[float | None, str]:
+    for key in ['draw_probability', 'model_draw_probability', 'draw_prob', 'draw_implied_probability', 'market_draw_probability']:
+        value = _prob(row.get(key))
+        if value is not None:
+            return value, key
+    for key in ['draw_decimal_price', 'draw_price', 'draw_odds']:
+        value = _price_to_prob(row.get(key))
+        if value is not None:
+            return value, key
+    if margin is None:
+        if model is not None and model < 0.58:
+            return 0.29, 'estimated_from_low_favorite_probability'
+        return None, 'missing'
+    if margin == 0:
+        return 0.33, 'estimated_from_projected_draw'
+    if margin <= 1.0 and total is not None and total <= 2.5:
+        return 0.30, 'estimated_from_one_goal_low_total'
+    if margin <= 1.0:
+        return 0.27, 'estimated_from_one_goal_margin'
     if model is not None and model < 0.60:
-        return 0.27, 'estimated_weak_favorite'
+        return 0.26, 'estimated_from_soft_favorite'
     return None, 'missing'
 
 
-def tennis_surface_context(row: dict[str, Any]) -> tuple[bool, str]:
-    text = _text(row, 'sport', 'event', 'tournament', 'surface', 'court_surface', 'manual_context_notes')
-    grass = _contains(text, GRASS_TERMS)
-    volatile = _contains(text, TENNIS_VOLATILITY_TERMS)
-    if grass and volatile:
-        return True, 'grass_plus_serve_or_tiebreak_volatility'
-    if grass:
-        return True, 'grass_surface_volatility'
-    if volatile:
-        return False, 'serve_or_tiebreak_volatility'
-    return False, ''
+def tennis_surface(row: dict[str, Any]) -> str:
+    text = _text(row, 'sport', 'event', 'tournament', 'surface', 'manual_context_notes')
+    explicit = safe_text(row.get('surface')).lower()
+    if explicit:
+        text = f'{explicit} {text}'
+    if _contains(text, GRASS_TERMS):
+        return 'grass'
+    if _contains(text, CLAY_TERMS):
+        return 'clay'
+    if _contains(text, HARD_TERMS):
+        return 'hard'
+    return 'unknown'
+
+
+def tennis_volatility(row: dict[str, Any], model: float | None, edge: float | None, projection_risk: str) -> tuple[float, list[str], str]:
+    surface = tennis_surface(row)
+    risk = 0.0
+    reasons: list[str] = []
+    if surface == 'grass':
+        risk += 18
+        reasons.append('grass_tennis_surface_volatility')
+        if model is not None and model < 0.65:
+            risk += 10
+            reasons.append('grass_tennis_probability_below_65_percent')
+        if edge is not None and edge < 0.08:
+            risk += 10
+            reasons.append('grass_tennis_edge_below_8_percent')
+    elif surface == 'unknown':
+        risk += 6
+        reasons.append('tennis_surface_missing')
+    if projection_risk == 'projected_2_1_close_match':
+        risk += 15
+        reasons.append('tennis_projected_three_sets')
+    if projection_risk == 'projected_tiebreak_margin':
+        risk += 14
+        reasons.append('tennis_tiebreak_projection')
+    tiebreak_prob = _prob(row.get('tiebreak_probability') or row.get('projected_tiebreak_probability'))
+    if tiebreak_prob is not None and tiebreak_prob >= 0.25:
+        risk += 14
+        reasons.append('tennis_high_tiebreak_probability')
+    underdog_ace = _num(row.get('underdog_ace_rate') or row.get('opponent_ace_rate') or row.get('ace_upside_score'))
+    if underdog_ace is not None and underdog_ace >= 8:
+        risk += 10
+        reasons.append('underdog_serve_ace_upside')
+    surface_win_rate = _prob(row.get('surface_win_rate') or row.get('grass_win_rate') or row.get('favorite_surface_win_rate'))
+    if surface_win_rate is not None and surface_win_rate < 0.55:
+        risk += 12
+        reasons.append('favorite_surface_form_below_55_percent')
+    recent_minutes = _num(row.get('last_match_minutes') or row.get('recent_match_minutes'))
+    recent_three_set = _num(row.get('recent_three_set_matches') or row.get('recent_3set_matches'))
+    rest_days = _num(row.get('rest_days'))
+    if recent_minutes is not None and recent_minutes >= 150:
+        risk += 8
+        reasons.append('recent_long_match_fatigue')
+    if recent_three_set is not None and recent_three_set >= 2:
+        risk += 8
+        reasons.append('multiple_recent_three_set_matches')
+    if rest_days is not None and rest_days <= 1:
+        risk += 6
+        reasons.append('short_rest_window')
+    rank_gap = _num(row.get('ranking_gap') or row.get('rank_gap'))
+    if rank_gap is not None and rank_gap >= 45 and model is not None and model < 0.65:
+        risk += 8
+        reasons.append('possible_ranking_name_bias')
+    return min(100.0, risk), reasons, surface
 
 
 def conservative_filter(row: dict[str, Any]) -> dict[str, Any]:
@@ -243,11 +309,15 @@ def conservative_filter(row: dict[str, Any]) -> dict[str, Any]:
     model = _prob(row.get('memory_adjusted_probability') or row.get('model_probability_clean') or row.get('model_probability'))
     edge = edge_value(row)
     margin = projected_margin(row)
+    total = projected_total(row)
     projection_risk = set_projection_risk(row)
-    draw_prob, draw_source = soccer_draw_estimate(row, model, margin) if family == 'soccer' else (None, '')
-    is_grass, tennis_surface_reason = tennis_surface_context(row) if family == 'tennis' else (False, '')
+    market = market_type(row)
     reasons: list[str] = []
     volatility = 0.0
+    draw_estimate = None
+    draw_source = ''
+    surface = ''
+    tennis_extra = 0.0
 
     if edge is None:
         reasons.append('missing_edge_over_market')
@@ -258,6 +328,11 @@ def conservative_filter(row: dict[str, Any]) -> dict[str, Any]:
     if model is not None and model < 0.58:
         reasons.append('model_probability_below_58_percent')
         volatility += 15
+    if model is not None and edge is not None:
+        price = _num(row.get('decimal_price'))
+        if price is not None and price < 1.50 and model < 0.68:
+            reasons.append('short_price_not_enough_probability')
+            volatility += 10
 
     if projection_risk:
         reasons.append(projection_risk)
@@ -265,7 +340,7 @@ def conservative_filter(row: dict[str, Any]) -> dict[str, Any]:
     if margin is not None:
         if family == 'soccer' and margin <= 1.0:
             reasons.append('soccer_one_goal_margin_draw_risk')
-            volatility += 22
+            volatility += 20
         elif family == 'baseball' and margin <= 1.0:
             reasons.append('baseball_one_run_margin')
             volatility += 15
@@ -274,35 +349,27 @@ def conservative_filter(row: dict[str, Any]) -> dict[str, Any]:
             volatility += 10
         elif family == 'tennis' and margin <= 1.0:
             reasons.append('tennis_close_sets_or_tiebreak_risk')
-            volatility += 18
+            volatility += 15
 
-    if family == 'soccer' and is_moneyline_like(row):
-        volatility += 14
+    if family == 'soccer' and ('h2h' in market or 'moneyline' in market or market in {'winner', '1x2', ''}):
+        draw_estimate, draw_source = soccer_draw_probability(row, model, margin, total)
         if model is not None and model < 0.60:
             reasons.append('soccer_moneyline_probability_below_60_percent')
-        if draw_prob is not None and draw_prob >= 0.25:
-            reasons.append(f'soccer_draw_risk_{draw_source}_{draw_prob:.0%}')
-        if draw_source == 'missing' and (model is None or model < 0.65 or edge is None or edge < 0.08):
-            reasons.append('soccer_draw_probability_missing_requires_65_model_and_8_edge')
-        if model is not None and model < 0.65 and (draw_prob is None or draw_prob >= 0.25):
-            reasons.append('soccer_moneyline_needs_stronger_favorite_or_draw_no_bet')
+        if draw_estimate is not None and draw_estimate >= 0.25:
+            reasons.append('soccer_draw_probability_above_25_percent')
+        elif draw_estimate is None:
+            reasons.append('soccer_draw_probability_missing')
+        if total is not None and total <= 2.5 and model is not None and model < 0.65:
+            reasons.append('soccer_low_total_favorite_risk')
+        if margin is not None and margin <= 1.0:
+            reasons.append('soccer_use_draw_no_bet_or_skip')
+        volatility += 12
 
     if family == 'tennis':
-        if tennis_surface_reason:
-            reasons.append(tennis_surface_reason)
-            volatility += 20 if is_grass else 10
-        if projection_risk == 'projected_2_1_close_match':
-            reasons.append('tennis_projected_three_sets')
-            volatility += 14
-        if is_grass and (model is None or model < 0.68 or edge is None or edge < 0.10):
-            reasons.append('grass_tennis_requires_68_model_and_10_edge')
-        if safe_text(row.get('recent_long_match_risk')).lower() in {'yes', 'true', 'high'}:
-            reasons.append('tennis_recent_long_match_risk')
-            volatility += 10
+        tennis_extra, tennis_reasons, surface = tennis_volatility(row, model, edge, projection_risk)
+        reasons.extend(tennis_reasons)
+        volatility += tennis_extra
 
-    if safe_text(row.get('memory_direction')) == 'lower_trust' and int(_num(row.get('memory_max_records')) or 0) >= 3 and family in {'soccer', 'tennis'}:
-        reasons.append('sport_specific_memory_lower_trust')
-        volatility += 12
     if safe_text(row.get('line_value_signal')).lower() == 'negative' or 'negative_line_movement' in safe_text(row.get('decision_reasons')).lower():
         reasons.append('line_moved_against_pick')
         volatility += 12
@@ -314,11 +381,12 @@ def conservative_filter(row: dict[str, Any]) -> dict[str, Any]:
         volatility += 10
 
     volatility = max(0.0, min(100.0, volatility))
-    if not reasons and edge is not None and model is not None and edge >= 0.08 and model >= 0.64 and volatility <= 15:
+    unique_reasons = list(dict.fromkeys(reasons))
+    if not unique_reasons and edge is not None and model is not None and edge >= 0.08 and model >= 0.64 and volatility <= 15:
         tier = 'A+'
         bettable = 'yes'
         final_action = 'play_strong'
-    elif not reasons and edge is not None and model is not None and edge >= 0.06 and model >= 0.60 and volatility <= 25:
+    elif not unique_reasons and edge is not None and model is not None and edge >= 0.06 and model >= 0.60 and volatility <= 25:
         tier = 'A'
         bettable = 'yes_small'
         final_action = 'play_small'
@@ -333,15 +401,17 @@ def conservative_filter(row: dict[str, Any]) -> dict[str, Any]:
 
     return {
         'volatility_score': round(volatility, 3),
-        'draw_probability_used': None if draw_prob is None else round(draw_prob, 6),
-        'draw_probability_source': draw_source,
-        'draw_risk': 'high' if any('draw' in reason for reason in reasons) else 'low',
-        'surface_risk': 'high' if any('grass' in reason or 'surface' in reason for reason in reasons) else 'low',
-        'close_margin_risk': 'high' if any(term in '|'.join(reasons) for term in ['margin', '2_1', '5_4', 'tiebreak', 'three_sets']) else 'low',
+        'soccer_draw_probability_estimate': None if draw_estimate is None else round(draw_estimate, 4),
+        'soccer_draw_probability_source': draw_source,
+        'tennis_surface': surface,
+        'tennis_volatility_score': round(tennis_extra, 3),
+        'draw_risk': 'high' if any('draw' in reason for reason in unique_reasons) else 'low',
+        'surface_risk': 'high' if any('grass_tennis' in reason or 'surface' in reason for reason in unique_reasons) else 'low',
+        'close_margin_risk': 'high' if any(term in '|'.join(unique_reasons) for term in ['margin', '2_1', '5_4', 'tiebreak']) else 'low',
         'conservative_confidence_tier': tier,
         'bettable_yes_no': bettable,
         'conservative_action': final_action,
-        'reason_for_downgrade': ' | '.join(dict.fromkeys(reasons)),
+        'reason_for_downgrade': ' | '.join(unique_reasons),
     }
 
 
