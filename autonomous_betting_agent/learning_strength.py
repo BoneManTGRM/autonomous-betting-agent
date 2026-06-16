@@ -13,7 +13,7 @@ def _status(row: dict[str, Any]) -> str:
         raw = row.get('result')
     if raw is None or str(raw).strip() == '':
         raw = row.get('outcome')
-    text = str(raw or '').strip().lower()
+    text = '' if raw is None else str(raw).strip().lower()
     if text in {'1', '1.0', 'win', 'won', 'w', 'correct', 'hit', 'true'}:
         return 'win'
     if text in {'0', '0.0', 'loss', 'lost', 'l', 'incorrect', 'miss', 'false'}:
