@@ -16,6 +16,16 @@ DRAW_MIN_EDGE = 0.065
 DRAW_STRONG_EDGE = 0.095
 DRAW_MIN_BOOKS = 4
 DRAW_MAX_STAKE_UNITS = 0.25
+ULTRA80_TARGET_PROBABILITY = 0.80
+ULTRA80_MIN_MODEL_PROBABILITY = 0.80
+ULTRA80_MIN_DECIMAL_PRICE = 1.27
+ULTRA80_MAX_DECIMAL_PRICE = 1.75
+ULTRA80_MIN_EXPECTED_VALUE = 0.025
+ULTRA80_MIN_EDGE = 0.075
+ULTRA80_MIN_BOOKS = 6
+ULTRA80_MIN_API_COVERAGE = 0.66
+ULTRA80_MIN_AGENT_SCORE = 70.0
+ULTRA80_MAX_STAKE_UNITS = 0.35
 TERMINAL_RESULTS = {'win', 'loss', 'void'}
 DECISION_ORDER = {'play_strong': 1, 'play_small': 2, 'watch_only': 3, 'no_action': 4, 'review_needed': 5}
 DRAW_NAMES = {'draw', 'tie', 'empate', 'x', 'the_draw', 'match_draw'}
@@ -123,8 +133,10 @@ def can_lock_candidate(row: dict[str, Any], *, now_utc: datetime | None = None) 
     return status == 'future_event_not_locked_yet'
 
 
-def stake_guidance(decision: str, score: float, locked: bool, *, draw_risk: bool = False) -> float:
-    if decision == 'play_strong':
+def stake_guidance(decision: str, score: float, locked: bool, *, draw_risk: bool = False, ultra80: bool = False) -> float:
+    if ultra80:
+        base = ULTRA80_MAX_STAKE_UNITS
+    elif decision == 'play_strong':
         base = 1.0 if score >= 65.0 else 0.75
     elif decision == 'play_small':
         base = 0.35 if score >= 50.0 else 0.25
@@ -148,9 +160,119 @@ def odds_quality_context(row: dict[str, Any]) -> dict[str, Any]:
     return {'odds_accuracy_score': quality, 'expected_value_per_unit': ev, 'edge_probability': edge_override, 'recommended_action': action, 'value_rating': rating, 'odds_trust_grade': trust_grade, 'odds_quality_flags': flags}
 
 
+def normalized_api_coverage(row: dict[str, Any]) -> float:
+    coverage = clean_number(row.get('api_coverage_score'))
+    if coverage is None:
+        return 0.0
+    if coverage > 1.0:
+        coverage /= 100.0
+    return max(0.0, min(1.0, coverage))
+
+
+def expected_value(model_prob: float | None, decimal_price: float | None) -> float | None:
+    if model_prob is None or decimal_price is None or decimal_price <= 1.0:
+        return None
+    return round(model_prob * decimal_price - 1.0, 6)
+
+
+def profit_at_target(decimal_price: float | None, target_probability: float = ULTRA80_TARGET_PROBABILITY) -> float | None:
+    if decimal_price is None or decimal_price <= 1.0:
+        return None
+    return round(target_probability * decimal_price - 1.0, 6)
+
+
+def ultra80_guardrails(
+    row: dict[str, Any],
+    *,
+    model_prob: float | None,
+    market_prob: float | None,
+    edge: float | None,
+    expected_ev: float | None,
+    score: float,
+    decision: str,
+    draw_risk: bool,
+    books: int,
+    line_signal: str,
+    timing: str,
+    result_status: str,
+    odds_quality: float | None,
+) -> dict[str, Any]:
+    decimal_price = clean_number(row.get('decimal_price')) or clean_number(row.get('best_price'))
+    api_coverage = normalized_api_coverage(row)
+    pattern_signal = clean_number(row.get('pattern_ara_memory_signal'))
+    if pattern_signal is None:
+        pattern_signal = clean_number(row.get('ara_memory_signal'))
+    pattern_signal = float(pattern_signal or 0.0)
+    target_profit = profit_at_target(decimal_price)
+    required_win_rate = None if decimal_price is None or decimal_price <= 1.0 else round(1.0 / decimal_price, 6)
+    reasons: list[str] = []
+    signals: list[str] = []
+    if model_prob is None or model_prob < ULTRA80_MIN_MODEL_PROBABILITY:
+        reasons.append('ultra80_model_probability_below_80')
+    if decimal_price is None or decimal_price < ULTRA80_MIN_DECIMAL_PRICE:
+        reasons.append('ultra80_price_below_profit_floor')
+    if decimal_price is not None and decimal_price > ULTRA80_MAX_DECIMAL_PRICE:
+        reasons.append('ultra80_price_too_high_for_consistency')
+    if required_win_rate is not None and model_prob is not None:
+        signals.append(f'profit_break_even={required_win_rate:.3f}')
+    if edge is None or edge < ULTRA80_MIN_EDGE:
+        reasons.append('ultra80_edge_below_minimum')
+    if expected_ev is None or expected_ev < ULTRA80_MIN_EXPECTED_VALUE:
+        reasons.append('ultra80_expected_value_below_minimum')
+    if target_profit is None or target_profit <= 0.0:
+        reasons.append('ultra80_not_profitable_at_80_percent')
+    if books < ULTRA80_MIN_BOOKS:
+        reasons.append('ultra80_not_enough_books')
+    if api_coverage < ULTRA80_MIN_API_COVERAGE:
+        reasons.append('ultra80_api_coverage_too_low')
+    if draw_risk:
+        reasons.append('ultra80_blocks_draws')
+    if line_signal == 'negative':
+        reasons.append('ultra80_negative_line_movement')
+    if result_status in TERMINAL_RESULTS:
+        reasons.append('ultra80_historical_result_present')
+    if timing in {'prediction_timestamp_not_before_start', 'event_already_started_without_prediction_timestamp', 'missing_event_start'}:
+        reasons.append(f'ultra80_bad_timing_{timing}')
+    if odds_quality is not None and odds_quality < 70.0:
+        reasons.append('ultra80_odds_quality_below_70')
+    if pattern_signal < -0.005:
+        reasons.append('ultra80_negative_memory_pattern')
+    if decision not in {'play_strong', 'play_small'}:
+        reasons.append('ultra80_not_playable_general_decision')
+    if score < ULTRA80_MIN_AGENT_SCORE:
+        reasons.append('ultra80_agent_score_too_low')
+    if model_prob is not None:
+        signals.append(f'ultra80_model_prob={model_prob:.3f}')
+    if edge is not None:
+        signals.append(f'ultra80_edge={edge:.3f}')
+    if expected_ev is not None:
+        signals.append(f'ultra80_ev={expected_ev:.3f}')
+    if target_profit is not None:
+        signals.append(f'profit_at_80={target_profit:.3f}')
+    signals.append(f'api_coverage={api_coverage:.3f}')
+    signals.append(f'books={books}')
+    candidate = not reasons
+    return {
+        'ultra80_candidate': bool(candidate),
+        'ultra80_profit_mode': 'PASS' if candidate else 'FAIL',
+        'ultra80_reasons': ' | '.join(reasons),
+        'ultra80_signals': ' | '.join(signals),
+        'ultra80_target_probability': ULTRA80_TARGET_PROBABILITY,
+        'ultra80_required_win_rate': required_win_rate,
+        'ultra80_profit_at_80_percent': target_profit,
+        'ultra80_min_decimal_price': ULTRA80_MIN_DECIMAL_PRICE,
+        'ultra80_min_expected_value': ULTRA80_MIN_EXPECTED_VALUE,
+        'ultra80_min_edge': ULTRA80_MIN_EDGE,
+        'ultra80_min_books': ULTRA80_MIN_BOOKS,
+        'ultra80_api_coverage': api_coverage,
+        'ultra80_pattern_signal': pattern_signal,
+    }
+
+
 def evaluate_row(row: dict[str, Any], *, min_edge: float = MINIMUM_EDGE, strong_edge: float = STRONG_EDGE, now_utc: datetime | None = None) -> dict[str, Any]:
     model_prob = clean_probability(row.get('model_probability'))
-    market_prob = implied_probability(row.get('decimal_price'))
+    decimal_price = clean_number(row.get('decimal_price')) or clean_number(row.get('best_price'))
+    market_prob = implied_probability(decimal_price)
     coverage = field_coverage_score(row)
     line = analyze_line_row(row)
     timing = event_timing_status(row, now_utc=now_utc)
@@ -209,9 +331,12 @@ def evaluate_row(row: dict[str, Any], *, min_edge: float = MINIMUM_EDGE, strong_
     if odds_ctx['edge_probability'] is not None:
         edge = round(float(odds_ctx['edge_probability']), 6)
         signals.append('odds_accuracy_edge_used')
+    if expected_ev is None:
+        expected_ev = expected_value(model_prob, decimal_price)
+        if expected_ev is not None:
+            signals.append('model_price_ev_used')
     if draw_risk and edge is not None:
         effective_draw_min = max(float(min_edge), DRAW_MIN_EDGE)
-        effective_draw_strong = max(float(strong_edge), DRAW_STRONG_EDGE)
         signals.append(f'draw_edge_required={effective_draw_min:.3f}')
         if edge < effective_draw_min:
             reasons.append('draw_edge_below_minimum')
@@ -279,9 +404,7 @@ def evaluate_row(row: dict[str, Any], *, min_edge: float = MINIMUM_EDGE, strong_
         decision = 'watch_only'
     elif draw_risk and edge is not None and edge >= max(float(strong_edge), DRAW_STRONG_EDGE) and model_prob is not None and model_prob >= 0.28:
         decision = 'play_small'
-    elif odds_action == 'lock_candidate' and edge is not None and edge >= strong_edge and model_prob is not None and model_prob >= HIGH_PROBABILITY:
-        decision = 'play_strong'
-    elif edge is not None and edge >= strong_edge and model_prob is not None and model_prob >= HIGH_PROBABILITY:
+    elif edge is not None and edge >= strong_edge and model_prob is not None and model_prob >= max(HIGH_PROBABILITY, 0.66) and expected_ev is not None and expected_ev > 0:
         decision = 'play_strong'
     elif edge is not None and edge >= min_edge and (expected_ev is None or expected_ev > -0.02):
         decision = 'play_small'
@@ -317,6 +440,25 @@ def evaluate_row(row: dict[str, Any], *, min_edge: float = MINIMUM_EDGE, strong_
     if decision == 'watch_only':
         score = min(score, 55.0)
     score = round(max(0.0, min(100.0, score)), 3)
+    ultra = ultra80_guardrails(
+        row,
+        model_prob=model_prob,
+        market_prob=market_prob,
+        edge=edge,
+        expected_ev=expected_ev,
+        score=score,
+        decision=decision,
+        draw_risk=draw_risk,
+        books=books,
+        line_signal=line_signal,
+        timing=timing,
+        result_status=result_status,
+        odds_quality=odds_quality,
+    )
+    if ultra['ultra80_candidate']:
+        decision = 'play_strong'
+        score = max(score, ULTRA80_MIN_AGENT_SCORE)
+        signals.append('ultra80_profitable_candidate')
     return {
         'agent_decision': decision,
         'agent_score': score,
@@ -324,15 +466,18 @@ def evaluate_row(row: dict[str, Any], *, min_edge: float = MINIMUM_EDGE, strong_
         'event_timing_status': timing,
         'lock_ready': bool(lock_ready),
         'already_locked': bool(has_lock_time),
-        'recommended_stake_units': stake_guidance(decision, score, has_lock_time, draw_risk=draw_risk),
+        'recommended_stake_units': stake_guidance(decision, score, has_lock_time, draw_risk=draw_risk, ultra80=bool(ultra['ultra80_candidate'])),
         'model_probability_clean': model_prob,
         'market_implied_probability': market_prob,
         'model_market_edge': edge,
         'model_market_edge_percent': edge_percent,
+        'expected_value_per_unit': expected_ev,
+        'profit_at_80_percent': ultra['ultra80_profit_at_80_percent'],
         'field_coverage_score': coverage,
         'line_value_signal': line_signal,
         'is_draw_prediction': bool(draw_risk),
         'draw_guardrail': 'strict_draw_rules_applied' if draw_risk else '',
+        **ultra,
         'decision_reasons': ' | '.join(sorted(set(reasons))),
         'decision_signals': ' | '.join(signals),
     }
@@ -361,6 +506,13 @@ def playable_candidates(frame: pd.DataFrame, *, min_edge: float = MINIMUM_EDGE, 
     return decisions[decision.isin(['play_strong', 'play_small'])].copy()
 
 
+def ultra80_candidates(frame: pd.DataFrame, *, min_edge: float = MINIMUM_EDGE, strong_edge: float = STRONG_EDGE) -> pd.DataFrame:
+    decisions = build_agent_decisions(frame, min_edge=min_edge, strong_edge=strong_edge)
+    if decisions.empty or 'ultra80_candidate' not in decisions.columns:
+        return pd.DataFrame()
+    return decisions[decisions['ultra80_candidate'].fillna(False).astype(bool)].copy()
+
+
 def lock_ready_candidates(frame: pd.DataFrame, *, min_edge: float = MINIMUM_EDGE, strong_edge: float = STRONG_EDGE) -> pd.DataFrame:
     candidates = playable_candidates(frame, min_edge=min_edge, strong_edge=strong_edge)
     if candidates.empty or 'lock_ready' not in candidates.columns:
@@ -371,8 +523,11 @@ def lock_ready_candidates(frame: pd.DataFrame, *, min_edge: float = MINIMUM_EDGE
 def agent_decision_summary(frame: pd.DataFrame, *, min_edge: float = MINIMUM_EDGE, strong_edge: float = STRONG_EDGE) -> dict[str, Any]:
     decisions = build_agent_decisions(frame, min_edge=min_edge, strong_edge=strong_edge)
     if decisions.empty:
-        return {'rows': 0, 'play_strong': 0, 'play_small': 0, 'watch_only': 0, 'no_action': 0, 'review_needed': 0, 'lock_ready_candidates': 0, 'recommended_total_stake_units': 0.0, 'average_score': None, 'draw_candidates': 0}
+        return {'rows': 0, 'play_strong': 0, 'play_small': 0, 'watch_only': 0, 'no_action': 0, 'review_needed': 0, 'lock_ready_candidates': 0, 'recommended_total_stake_units': 0.0, 'average_score': None, 'draw_candidates': 0, 'ultra80_candidates': 0, 'ultra80_avg_profit_at_80': None}
     decision = decisions['agent_decision'].fillna('').astype(str)
+    ultra80 = decisions.get('ultra80_candidate', pd.Series(dtype=bool)).fillna(False).astype(bool)
+    profit80 = pd.to_numeric(decisions.get('profit_at_80_percent', pd.Series(dtype=float)), errors='coerce')
+    ultra_profit = profit80[ultra80.reindex(profit80.index, fill_value=False)] if not profit80.empty else pd.Series(dtype=float)
     return {
         'rows': int(len(decisions)),
         'play_strong': int(decision.eq('play_strong').sum()),
@@ -384,4 +539,6 @@ def agent_decision_summary(frame: pd.DataFrame, *, min_edge: float = MINIMUM_EDG
         'recommended_total_stake_units': round(float(pd.to_numeric(decisions.get('recommended_stake_units', pd.Series(dtype=float)), errors='coerce').fillna(0).sum()), 3),
         'average_score': round(float(pd.to_numeric(decisions['agent_score'], errors='coerce').fillna(0).mean()), 3),
         'draw_candidates': int(decisions.get('is_draw_prediction', pd.Series(dtype=bool)).fillna(False).astype(bool).sum()),
+        'ultra80_candidates': int(ultra80.sum()),
+        'ultra80_avg_profit_at_80': None if ultra_profit.empty else round(float(ultra_profit.mean()), 6),
     }
