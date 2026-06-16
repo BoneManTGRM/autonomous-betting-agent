@@ -111,6 +111,9 @@ def _apply_toggle_default(label, kwargs):
 
 
 def render_sidebar_brand() -> None:
+    if st.session_state.get("aba_sidebar_brand_rendered"):
+        return
+    st.session_state["aba_sidebar_brand_rendered"] = True
     st.sidebar.markdown("## ABA Signal Pro")
     st.sidebar.success("ABA")
     st.sidebar.markdown("### Signal")
@@ -131,9 +134,8 @@ def mobile_safe_file_uploader(label, *args, **kwargs):
 
 
 def branded_dg_selectbox(self, label, *args, **kwargs):
-    if _label_key(label) == "language / idioma" and not st.session_state.get("aba_sidebar_brand_rendered"):
+    if _label_key(label) == "language / idioma":
         render_sidebar_brand()
-        st.session_state["aba_sidebar_brand_rendered"] = True
     return _REAL_DG_SELECTBOX(self, label, *args, **kwargs)
 
 
@@ -204,6 +206,7 @@ DeltaGenerator.text_input = defaulted_dg_text_input
 DeltaGenerator.toggle = defaulted_dg_toggle
 
 try:
+    render_sidebar_brand()
     current_page = st.navigation(CORE_PAGES, position="sidebar")
     current_page.run()
 except AttributeError:
