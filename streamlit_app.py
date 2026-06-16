@@ -11,6 +11,12 @@ APP_NAME = "ABA Signal Pro"
 APP_TAGLINE = "Powered by Reparodynamics"
 BRANDED_REPORT_PREFIX = f"{APP_NAME}\n{APP_TAGLINE}"
 
+st.set_page_config(
+    page_title=APP_NAME,
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 _REAL_FILE_UPLOADER = st.file_uploader
 _REAL_ST_NUMBER_INPUT = st.number_input
 _REAL_ST_SLIDER = st.slider
