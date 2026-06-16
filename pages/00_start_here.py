@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import streamlit as st
 
+from autonomous_betting_agent.tool_sidebar import render_tool_sidebar
+
 st.set_page_config(page_title='Start Here', layout='wide')
 LANG = 'es' if st.sidebar.selectbox('Language / Idioma', ['English', 'Español'], key='start_here_language') == 'Español' else 'en'
+render_tool_sidebar('start_here', 'Español' if LANG == 'es' else 'English')
 
 TEXT = {
     'en': {
