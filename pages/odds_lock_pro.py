@@ -50,6 +50,7 @@ TEXT = {
         'download_client': 'Download client-view CSV',
         'download_private': 'Download private audit CSV',
         'no_rows': 'No rows found. Run What Are the Odds first or upload a CSV.',
+        'no_locked': 'No locked proof rows yet. Create a locked proof ledger or upload a ledger with proof_id and locked_at_utc.',
         'no_candidates': 'No lock candidates found. Use play_strong/play_small or lock_ready rows.',
         'public_only': 'Public/client-safe view',
         'report_language': 'Report language',
@@ -86,6 +87,7 @@ TEXT = {
         'download_client': 'Descargar CSV para clientes',
         'download_private': 'Descargar CSV privado de auditoría',
         'no_rows': 'No se encontraron filas. Ejecuta What Are the Odds primero o sube un CSV.',
+        'no_locked': 'Aún no hay filas bloqueadas con prueba. Crea un ledger bloqueado o sube uno con proof_id y locked_at_utc.',
         'no_candidates': 'No se encontraron candidatos. Usa filas play_strong/play_small o lock_ready.',
         'public_only': 'Vista segura para público/clientes',
         'report_language': 'Idioma del reporte',
@@ -141,6 +143,10 @@ def read_inputs() -> tuple[str, pd.DataFrame]:
     return ', '.join(names), pd.concat(frames, ignore_index=True, sort=False)
 
 
+def has_proof_fields(frame: pd.DataFrame) -> bool:
+    return not frame.empty and {'proof_id', 'locked_at_utc'}.issubset(set(frame.columns))
+
+
 st.title(t('title'))
 st.caption(t('caption'))
 st.info(t('info'))
@@ -160,6 +166,7 @@ sport_limit = st.number_input(t('sport_limit'), min_value=0.25, max_value=100.0,
 
 candidates = prepare_lock_candidates(normalized, include_watch=include_watch)
 existing_locked = update_profit_columns(pd.DataFrame(st.session_state.get('odds_lock_pro_locked_rows', [])))
+uploaded_locked = update_profit_columns(normalized) if has_proof_fields(normalized) else pd.DataFrame()
 
 if st.button(t('lock'), type='primary', use_container_width=True):
     locked = lock_rows(normalized, analyst=analyst, max_units=float(max_units), include_watch=include_watch)
@@ -168,8 +175,9 @@ if st.button(t('lock'), type='primary', use_container_width=True):
     st.session_state['ara_latest_predictions_source'] = 'Odds Lock Pro'
     existing_locked = update_profit_columns(locked)
 
-active_locked = existing_locked if not existing_locked.empty else update_profit_columns(raw)
+active_locked = existing_locked if not existing_locked.empty else uploaded_locked
 summary = summarize_locked_picks(active_locked)
+health_frame_source = active_locked if not active_locked.empty else candidates
 
 cols = st.columns(7)
 cols[0].metric(t('rows'), summary['locked_picks'])
@@ -181,7 +189,7 @@ cols[5].metric(t('roi'), pct(summary['roi']))
 cols[6].metric(t('valid'), summary['valid_before_start'])
 
 st.subheader(t('handoff'))
-st.dataframe(page_health_frame(active_locked, page='what_are_the_odds'), use_container_width=True, hide_index=True)
+st.dataframe(page_health_frame(health_frame_source, page='what_are_the_odds'), use_container_width=True, hide_index=True)
 
 tabs = st.tabs([t('candidates'), t('locked'), t('dashboard'), t('reports'), t('bankroll'), t('client')])
 
@@ -194,7 +202,7 @@ with tabs[0]:
 
 with tabs[1]:
     if active_locked.empty:
-        st.warning(t('no_rows'))
+        st.warning(t('no_locked'))
     else:
         st.dataframe(active_locked, use_container_width=True, hide_index=True)
         st.download_button(t('download_locked'), active_locked.to_csv(index=False), file_name='odds_lock_pro_locked_ledger.csv', mime='text/csv')
