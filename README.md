@@ -13,12 +13,12 @@ It is designed for sports analysts, market researchers, prediction reviewers, pr
 The app is organized around a no-password commercial workflow:
 
 ```text
-Deployment Health -> Scanner Pro -> Pro Predictor -> What Are the Odds -> Odds Lock Pro -> Daily Workflow -> Auto Result Grading -> Public Proof Dashboard -> Learning Memory
+Deployment Health -> Scanner Pro -> Pro Predictor -> What Are the Odds -> Odds Lock Pro -> Daily Workflow -> Auto Result Grading -> Public Proof Dashboard -> Monthly License Readiness -> Learning Memory
 ```
 
 | Tool | Main job |
 | --- | --- |
-| **Deployment Health** | Checks integration status, page/file presence, persistent ledger health, proof quality, and action items. |
+| **Deployment Health** | Checks integration status, page/file presence, persistent ledger health, proof quality, monthly-license readiness, and action items. |
 | **Scanner Pro** | Scans live odds feeds, normalizes markets, ranks market quality, and sends clean rows forward. |
 | **Pro Predictor** | Builds model probabilities, applies learned memory, scores agent decisions, and produces prediction-ready rows. |
 | **What Are the Odds** | Runs the market/value command board: edge, agent decision, scanner strength, CLV, loss review, sport routing, and lock-ready review. |
@@ -26,6 +26,7 @@ Deployment Health -> Scanner Pro -> Pro Predictor -> What Are the Odds -> Odds L
 | **One-Click Daily Workflow** | Takes current/session/uploaded rows, locks qualified rows, optionally saves them, and generates report output in one guided flow. |
 | **Auto Result Grading** | Grades the persistent proof ledger from finished-result CSV uploads or an explicit one-click score fetch. |
 | **Public Proof Dashboard** | Displays no-login proof metrics, demo mode, proof audit, CLV, result uploads, persistent ledger storage, and report cards. |
+| **Monthly License Readiness** | Scores whether the product is ready for private beta, operator licensing, or white-label licensing, then produces pricing and offer copy. |
 | **Buyer Demo Mode** | Shows a polished buyer-ready dashboard with demo locked rows, audit, proof table, and report cards without API keys. |
 | **Learning Memory** | Trains durable calibration and pattern memory from finished, graded results. |
 
@@ -46,7 +47,8 @@ The app now includes the most valuable platform upgrades without requiring users
 9. **Demo ledger mode** so a buyer can see the dashboard without an API key or real locked picks.
 10. **Deployment Health** so the operator can see readiness and blockers before daily use.
 11. **One-Click Daily Workflow** so non-technical users can run the daily lock/report process.
-12. **Public-safe exports** and private audit exports.
+12. **Monthly License Readiness** so the operator can package private beta, analyst, operator, or white-label offers.
+13. **Public-safe exports** and private audit exports.
 
 This is not a full password-protected client portal yet. Login, paid accounts, Stripe, and client roles can be added later.
 
@@ -59,7 +61,8 @@ This is not a full password-protected client portal yet. Login, paid accounts, S
 5. Save locked rows into the persistent proof ledger.
 6. Use **Auto Result Grading** when finished results are available.
 7. Use **Public Proof Dashboard** to review public metrics, proof audit, CLV, report cards, and exports.
-8. Use **Learning Memory** after results are graded and probabilities/prices are available.
+8. Use **Monthly License Readiness** before pitching monthly clients or raising prices.
+9. Use **Learning Memory** after results are graded and probabilities/prices are available.
 
 ## Data proof rules
 
@@ -70,6 +73,33 @@ A future prediction is strongest when it has event name, sport, market type, pre
 A row does not count as a public proof row unless it has both `proof_id` and `locked_at_utc`.
 
 A high hit rate alone is not enough. ROI, average price, CLV, book coverage, sample size, duplicate control, and prospective timestamped proof matter more than headline accuracy.
+
+## Monthly license readiness
+
+The product should be sold as a monthly sports analytics and proof-tracking license, not as guaranteed betting income and not as a one-time code dump.
+
+Minimum readiness for a private beta license:
+
+| Requirement | Target |
+| --- | --- |
+| Future-only locked proof rows | 25+ |
+| Resolved proof rows | 20+ |
+| Proof quality | 90/100+ preferred |
+| Hash mismatches | 0 |
+| Product pages | Deployment Health, Odds Lock Pro, Public Proof Dashboard, Daily Workflow, Auto Result Grading, Buyer Demo Mode, Monthly License Readiness |
+| Client outputs | public dashboard, daily report, proof card, private audit export |
+| Positioning | analytics/research only; no guaranteed wins or returns |
+
+Suggested pricing path:
+
+| Tier | Target price | When to use |
+| --- | ---: | --- |
+| Private beta license | $500-$1,000/mo | First 2-3 serious testers while proof sample is still growing. |
+| Private analyst license | $1,000-$2,500/mo | After 100+ future-locked rows with clean audit and transparent ROI. |
+| Operator license | $2,500-$5,000/mo | For paid communities, influencers, or private groups needing reports and proof exports. |
+| White-label/private deployment | $10,000 setup + $5,000-$10,000/mo | For branded/private deployments after operator-ready proof and support workflow exist. |
+
+Before pitching higher tiers, use the **Monthly License Readiness** page to generate the readiness checklist, next build queue, pricing table, client package list, and offer text.
 
 ## API and background behavior
 
