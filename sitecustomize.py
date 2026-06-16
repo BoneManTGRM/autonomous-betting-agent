@@ -5,10 +5,12 @@ import inspect
 import os
 from typing import Any
 
+APP_NAME = 'ABA Signal Pro'
+APP_TAGLINE = 'Powered by Reparodynamics'
 
 NAV_TOOLS: tuple[tuple[str, str, str], ...] = (
     ('Scanner Pro', 'Scanner Pro', 'pages/scanner_pro.py'),
-    ('Pro Predictor', 'Predictor Pro', 'pages/pro_predictor.py'),
+    (APP_NAME, 'ABA Signal Pro', 'pages/pro_predictor.py'),
     ('Ultra 80 Profit Mode', 'Modo Ultra 80 Rentable', 'pages/ultra80_profit_mode.py'),
     ('Simulation Lab', 'Laboratorio de Simulación', 'pages/simulation_lab.py'),
     ('Threshold Optimizer', 'Optimizador de Umbrales', 'pages/threshold_optimizer.py'),
@@ -20,11 +22,11 @@ NAV_TOOLS: tuple[tuple[str, str, str], ...] = (
 )
 
 NAV_NOTES_EN = (
-    'Workflow: Scanner Pro → Pro Predictor → Ultra 80 Profit Mode → Simulation Lab → Odds Lock Pro → Public Proof Dashboard → Threshold Optimizer → Learning Memory.',
+    'Workflow: Scanner Pro → ABA Signal Pro → Ultra 80 Profit Mode → Simulation Lab → Odds Lock Pro → Public Proof Dashboard → Threshold Optimizer → Learning Memory.',
     'Use Reset Lock File to clear one test-window proof ledger without touching other windows.',
 )
 NAV_NOTES_ES = (
-    'Flujo: Scanner Pro → Predictor Pro → Modo Ultra 80 Rentable → Laboratorio de Simulación → Bloqueo de Cuotas Pro → Dashboard Público de Prueba → Optimizador de Umbrales → Memoria de Aprendizaje.',
+    'Flujo: Scanner Pro → ABA Signal Pro → Modo Ultra 80 Rentable → Laboratorio de Simulación → Bloqueo de Cuotas Pro → Dashboard Público de Prueba → Optimizador de Umbrales → Memoria de Aprendizaje.',
     'Usa Reiniciar Archivo de Bloqueo para borrar el ledger de una ventana de prueba sin tocar las demás.',
 )
 
@@ -91,17 +93,29 @@ def _install_sidebar_nav_fallback() -> None:
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, '_aba_sidebar_nav_fallback_installed_v2', False):
+    if getattr(st, '_aba_sidebar_nav_fallback_installed_v3', False):
         return
-    st._aba_sidebar_nav_fallback_installed_v2 = True
+    st._aba_sidebar_nav_fallback_installed_v3 = True
     real_st_selectbox = st.selectbox
     real_dg_selectbox = DeltaGenerator.selectbox
     real_set_page_config = st.set_page_config
 
+    def render_brand_once() -> None:
+        if st.session_state.get('_aba_sidebar_brand_rendered_v3'):
+            return
+        st.session_state['_aba_sidebar_brand_rendered_v3'] = True
+        with st.sidebar:
+            st.markdown('## ABA Signal Pro')
+            st.success('ABA')
+            st.markdown('### Signal')
+            st.error('Pro')
+            st.caption(APP_TAGLINE)
+            st.markdown('---')
+
     def render_nav(lang: str | None = None) -> None:
+        render_brand_once()
         lang = lang or _sidebar_language()
         with st.sidebar:
-            st.markdown('---')
             st.markdown('### Herramientas' if lang == 'Español' else '### Tools')
             for english, spanish, path in NAV_TOOLS:
                 label = spanish if lang == 'Español' else english
@@ -123,17 +137,22 @@ def _install_sidebar_nav_fallback() -> None:
         return ('language' in label_text or 'idioma' in label_text) and 'English' in opts and 'Español' in opts
 
     def patched_set_page_config(*args: Any, **kwargs: Any) -> Any:
+        if not args:
+            kwargs.setdefault('page_title', APP_NAME)
+            kwargs.setdefault('initial_sidebar_state', 'expanded')
         result = real_set_page_config(*args, **kwargs)
-        # Render after page config because Streamlit requires set_page_config to be first.
-        # This makes the tools visible even on pages that do not import the package root
-        # or whose language selector is rendered before the normal nav patch loads.
         try:
-            render_nav(_sidebar_language())
+            render_brand_once()
         except Exception:
             pass
         return result
 
     def patched_st_selectbox(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
+        if is_language_selector(label, options):
+            try:
+                render_brand_once()
+            except Exception:
+                pass
         value = real_st_selectbox(label, options, *args, **kwargs)
         if is_language_selector(label, options):
             try:
@@ -143,6 +162,11 @@ def _install_sidebar_nav_fallback() -> None:
         return value
 
     def patched_dg_selectbox(self: Any, label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
+        if is_language_selector(label, options):
+            try:
+                render_brand_once()
+            except Exception:
+                pass
         value = real_dg_selectbox(self, label, options, *args, **kwargs)
         if is_language_selector(label, options):
             try:
