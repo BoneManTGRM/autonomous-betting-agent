@@ -11,9 +11,11 @@ from autonomous_betting_agent.commercial_platform_tools import (
     report_card_markdown,
 )
 from autonomous_betting_agent.daily_workflow_tools import workflow_stage_frame
+from autonomous_betting_agent.tool_sidebar import render_tool_sidebar
 
 st.set_page_config(page_title='Buyer Demo Mode', layout='wide')
 LANG = 'es' if st.sidebar.selectbox('Language / Idioma', ['English', 'Español'], key='buyer_demo_mode_language') == 'Español' else 'en'
+render_tool_sidebar('buyer_demo_mode', 'Español' if LANG == 'es' else 'English')
 
 TEXT = {
     'en': {
