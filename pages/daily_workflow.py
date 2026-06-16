@@ -4,9 +4,11 @@ import pandas as pd
 import streamlit as st
 
 from autonomous_betting_agent.daily_workflow_tools import daily_workflow_preview, run_daily_workflow, workflow_stage_frame
+from autonomous_betting_agent.tool_sidebar import render_tool_sidebar
 
 st.set_page_config(page_title='One-Click Daily Workflow', layout='wide')
 LANG = 'es' if st.sidebar.selectbox('Language / Idioma', ['English', 'Español'], key='daily_workflow_language') == 'Español' else 'en'
+render_tool_sidebar('daily_workflow', 'Español' if LANG == 'es' else 'English')
 
 TEXT = {
     'en': {
