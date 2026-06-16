@@ -49,12 +49,21 @@ def query_param_language() -> str | None:
     return label(raw)
 
 
+def _safe_set_session(key: str, value: str) -> None:
+    try:
+        st.session_state[key] = value
+    except Exception:
+        # Streamlit blocks mutating a widget's own key after that widget is instantiated.
+        # The widget already contains the selected value, so skipping that key is safe.
+        pass
+
+
 def set_global_language(selected: object) -> str:
     normalized = label(selected)
-    st.session_state[SESSION_KEY] = normalized
-    st.session_state['global_language'] = normalized
+    _safe_set_session(SESSION_KEY, normalized)
+    _safe_set_session('global_language', normalized)
     for key in PAGE_LANGUAGE_KEYS:
-        st.session_state[key] = normalized
+        _safe_set_session(key, normalized)
     try:
         st.query_params['lang'] = 'es' if normalized == 'Español' else 'en'
     except Exception:
@@ -62,18 +71,16 @@ def set_global_language(selected: object) -> str:
     return normalized
 
 
-def current_language_label(default: object = 'English') -> str:
+def current_language_label(default: object = 'Español') -> str:
     return label(query_param_language() or st.session_state.get('global_language') or st.session_state.get(SESSION_KEY) or default)
 
 
 def render_language_selector(*, key: str) -> str:
     current = current_language_label()
-    # This intentionally overrides stale page-specific keys. Without this, a page that once defaulted
-    # to English can flip the whole app back to English when the user navigates to it.
-    st.session_state[key] = current
+    _safe_set_session(key, current)
 
     def _sync_language() -> None:
-        set_global_language(st.session_state.get(key, current))
+        set_global_language(st.session_state.get(key) or st.session_state.get('global_language') or current)
 
     selected = st.sidebar.selectbox('Language / Idioma', OPTIONS, index=OPTIONS.index(current), key=key, on_change=_sync_language)
     set_global_language(selected)
