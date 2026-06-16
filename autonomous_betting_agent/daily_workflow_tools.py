@@ -20,10 +20,13 @@ from .row_normalizer import normalize_frame
 def daily_workflow_preview(frame: pd.DataFrame | list[dict[str, Any]], *, include_watch: bool = False) -> dict[str, Any]:
     raw = pd.DataFrame(frame) if isinstance(frame, list) else frame
     normalized = normalize_frame(raw) if raw is not None and not raw.empty else pd.DataFrame()
-    candidates = prepare_lock_candidates(normalized, include_watch=include_watch)
+    candidates = prepare_lock_candidates(normalized, include_watch=include_watch, strict=True, require_future=True)
+    loose_candidates = prepare_lock_candidates(normalized, include_watch=include_watch, strict=False, require_future=True)
+    blocked = max(0, int(len(loose_candidates) - len(candidates)))
     return {
         'input_rows': int(len(normalized)),
         'candidate_rows': int(len(candidates)),
+        'blocked_rows': blocked,
         'can_lock': bool(not candidates.empty),
     }
 
@@ -39,8 +42,9 @@ def run_daily_workflow(
 ) -> dict[str, Any]:
     raw = pd.DataFrame(frame) if isinstance(frame, list) else frame
     normalized = normalize_frame(raw) if raw is not None and not raw.empty else pd.DataFrame()
-    candidates = prepare_lock_candidates(normalized, include_watch=include_watch)
-    locked = lock_rows(normalized, analyst=analyst, max_units=max_units, include_watch=include_watch)
+    candidates = prepare_lock_candidates(normalized, include_watch=include_watch, strict=True, require_future=True)
+    loose_candidates = prepare_lock_candidates(normalized, include_watch=include_watch, strict=False, require_future=True)
+    locked = lock_rows(normalized, analyst=analyst, max_units=max_units, include_watch=include_watch, strict=True, require_future=True)
     saved = pd.DataFrame()
     if save_to_persistent and not locked.empty:
         saved = save_persistent_ledger(merge_ledgers(load_persistent_ledger(), locked))
@@ -48,6 +52,7 @@ def run_daily_workflow(
     return {
         'input_rows': int(len(normalized)),
         'candidate_rows': int(len(candidates)),
+        'blocked_rows': max(0, int(len(loose_candidates) - len(candidates))),
         'locked_rows': int(len(active)),
         'saved_rows': int(len(saved)),
         'locked_frame': active,
@@ -61,7 +66,8 @@ def run_daily_workflow(
 def workflow_stage_frame(result: dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame([
         {'stage': 'Input rows', 'rows': result.get('input_rows', 0), 'status': 'ready' if result.get('input_rows', 0) else 'empty'},
-        {'stage': 'Lock candidates', 'rows': result.get('candidate_rows', 0), 'status': 'ready' if result.get('candidate_rows', 0) else 'none'},
+        {'stage': 'Official lock candidates', 'rows': result.get('candidate_rows', 0), 'status': 'ready' if result.get('candidate_rows', 0) else 'none'},
+        {'stage': 'Blocked rows', 'rows': result.get('blocked_rows', 0), 'status': 'review' if result.get('blocked_rows', 0) else 'ok'},
         {'stage': 'Locked proof rows', 'rows': result.get('locked_rows', 0), 'status': 'ready' if result.get('locked_rows', 0) else 'none'},
         {'stage': 'Persistent saved rows', 'rows': result.get('saved_rows', 0), 'status': 'saved' if result.get('saved_rows', 0) else 'not_saved'},
     ])
