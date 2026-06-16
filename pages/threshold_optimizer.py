@@ -99,7 +99,11 @@ def normalize(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def profit_units(prob_frame: pd.DataFrame, stake: float = 1.0) -> pd.Series:
-    return prob_frame['outcome'].astype(float).where(prob_frame['outcome'].astype(float).eq(0), prob_frame['decimal_price'].astype(float) - 1.0) * stake
+    outcome = prob_frame['outcome'].astype(float)
+    price = prob_frame['decimal_price'].astype(float).fillna(1.0)
+    profits = pd.Series(-1.0 * stake, index=prob_frame.index, dtype=float)
+    profits[outcome.eq(1.0)] = (price[outcome.eq(1.0)] - 1.0) * stake
+    return profits
 
 
 def metrics(frame: pd.DataFrame) -> dict[str, Any]:
