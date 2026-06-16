@@ -10,16 +10,31 @@ from .row_normalizer import normalize_frame, result_status, safe_text
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LEDGER_PATH = REPO_ROOT / 'data' / 'odds_lock_pro_ledger.csv'
+PROOF_REQUIRED_COLUMNS = {'proof_id', 'locked_at_utc'}
 
 
 def ensure_data_dir(path: Path = DEFAULT_LEDGER_PATH) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
+def filter_locked_proof_rows(frame: pd.DataFrame | list[dict[str, Any]]) -> pd.DataFrame:
+    raw = pd.DataFrame(frame) if isinstance(frame, list) else frame
+    cleaned = update_profit_columns(raw) if raw is not None and not raw.empty else pd.DataFrame()
+    if cleaned.empty or not PROOF_REQUIRED_COLUMNS.issubset(set(cleaned.columns)):
+        return pd.DataFrame()
+    proof = cleaned['proof_id'].map(safe_text)
+    locked_at = cleaned['locked_at_utc'].map(safe_text)
+    return cleaned[proof.ne('') & locked_at.ne('')].copy()
+
+
+def has_locked_proof_rows(frame: pd.DataFrame | list[dict[str, Any]]) -> bool:
+    return not filter_locked_proof_rows(frame).empty
+
+
 def load_persistent_ledger(path: Path = DEFAULT_LEDGER_PATH) -> pd.DataFrame:
     try:
         if path.exists():
-            return update_profit_columns(pd.read_csv(path))
+            return filter_locked_proof_rows(pd.read_csv(path))
     except Exception:
         return pd.DataFrame()
     return pd.DataFrame()
@@ -27,7 +42,7 @@ def load_persistent_ledger(path: Path = DEFAULT_LEDGER_PATH) -> pd.DataFrame:
 
 def save_persistent_ledger(frame: pd.DataFrame | list[dict[str, Any]], path: Path = DEFAULT_LEDGER_PATH) -> pd.DataFrame:
     ensure_data_dir(path)
-    cleaned = update_profit_columns(frame)
+    cleaned = filter_locked_proof_rows(frame)
     if cleaned.empty:
         return pd.DataFrame()
     cleaned.to_csv(path, index=False)
@@ -38,8 +53,9 @@ def merge_ledgers(*frames: pd.DataFrame | list[dict[str, Any]]) -> pd.DataFrame:
     usable = []
     for frame in frames:
         raw = pd.DataFrame(frame) if isinstance(frame, list) else frame
-        if raw is not None and not raw.empty:
-            usable.append(raw)
+        locked = filter_locked_proof_rows(raw) if raw is not None and not raw.empty else pd.DataFrame()
+        if not locked.empty:
+            usable.append(locked)
     if not usable:
         return pd.DataFrame()
     merged = pd.concat(usable, ignore_index=True, sort=False)
@@ -51,7 +67,7 @@ def merge_ledgers(*frames: pd.DataFrame | list[dict[str, Any]]) -> pd.DataFrame:
     fallback_cols = [col for col in ['event', 'prediction', 'event_start_utc', 'market_type'] if col in merged.columns]
     if fallback_cols:
         merged = merged.drop_duplicates(subset=fallback_cols, keep='last')
-    return update_profit_columns(merged)
+    return filter_locked_proof_rows(merged)
 
 
 def _key_text(value: Any) -> str:
@@ -78,12 +94,12 @@ def _result_from_row(row: Mapping[str, Any], pick: str = '') -> str:
 
 
 def apply_result_updates(ledger: pd.DataFrame | list[dict[str, Any]], results: pd.DataFrame | list[dict[str, Any]]) -> tuple[pd.DataFrame, dict[str, Any]]:
-    locked = normalize_frame(pd.DataFrame(ledger) if isinstance(ledger, list) else ledger)
+    locked = filter_locked_proof_rows(ledger)
     result_frame = normalize_frame(pd.DataFrame(results) if isinstance(results, list) else results)
     if locked.empty:
         return pd.DataFrame(), {'updated_rows': 0, 'matched_by_proof_id': 0, 'matched_by_event_pick': 0, 'unmatched_results': int(len(result_frame)) if result_frame is not None else 0}
     if result_frame.empty:
-        return update_profit_columns(locked), {'updated_rows': 0, 'matched_by_proof_id': 0, 'matched_by_event_pick': 0, 'unmatched_results': 0}
+        return filter_locked_proof_rows(locked), {'updated_rows': 0, 'matched_by_proof_id': 0, 'matched_by_event_pick': 0, 'unmatched_results': 0}
 
     proof_lookup: dict[str, Mapping[str, Any]] = {}
     key_lookup: dict[str, Mapping[str, Any]] = {}
@@ -123,14 +139,14 @@ def apply_result_updates(ledger: pd.DataFrame | list[dict[str, Any]], results: p
                 item['graded_at_utc'] = pd.Timestamp.utcnow().isoformat()
                 updated += 1
         rows.append(item)
-    updated_frame = update_profit_columns(pd.DataFrame(rows))
+    updated_frame = filter_locked_proof_rows(pd.DataFrame(rows))
     unmatched = max(0, len(result_frame) - len(matched_result_keys))
     return updated_frame, {'updated_rows': updated, 'matched_by_proof_id': proof_matches, 'matched_by_event_pick': key_matches, 'unmatched_results': unmatched}
 
 
 def dashboard_metrics(frame: pd.DataFrame | list[dict[str, Any]]) -> dict[str, Any]:
-    summary = summarize_locked_picks(frame)
-    cleaned = update_profit_columns(frame)
+    cleaned = filter_locked_proof_rows(frame)
+    summary = summarize_locked_picks(cleaned)
     pending = 0
     avg_stake = None
     avg_clv = None
@@ -149,7 +165,8 @@ def dashboard_metrics(frame: pd.DataFrame | list[dict[str, Any]]) -> dict[str, A
 
 
 def public_dashboard_table(frame: pd.DataFrame | list[dict[str, Any]], limit: int = 200) -> pd.DataFrame:
-    view = client_view(frame, public_only=True)
+    cleaned = filter_locked_proof_rows(frame)
+    view = client_view(cleaned, public_only=True)
     if view.empty:
         return pd.DataFrame()
     sort_cols = [col for col in ['locked_at_utc', 'event_start_utc'] if col in view.columns]
@@ -202,4 +219,5 @@ def report_card_html(frame: pd.DataFrame | list[dict[str, Any]], *, title: str =
 
 
 def daily_locked_report(frame: pd.DataFrame | list[dict[str, Any]], *, language: str = 'English', public_only: bool = True) -> str:
-    return daily_report(frame, language=language, public_only=public_only)
+    cleaned = filter_locked_proof_rows(frame)
+    return daily_report(cleaned, language=language, public_only=public_only)
