@@ -23,6 +23,7 @@ OPTIONAL_PAGES = [
     'pages/auto_result_grading.py',
     'pages/daily_workflow.py',
     'pages/buyer_demo_mode.py',
+    'pages/monthly_license_readiness.py',
 ]
 KEY_GROUPS = {
     'Odds data': ['THE_ODDS_API_KEY', 'ODDS_API_KEY'],
@@ -111,6 +112,10 @@ def action_items(summary: Mapping[str, Any]) -> list[str]:
         items.append('Review proof hash mismatches in the proof audit tab.')
     if int(summary.get('locked_rows', 0)) == 0:
         items.append('Create and save locked proof rows.')
+    elif int(summary.get('locked_rows', 0)) < 25:
+        items.append('Keep collecting future-only locked proof rows before charging monthly clients.')
+    if float(summary.get('proof_quality_score', 0.0) or 0.0) < 90 and int(summary.get('locked_rows', 0)) > 0:
+        items.append('Improve proof quality before using the dashboard in a paid client pitch.')
     if not items:
-        items.append('Deployment looks ready for the no-password daily workflow.')
+        items.append('Deployment looks ready for the no-password daily workflow and monthly-license review.')
     return items
