@@ -9,21 +9,16 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   test:
-    name: Python tests and syntax checks
+    name: Python checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       PYTHONPATH: ${{ github.workspace }}
-      PIP_DISABLE_PIP_VERSION_CHECK: '1'
 
     steps:
-      - name: Check out repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -31,27 +26,16 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
+          cache-dependency-path: requirements.txt
 
-      - name: Show environment
-        run: |
-          python --version
-          python -m pip --version
-          pwd
-          find . -maxdepth 2 -type f | sort | sed 's#^./##' | head -200
-
-      - name: Install dependencies
+      - name: Install
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
-          if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; else python -m pip install pytest; fi
+          python -m pip install -r requirements.txt
+          if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; fi
 
-      - name: Compile Python files
-        run: |
-          python -m compileall autonomous_betting_agent pages tests
+      - name: Compile
+        run: python -m compileall autonomous_betting_agent pages tests
 
-      - name: Run unit tests
-        run: |
-          python -m pytest tests -q --maxfail=1
+      - name: Test
+        run: python -m unittest discover -s tests -v
