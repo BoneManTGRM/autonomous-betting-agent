@@ -21,6 +21,23 @@ DEFAULT_LEDGER_PATH = REPO_ROOT / 'data' / 'odds_lock_pro_ledger.csv'
 PROOF_REQUIRED_COLUMNS = {'proof_id', 'locked_at_utc'}
 
 
+def normalize_workspace_id(value: Any) -> str:
+    """Return a safe no-login workspace/test-window id for separated proof ledgers."""
+    text = safe_text(value).strip().lower()
+    if not text:
+        return 'default'
+    cleaned = ''.join(char if char.isalnum() or char in {'-', '_'} else '_' for char in text)
+    cleaned = '_'.join(part for part in cleaned.split('_') if part)
+    return cleaned[:48] or 'default'
+
+
+def persistent_ledger_path(workspace_id: Any = '', path: Path = DEFAULT_LEDGER_PATH) -> Path:
+    workspace = normalize_workspace_id(workspace_id)
+    if workspace in {'default', 'shared', 'main'}:
+        return path
+    return path.with_name(f'{path.stem}_{workspace}{path.suffix}')
+
+
 def ensure_data_dir(path: Path = DEFAULT_LEDGER_PATH) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -70,21 +87,23 @@ def has_locked_proof_rows(frame: pd.DataFrame | list[dict[str, Any]]) -> bool:
     return not filter_locked_proof_rows(frame).empty
 
 
-def load_persistent_ledger(path: Path = DEFAULT_LEDGER_PATH) -> pd.DataFrame:
+def load_persistent_ledger(path: Path = DEFAULT_LEDGER_PATH, workspace_id: Any = '') -> pd.DataFrame:
+    ledger_path = persistent_ledger_path(workspace_id, path)
     try:
-        if path.exists():
-            return filter_locked_proof_rows(pd.read_csv(path))
+        if ledger_path.exists():
+            return filter_locked_proof_rows(pd.read_csv(ledger_path))
     except Exception:
         return pd.DataFrame()
     return pd.DataFrame()
 
 
-def save_persistent_ledger(frame: pd.DataFrame | list[dict[str, Any]], path: Path = DEFAULT_LEDGER_PATH) -> pd.DataFrame:
-    ensure_data_dir(path)
+def save_persistent_ledger(frame: pd.DataFrame | list[dict[str, Any]], path: Path = DEFAULT_LEDGER_PATH, workspace_id: Any = '') -> pd.DataFrame:
+    ledger_path = persistent_ledger_path(workspace_id, path)
+    ensure_data_dir(ledger_path)
     cleaned = filter_locked_proof_rows(frame)
     if cleaned.empty:
         return pd.DataFrame()
-    cleaned.to_csv(path, index=False)
+    cleaned.to_csv(ledger_path, index=False)
     return cleaned
 
 
