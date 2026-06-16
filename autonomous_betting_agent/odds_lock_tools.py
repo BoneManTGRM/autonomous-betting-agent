@@ -16,12 +16,17 @@ PUBLIC_COLUMNS = [
 ]
 PRIVATE_COLUMNS = [
     'proof_id', 'locked_at_utc', 'event_start_utc', 'event', 'sport', 'sport_key',
-    'market_type', 'prediction', 'model_probability', 'decimal_price', 'implied_probability',
-    'model_edge', 'bookmaker', 'odds_source', 'agent_decision', 'agent_score', 'scanner_strength_score',
-    'stake_units', 'kelly_fraction', 'proof_hash', 'proof_status', 'result_status',
-    'profit_units',
+    'market_type', 'prediction', 'volume_tier', 'model_probability', 'decimal_price',
+    '_robust_decimal_price', 'implied_probability', 'model_edge', 'expected_value_per_unit',
+    '_robust_expected_value', 'ultra80_profit_at_80_percent', '_robust_profit_at_80_percent',
+    '_price_range_risk', 'bookmaker', 'odds_source', 'agent_decision', 'agent_score',
+    'scanner_strength_score', 'stake_units', 'kelly_fraction', 'proof_hash', 'proof_status',
+    'result_status', 'profit_units',
 ]
 REQUIRED_OFFICIAL_LOCK_FIELDS = ['event', 'prediction', 'model_probability', 'decimal_price']
+ULTRA80_LOCK_CAP_UNITS = 0.35
+MAX_VOLUME_LOCK_CAP_UNITS = 0.25
+RESERVE_LOCK_CAP_UNITS = 0.10
 
 
 def now_utc() -> str:
@@ -57,12 +62,96 @@ def bookmaker_or_source(row: Mapping[str, Any]) -> str:
     return safe_text(row.get('bookmaker')) or safe_text(row.get('odds_source')) or safe_text(row.get('source'))
 
 
+def _safe_float(value: Any) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if pd.isna(parsed):
+        return None
+    return parsed
+
+
+def _first_float(row: Mapping[str, Any], names: list[str]) -> float | None:
+    for name in names:
+        value = _safe_float(row.get(name))
+        if value is not None:
+            return value
+    return None
+
+
+def _probability_like(value: float | None) -> float | None:
+    if value is None:
+        return None
+    if value > 1.0:
+        value = value / 100.0
+    if 0.0 < value < 1.0:
+        return value
+    return None
+
+
 def model_edge(row: Mapping[str, Any]) -> float | None:
+    explicit = _first_float(row, ['model_edge', 'model_market_edge', 'edge_probability'])
+    if explicit is not None:
+        if abs(explicit) > 1.0:
+            explicit /= 100.0
+        return round(explicit, 6)
     probability = probability_value(row, 'model_probability')
     implied = decimal_to_implied(row.get('decimal_price'))
     if probability is None or implied is None:
         return None
     return round(probability - implied, 6)
+
+
+def expected_value(row: Mapping[str, Any]) -> float | None:
+    explicit = _first_float(row, ['expected_value_per_unit', 'computed_ev_decimal', 'estimated_ev_decimal', 'ev'])
+    if explicit is not None:
+        if abs(explicit) > 1.0:
+            explicit /= 100.0
+        return round(explicit, 6)
+    probability = probability_value(row, 'model_probability')
+    price = _safe_float(row.get('decimal_price'))
+    if probability is None or price is None or price <= 1.0:
+        return None
+    return round(probability * price - 1.0, 6)
+
+
+def robust_expected_value(row: Mapping[str, Any]) -> float | None:
+    explicit = _first_float(row, ['_robust_expected_value', 'robust_expected_value'])
+    if explicit is not None:
+        if abs(explicit) > 1.0:
+            explicit /= 100.0
+        return round(explicit, 6)
+    probability = probability_value(row, 'model_probability')
+    robust_price = _first_float(row, ['_robust_decimal_price', 'robust_decimal_price', 'worst_price', 'average_price', 'decimal_price'])
+    if probability is None or robust_price is None or robust_price <= 1.0:
+        return None
+    return round(probability * robust_price - 1.0, 6)
+
+
+def robust_profit_at_80(row: Mapping[str, Any]) -> float | None:
+    explicit = _first_float(row, ['_robust_profit_at_80_percent', 'robust_profit_at_80_percent'])
+    if explicit is not None:
+        if abs(explicit) > 1.0:
+            explicit /= 100.0
+        return round(explicit, 6)
+    robust_price = _first_float(row, ['_robust_decimal_price', 'robust_decimal_price', 'worst_price', 'average_price', 'decimal_price'])
+    if robust_price is None or robust_price <= 1.0:
+        return None
+    return round(0.80 * robust_price - 1.0, 6)
+
+
+def price_range_risk(row: Mapping[str, Any]) -> float:
+    explicit = _safe_float(row.get('_price_range_risk'))
+    if explicit is None:
+        explicit = _safe_float(row.get('price_range'))
+    if explicit is not None:
+        return max(0.0, float(explicit))
+    best = _first_float(row, ['decimal_price', 'best_price'])
+    conservative = _first_float(row, ['_robust_decimal_price', 'robust_decimal_price', 'worst_price', 'average_price'])
+    if best is None or conservative is None:
+        return 0.0
+    return max(0.0, abs(best - conservative))
 
 
 def kelly_fraction(probability: float | None, decimal_price: float | None) -> float:
@@ -74,37 +163,57 @@ def kelly_fraction(probability: float | None, decimal_price: float | None) -> fl
     return round(max(0.0, fraction), 6)
 
 
-def _safe_float(value: Any) -> float | None:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return None
-    if pd.isna(parsed):
-        return None
-    return parsed
+def tier_cap(row: Mapping[str, Any], *, max_units: float) -> float:
+    tier = safe_text(row.get('volume_tier')).lower()
+    ultra = safe_text(row.get('ultra80_candidate')).lower() in {'true', '1', 'yes', 'pass'}
+    cap = float(max_units)
+    incoming = _first_float(row, ['recommended_stake_units'])
+    if incoming is not None and incoming > 0:
+        cap = min(cap, incoming)
+    if ultra or tier.startswith('a_') or 'strict_ultra80' in tier:
+        cap = min(cap, ULTRA80_LOCK_CAP_UNITS)
+    elif tier.startswith('b_') or 'max_profitable' in tier:
+        cap = min(cap, MAX_VOLUME_LOCK_CAP_UNITS)
+    elif tier.startswith('c_') or 'reserve' in tier:
+        cap = min(cap, RESERVE_LOCK_CAP_UNITS)
+    return max(0.0, cap)
 
 
-def recommended_stake_units(row: Mapping[str, Any], *, max_units: float = 2.0, risk_multiplier: float = 0.25) -> float:
+def recommended_stake_units(row: Mapping[str, Any], *, max_units: float = 0.5, risk_multiplier: float = 0.15) -> float:
     probability = probability_value(row, 'model_probability')
     price = _safe_float(row.get('decimal_price'))
     fraction = kelly_fraction(probability, price)
     agent_decision = safe_text(row.get('agent_decision') or row.get('decision')).lower()
     agent_score = _safe_float(row.get('agent_score')) or 0.0
     scanner_score = _safe_float(row.get('scanner_strength_score')) or 0.0
+    robust_ev = robust_expected_value(row)
+    robust_profit = robust_profit_at_80(row)
+    risk = price_range_risk(row)
+    cap = tier_cap(row, max_units=max_units)
     base_units = fraction * 10.0 * risk_multiplier
     if agent_decision == 'play_strong':
-        base_units *= 1.25
-    elif agent_decision == 'play_small':
-        base_units *= 0.75
-    elif agent_decision:
-        base_units *= 0.25
-    if agent_score >= 80:
         base_units *= 1.15
-    if scanner_score >= 80:
+    elif agent_decision == 'play_small':
+        base_units *= 0.65
+    elif agent_decision:
+        base_units *= 0.20
+    if agent_score >= 80:
         base_units *= 1.10
-    if base_units <= 0 and agent_decision in {'play_strong', 'play_small'}:
-        base_units = 0.25
-    return round(max(0.0, min(float(max_units), base_units)), 2)
+    if scanner_score >= 80:
+        base_units *= 1.05
+    if robust_ev is not None and robust_ev <= 0.0:
+        base_units = 0.0
+    elif robust_ev is not None and robust_ev < 0.015:
+        base_units *= 0.50
+    if robust_profit is not None and robust_profit <= 0.0:
+        base_units = 0.0
+    if risk > 0.50:
+        base_units = 0.0
+    elif risk > 0.35:
+        base_units *= 0.50
+    if base_units <= 0 and agent_decision in {'play_strong', 'play_small'} and cap > 0 and (robust_ev is None or robust_ev > 0) and (robust_profit is None or robust_profit > 0):
+        base_units = min(0.10, cap)
+    return round(max(0.0, min(cap, base_units)), 2)
 
 
 def proof_payload(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -154,10 +263,31 @@ def lock_blockers(row: Mapping[str, Any], *, require_future: bool = False, locke
             blockers.append(f'missing_{field}')
     if not bookmaker_or_source(row):
         blockers.append('missing_bookmaker_or_odds_source')
-    if probability_value(row, 'model_probability') is None:
+    probability = probability_value(row, 'model_probability')
+    if probability is None:
         blockers.append('invalid_model_probability')
     if decimal_to_implied(row.get('decimal_price')) is None:
         blockers.append('invalid_decimal_price')
+    edge = model_edge(row)
+    ev = expected_value(row)
+    robust_ev = robust_expected_value(row)
+    robust_profit = robust_profit_at_80(row)
+    risk = price_range_risk(row)
+    tier = safe_text(row.get('volume_tier')).lower()
+    if edge is not None and edge < 0.0:
+        blockers.append('negative_model_edge')
+    if ev is not None and ev < 0.0:
+        blockers.append('negative_expected_value')
+    if robust_ev is not None and robust_ev <= 0.0:
+        blockers.append('robust_ev_below_0')
+    if robust_profit is not None and robust_profit <= 0.0:
+        blockers.append('robust_profit80_below_0')
+    if tier.startswith('a_') and robust_ev is not None and robust_ev < 0.015:
+        blockers.append('strict_robust_ev_below_1_5pct')
+    if risk > 0.50:
+        blockers.append('price_range_risk_too_high')
+    elif tier.startswith(('a_', 'b_')) and risk > 0.35:
+        blockers.append('price_range_risk_above_profit_mode_limit')
     status = lock_status(row, locked_at=locked_at)
     if require_future and status != 'locked_before_start':
         blockers.append(status)
@@ -167,10 +297,14 @@ def lock_blockers(row: Mapping[str, Any], *, require_future: bool = False, locke
 def _decision_candidate(row: Mapping[str, Any], *, include_watch: bool) -> bool:
     decision = safe_text(row.get('agent_decision') or row.get('decision')).lower()
     lock_ready = safe_text(row.get('lock_ready')).lower() in {'true', '1', 'yes', 'y'}
+    ultra = safe_text(row.get('ultra80_candidate')).lower() in {'true', '1', 'yes', 'pass'}
+    tier = safe_text(row.get('volume_tier')).lower()
+    if ultra or tier.startswith(('a_', 'b_')):
+        return True
     if lock_ready or decision in {'play_strong', 'play_small'}:
         return True
     if include_watch:
-        if decision in {'watch_only', 'watch'}:
+        if decision in {'watch_only', 'watch'} or tier.startswith('c_'):
             return True
         return bool(safe_text(row.get('event')) and safe_text(row.get('prediction')))
     return False
@@ -199,6 +333,10 @@ def prepare_lock_candidates(
             item['bookmaker'] = bookmaker_or_source(item)
         item['implied_probability'] = decimal_to_implied(item.get('decimal_price'))
         item['model_edge'] = model_edge(item)
+        item['expected_value_per_unit'] = expected_value(item)
+        item['_robust_expected_value'] = robust_expected_value(item)
+        item['_robust_profit_at_80_percent'] = robust_profit_at_80(item)
+        item['_price_range_risk'] = price_range_risk(item)
         item['stake_units'] = recommended_stake_units(item)
         item['prelock_status'] = lock_status(item, locked_at=now)
         blockers = lock_blockers(item, require_future=require_future, locked_at=now)
@@ -216,7 +354,7 @@ def lock_rows(
     frame: pd.DataFrame | list[dict[str, Any]],
     *,
     analyst: str = '',
-    max_units: float = 2.0,
+    max_units: float = 0.5,
     include_watch: bool = False,
     strict: bool = False,
     require_future: bool = False,
@@ -231,6 +369,12 @@ def lock_rows(
         item = dict(row)
         if not safe_text(item.get('bookmaker')) and bookmaker_or_source(item):
             item['bookmaker'] = bookmaker_or_source(item)
+        item['implied_probability'] = decimal_to_implied(item.get('decimal_price'))
+        item['model_edge'] = model_edge(item)
+        item['expected_value_per_unit'] = expected_value(item)
+        item['_robust_expected_value'] = robust_expected_value(item)
+        item['_robust_profit_at_80_percent'] = robust_profit_at_80(item)
+        item['_price_range_risk'] = price_range_risk(item)
         if strict:
             blockers = lock_blockers(item, require_future=require_future, locked_at=locked_dt)
             if blockers:
@@ -238,8 +382,6 @@ def lock_rows(
         item['locked_at_utc'] = locked_time
         item['analyst'] = analyst or 'private_analyst'
         item['stake_units'] = recommended_stake_units(item, max_units=max_units)
-        item['implied_probability'] = decimal_to_implied(item.get('decimal_price'))
-        item['model_edge'] = model_edge(item)
         price = _safe_float(item.get('decimal_price'))
         item['kelly_fraction'] = kelly_fraction(probability_value(item, 'model_probability'), price)
         item['proof_status'] = lock_status(item, locked_at=locked_dt)
@@ -284,6 +426,10 @@ def update_profit_columns(frame: pd.DataFrame | list[dict[str, Any]]) -> pd.Data
         item['profit_units'] = profit_units(item)
         item['implied_probability'] = decimal_to_implied(item.get('decimal_price'))
         item['model_edge'] = model_edge(item)
+        item['expected_value_per_unit'] = expected_value(item)
+        item['_robust_expected_value'] = robust_expected_value(item)
+        item['_robust_profit_at_80_percent'] = robust_profit_at_80(item)
+        item['_price_range_risk'] = price_range_risk(item)
         rows.append(item)
     return pd.DataFrame(rows)
 
@@ -306,7 +452,7 @@ def summarize_locked_picks(frame: pd.DataFrame | list[dict[str, Any]]) -> dict[s
     stake = pd.to_numeric(enriched.get('stake_units', pd.Series(dtype=float)), errors='coerce').fillna(1.0)
     staked_resolved = float(stake[resolved_mask].sum()) if len(stake) == len(enriched) else 0.0
     profit = pd.to_numeric(enriched.get('profit_units', pd.Series(dtype=float)), errors='coerce').fillna(0.0)
-    profit_total = float(profit.sum())
+    profit_total = float(profit[resolved_mask].sum()) if len(profit) == len(enriched) else float(profit.sum())
     prices = pd.to_numeric(enriched.get('decimal_price', pd.Series(dtype=float)), errors='coerce').dropna()
     probs = pd.to_numeric(enriched.get('model_probability', pd.Series(dtype=float)), errors='coerce').dropna()
     probs = probs.where(probs <= 1.0, probs / 100.0)
@@ -344,12 +490,16 @@ def performance_by_group(frame: pd.DataFrame | list[dict[str, Any]], group_col: 
 
 
 def public_confidence(row: Mapping[str, Any]) -> str:
+    tier = safe_text(row.get('volume_tier')).lower()
     decision = safe_text(row.get('agent_decision') or row.get('decision')).lower()
     edge = model_edge(row)
     score = _safe_float(row.get('agent_score')) or 0.0
-    if decision == 'play_strong' and edge is not None and edge >= 0.075 and score >= 75:
+    robust_ev = robust_expected_value(row)
+    if tier.startswith('a_') and robust_ev is not None and robust_ev >= 0.015:
+        return 'Strict Ultra 80'
+    if decision == 'play_strong' and edge is not None and edge >= 0.075 and score >= 75 and (robust_ev is None or robust_ev > 0):
         return 'Premium'
-    if decision in {'play_strong', 'play_small'} and edge is not None and edge >= 0.035:
+    if decision in {'play_strong', 'play_small'} and edge is not None and edge >= 0.035 and (robust_ev is None or robust_ev > 0):
         return 'Qualified'
     return 'Watch'
 
@@ -357,8 +507,14 @@ def public_confidence(row: Mapping[str, Any]) -> str:
 def public_reason(row: Mapping[str, Any]) -> str:
     parts: list[str] = []
     edge = model_edge(row)
+    ev = expected_value(row)
+    robust_ev = robust_expected_value(row)
     if edge is not None:
         parts.append(f'model edge {edge * 100:.1f}%')
+    if ev is not None:
+        parts.append(f'EV {ev * 100:.1f}%')
+    if robust_ev is not None:
+        parts.append(f'robust EV {robust_ev * 100:.1f}%')
     book = bookmaker_or_source(row)
     if book:
         parts.append(f'price/source: {book}')
