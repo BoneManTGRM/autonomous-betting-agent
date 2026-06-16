@@ -21,6 +21,8 @@ CORE_PAGES = [
 OPTIONAL_PAGES = [
     'pages/00_start_here.py',
     'pages/01_tool_command_center.py',
+    'pages/02_daily_operator_checklist.py',
+    'pages/03_private_beta_sales_dashboard.py',
     'pages/deployment_health.py',
     'pages/auto_result_grading.py',
     'pages/daily_workflow.py',
