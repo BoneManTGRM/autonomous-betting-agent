@@ -48,6 +48,10 @@ TEXT = {
         'bankroll': 'Bankroll / exposure',
         'client': 'Client view',
         'rows': 'Rows',
+        'input_rows': 'Input rows',
+        'reviewed': 'Reviewed',
+        'official_candidates': 'Official candidates',
+        'uploaded_locked': 'Uploaded locked',
         'resolved': 'Resolved',
         'record': 'Record',
         'hit_rate': 'Hit rate',
@@ -61,6 +65,13 @@ TEXT = {
         'no_rows': 'No rows found. Run What Are the Odds first or upload a CSV.',
         'no_locked': 'No locked proof rows yet. Create a locked proof ledger or upload a ledger with proof_id and locked_at_utc.',
         'no_candidates': 'No official lock candidates found. Rows must be future events with event, prediction, probability, decimal price, and bookmaker.',
+        'no_review_rows': 'No rows reached lock-candidate review. Rows need lock_ready=true or an agent decision such as play_strong/play_small. Turn on watch-only rows only for rows that should be reviewed.',
+        'lock_created': 'Created official locked proof rows',
+        'lock_not_created': 'No official ledger was created.',
+        'lock_not_created_detail': 'The button worked, but every reviewed row was blocked from official locking. Use a fresh future prediction CSV before event start with event, prediction, model probability, decimal price, bookmaker, and event start time.',
+        'lock_not_created_no_review': 'The button worked, but no rows qualified for lock review. The upload is probably a results/graded CSV, a watch-only file, or a file without lock_ready/agent decision fields.',
+        'blocker_summary': 'Why rows were blocked',
+        'blocked_preview': 'Blocked-row diagnostic preview',
         'public_only': 'Public/client-safe view',
         'report_language': 'Report language',
         'report': 'Copy/paste report',
@@ -88,6 +99,10 @@ TEXT = {
         'bankroll': 'Bankroll / exposición',
         'client': 'Vista para clientes',
         'rows': 'Filas',
+        'input_rows': 'Filas cargadas',
+        'reviewed': 'Revisadas',
+        'official_candidates': 'Candidatos oficiales',
+        'uploaded_locked': 'Ledger subido',
         'resolved': 'Resueltos',
         'record': 'Récord',
         'hit_rate': 'Tasa de acierto',
@@ -101,6 +116,13 @@ TEXT = {
         'no_rows': 'No se encontraron filas. Ejecuta What Are the Odds primero o sube un CSV.',
         'no_locked': 'Aún no hay filas bloqueadas con prueba. Crea un ledger bloqueado o sube uno con proof_id y locked_at_utc.',
         'no_candidates': 'No hay candidatos oficiales para bloquear. Las filas deben ser eventos futuros con evento, pronóstico, probabilidad, cuota decimal y casa.',
+        'no_review_rows': 'Ninguna fila llegó a revisión de bloqueo. Las filas necesitan lock_ready=true o una decisión del agente como play_strong/play_small. Activa watch-only solo para filas que deban revisarse.',
+        'lock_created': 'Filas oficiales bloqueadas creadas',
+        'lock_not_created': 'No se creó ningún ledger oficial.',
+        'lock_not_created_detail': 'El botón funcionó, pero todas las filas revisadas fueron bloqueadas para prueba oficial. Usa un CSV fresco de predicciones futuras antes del inicio con evento, pronóstico, probabilidad del modelo, cuota decimal, casa y hora de inicio.',
+        'lock_not_created_no_review': 'El botón funcionó, pero ninguna fila calificó para revisión. Probablemente es un CSV de resultados/calificado, un archivo watch-only o un archivo sin lock_ready/decisión del agente.',
+        'blocker_summary': 'Por qué se bloquearon las filas',
+        'blocked_preview': 'Vista diagnóstica de filas bloqueadas',
         'public_only': 'Vista segura para público/clientes',
         'report_language': 'Idioma del reporte',
         'report': 'Reporte para copiar/pegar',
@@ -159,6 +181,31 @@ def has_proof_fields(frame: pd.DataFrame) -> bool:
     return not frame.empty and {'proof_id', 'locked_at_utc'}.issubset(set(frame.columns))
 
 
+def blocker_summary(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty or 'lock_blockers' not in frame.columns:
+        return pd.DataFrame()
+    counts: dict[str, int] = {}
+    for value in frame['lock_blockers'].fillna('').astype(str):
+        for item in value.split(';'):
+            key = item.strip()
+            if key:
+                counts[key] = counts.get(key, 0) + 1
+    if not counts:
+        return pd.DataFrame()
+    return pd.DataFrame(
+        [{'blocker': key, 'rows': value} for key, value in sorted(counts.items(), key=lambda item: (-item[1], item[0]))]
+    )
+
+
+def diagnostic_columns(frame: pd.DataFrame) -> list[str]:
+    preferred = [
+        'event', 'sport', 'market_type', 'prediction', 'model_probability', 'decimal_price',
+        'bookmaker', 'event_start_utc', 'agent_decision', 'decision', 'lock_ready',
+        'prelock_status', 'lock_blockers', 'result_status', 'source_file',
+    ]
+    return [col for col in preferred if col in frame.columns]
+
+
 st.title(t('title'))
 st.caption(t('caption'))
 st.info(t('info'))
@@ -176,16 +223,36 @@ max_units = st.number_input(t('max_units'), min_value=0.25, max_value=10.0, valu
 daily_limit = st.number_input(t('daily_limit'), min_value=0.25, max_value=100.0, value=5.0, step=0.25)
 sport_limit = st.number_input(t('sport_limit'), min_value=0.25, max_value=100.0, value=3.0, step=0.25)
 
-candidates = prepare_lock_candidates(normalized, include_watch=include_watch, strict=True, require_future=True)
+review_rows = prepare_lock_candidates(normalized, include_watch=include_watch, strict=False, require_future=True)
+candidates = review_rows[review_rows.get('official_lock_ready', pd.Series(dtype=bool)).fillna(False)].copy() if not review_rows.empty else pd.DataFrame()
 existing_locked = filter_locked_proof_rows(pd.DataFrame(st.session_state.get('odds_lock_pro_locked_rows', [])))
 uploaded_locked = filter_locked_proof_rows(normalized) if has_proof_fields(normalized) else pd.DataFrame()
 
+status_cols = st.columns(4)
+status_cols[0].metric(t('input_rows'), int(len(normalized)))
+status_cols[1].metric(t('reviewed'), int(len(review_rows)))
+status_cols[2].metric(t('official_candidates'), int(len(candidates)))
+status_cols[3].metric(t('uploaded_locked'), int(len(uploaded_locked)))
+
 if st.button(t('lock'), type='primary', use_container_width=True):
     locked = lock_rows(normalized, analyst=analyst, max_units=float(max_units), include_watch=include_watch, strict=True, require_future=True)
-    st.session_state['odds_lock_pro_locked_rows'] = locked.to_dict('records')
-    st.session_state['ara_latest_predictions'] = locked.to_dict('records')
-    st.session_state['ara_latest_predictions_source'] = 'Odds Lock Pro'
-    existing_locked = filter_locked_proof_rows(locked)
+    if locked.empty:
+        st.error(t('lock_not_created'))
+        st.warning(t('lock_not_created_no_review') if review_rows.empty else t('lock_not_created_detail'))
+        blocked = blocker_summary(review_rows)
+        if not blocked.empty:
+            st.subheader(t('blocker_summary'))
+            st.dataframe(blocked, use_container_width=True, hide_index=True)
+        if not review_rows.empty:
+            cols = diagnostic_columns(review_rows)
+            st.subheader(t('blocked_preview'))
+            st.dataframe(review_rows[cols] if cols else review_rows, use_container_width=True, hide_index=True)
+    else:
+        st.session_state['odds_lock_pro_locked_rows'] = locked.to_dict('records')
+        st.session_state['ara_latest_predictions'] = locked.to_dict('records')
+        st.session_state['ara_latest_predictions_source'] = 'Odds Lock Pro'
+        existing_locked = filter_locked_proof_rows(locked)
+        st.success(f"{t('lock_created')}: {len(locked)}")
 
 active_locked = merge_ledgers(existing_locked, uploaded_locked)
 summary = summarize_locked_picks(active_locked)
@@ -210,6 +277,16 @@ tabs = st.tabs([t('candidates'), t('locked'), t('dashboard'), t('reports'), t('b
 with tabs[0]:
     if candidates.empty:
         st.warning(t('no_candidates'))
+        if review_rows.empty:
+            st.info(t('no_review_rows'))
+        else:
+            blocked = blocker_summary(review_rows)
+            if not blocked.empty:
+                st.subheader(t('blocker_summary'))
+                st.dataframe(blocked, use_container_width=True, hide_index=True)
+            cols = diagnostic_columns(review_rows)
+            st.subheader(t('blocked_preview'))
+            st.dataframe(review_rows[cols] if cols else review_rows, use_container_width=True, hide_index=True)
     else:
         show_cols = [col for col in ['event', 'sport', 'market_type', 'prediction', 'model_probability', 'decimal_price', 'bookmaker', 'agent_decision', 'agent_score', 'scanner_strength_score', 'model_edge', 'stake_units', 'prelock_status', 'official_lock_ready', 'public_confidence', 'public_reason'] if col in candidates.columns]
         st.dataframe(candidates[show_cols] if show_cols else candidates, use_container_width=True, hide_index=True)
