@@ -12,27 +12,33 @@ LANG = 'es' if st.sidebar.selectbox('Language / Idioma', ['English', 'Español']
 TEXT = {
     'en': {
         'title': 'Simulation Lab',
-        'caption': 'Monte Carlo stress test for hit rate, ROI, drawdown, and profit risk. This does not prove the model; it tests whether a strategy survives reasonable probability error.',
+        'caption': 'Monte Carlo stress test for hit rate, ROI, drawdown, profit risk, and changing conditions. This does not prove the model; it tests whether a strategy survives reasonable probability error.',
         'source': 'Prediction source', 'session': 'Use latest prediction session', 'survivor_source': 'Use last simulation survivor list', 'upload': 'Upload prediction CSV', 'upload_label': 'Upload CSV',
         'run': 'Run simulations + optimizer', 'no_rows': 'No rows available. Run Pro Predictor/Ultra 80 first or upload a CSV.',
         'settings': 'Simulation settings', 'iterations': 'Iterations', 'stake': 'Flat stake units', 'max_rows': 'Max rows per strategy', 'min_rows': 'Minimum optimizer rows',
+        'change_settings': 'Law of Variable Change stress settings', 'rain': 'Rain/wet-field stress', 'injury': 'Key injury to picked side', 'opp_injury': 'Opponent injury boost', 'altitude': 'Altitude mismatch stress', 'travel': 'Travel/fatigue stress', 'chaos': 'General uncertainty shrink',
         'summary': 'Simulation summary', 'details': 'Selected rows', 'optimizer': 'Simulation optimizer', 'survivor': 'Simulation survivor handoff', 'download': 'Download simulation report',
-        'note': 'Best use: compare strategies under model, blended-market, memory-penalty, and overconfidence scenarios. A strategy that only works when the model is perfectly calibrated is not robust enough.',
+        'note': 'Best use: compare strategies under model, market, memory, overconfidence, weather, injury, altitude, travel, and combined-change scenarios. A strategy that only works when conditions stay perfect is not robust enough.',
         'saved': 'Simulation survivor rows saved for Odds Lock Pro handoff.', 'recommendation': 'Recommendation',
     },
     'es': {
         'title': 'Laboratorio de Simulación',
-        'caption': 'Prueba Monte Carlo para acierto, ROI, drawdown y riesgo de pérdida. No prueba el modelo; prueba si la estrategia sobrevive errores razonables de probabilidad.',
+        'caption': 'Prueba Monte Carlo para acierto, ROI, drawdown, riesgo de pérdida y condiciones cambiantes. No prueba el modelo; prueba si la estrategia sobrevive errores razonables de probabilidad.',
         'source': 'Fuente de predicciones', 'session': 'Usar última sesión de predicciones', 'survivor_source': 'Usar última lista sobreviviente de simulación', 'upload': 'Subir CSV de predicciones', 'upload_label': 'Subir CSV',
         'run': 'Ejecutar simulaciones + optimizador', 'no_rows': 'No hay filas. Ejecuta Predictor Pro/Ultra 80 primero o sube un CSV.',
         'settings': 'Configuración de simulación', 'iterations': 'Iteraciones', 'stake': 'Unidades fijas por pick', 'max_rows': 'Máx filas por estrategia', 'min_rows': 'Mínimo de filas del optimizador',
+        'change_settings': 'Ajustes de estrés por Ley de Cambio Variable', 'rain': 'Estrés por lluvia/cancha mojada', 'injury': 'Lesión clave del lado elegido', 'opp_injury': 'Impulso por lesión del rival', 'altitude': 'Estrés por diferencia de altitud', 'travel': 'Estrés por viaje/fatiga', 'chaos': 'Reducción por incertidumbre general',
         'summary': 'Resumen de simulación', 'details': 'Filas seleccionadas', 'optimizer': 'Optimizador de simulación', 'survivor': 'Traspaso sobreviviente de simulación', 'download': 'Descargar reporte de simulación',
-        'note': 'Uso ideal: comparar estrategias con escenarios de modelo, mezcla de mercado, penalización de memoria y sobreconfianza. Una estrategia que solo funciona cuando el modelo está perfectamente calibrado no es suficientemente robusta.',
+        'note': 'Uso ideal: comparar estrategias con escenarios de modelo, mercado, memoria, sobreconfianza, clima, lesiones, altitud, viaje y cambio combinado. Una estrategia que solo funciona cuando las condiciones se mantienen perfectas no es suficientemente robusta.',
         'saved': 'Filas sobrevivientes de simulación guardadas para traspaso a Odds Lock Pro.', 'recommendation': 'Recomendación',
     },
 }
 
-SCENARIOS = ['model', 'market_blend', 'memory_penalty', 'overconfident_5pct', 'overconfident_10pct', 'conservative_blend']
+SCENARIOS = [
+    'model', 'market_blend', 'memory_penalty', 'overconfident_5pct', 'overconfident_10pct',
+    'conservative_blend', 'rain_weather_stress', 'injury_to_pick_stress',
+    'altitude_travel_stress', 'combined_variable_change',
+]
 UPSTREAM_SESSION_KEYS = ('pro_predictor_latest_rows', 'ultra80_profit_mode_rows', 'ultra80_max_volume_rows', 'ara_latest_predictions', 'pro_predictor_all_rows')
 
 
@@ -95,12 +101,20 @@ def american_to_decimal(values: pd.Series) -> pd.Series:
     return out
 
 
+def normalize_altitude_feet(values: pd.Series) -> pd.Series:
+    values = pd.to_numeric(values, errors='coerce')
+    # Values below 3,000 are commonly meters in exports; convert to feet.
+    return values.where(values.abs() > 3000, values * 3.28084)
+
+
 def normalize(frame: pd.DataFrame) -> pd.DataFrame:
     out = pd.DataFrame(index=frame.index)
     out['event'] = text_series(frame, ['event', 'game', 'match', 'partido'])
     out['sport'] = text_series(frame, ['sport', 'sport_key', 'league', 'competition', 'deporte'])
     out['market_type'] = text_series(frame, ['market_type', 'market', 'bet_type', 'prop_type', 'tipo_mercado']).str.lower()
     out['prediction'] = text_series(frame, ['prediction', 'pick', 'selection', 'prediccion', 'pronostico'])
+    out['home_team'] = text_series(frame, ['home_team', 'home', 'local'])
+    out['away_team'] = text_series(frame, ['away_team', 'away', 'visitor', 'visitante'])
     out['volume_tier'] = text_series(frame, ['volume_tier', 'tier', 'ultra80_tier'], 'unknown')
     out['model_probability'] = num_series(frame, ['model_probability_clean', 'model_probability', 'final_probability_value', 'final_probability', 'probability', 'probabilidad', 'prob_final'], probability=True)
     decimal = num_series(frame, ['decimal_price', 'best_price', 'average_price', 'odds', 'price', 'cuota', 'mejor_cuota'])
@@ -118,6 +132,41 @@ def normalize(frame: pd.DataFrame) -> pd.DataFrame:
     out['robust_ev'] = num_series(frame, ['_robust_expected_value', 'robust_expected_value'], percent_like=True).fillna(out['ev'])
     out['robust_profit80'] = num_series(frame, ['_robust_profit_at_80_percent', 'robust_profit_at_80_percent'], percent_like=True).fillna(0.80 * out['decimal_price'] - 1.0)
     out['price_risk'] = num_series(frame, ['_price_range_risk', 'price_range_risk', 'price_range']).fillna(0.0)
+
+    prediction = out['prediction'].str.lower()
+    away = out['away_team'].str.lower()
+    home = out['home_team'].str.lower()
+    out['is_away_pick'] = away.ne('') & prediction.ne('') & prediction.eq(away)
+    out['is_home_pick'] = home.ne('') & prediction.ne('') & prediction.eq(home)
+
+    sport = out['sport'].str.lower()
+    market = out['market_type'].str.lower()
+    out['weather_sensitivity'] = np.select(
+        [sport.str.contains('tennis|baseball|mlb|soccer|football|nfl|rugby|cricket', regex=True, na=False), market.str.contains('total|spread|prop', regex=True, na=False)],
+        [1.00, 0.75],
+        default=0.35,
+    )
+    out['injury_risk'] = num_series(frame, ['injury_risk', 'picked_side_injury_risk', 'key_injury_risk', 'injury_impact'], probability=True).fillna(0.0)
+    out['opponent_injury_risk'] = num_series(frame, ['opponent_injury_risk', 'opponent_key_injury_risk'], probability=True).fillna(0.0)
+    out['rain_risk'] = num_series(frame, ['rain_probability', 'precipitation_probability', 'precip_probability', 'rain_risk'], probability=True).fillna(0.0)
+    wind = num_series(frame, ['wind_speed_mph', 'wind_mph', 'wind_speed'])
+    out['wind_risk'] = (wind.fillna(0.0) / 25.0).clip(0.0, 1.0)
+    temp_f = num_series(frame, ['temperature_f', 'temp_f'])
+    temp_c = num_series(frame, ['temperature_c', 'temp_c'])
+    temp_f = temp_f.fillna(temp_c * 9 / 5 + 32)
+    out['heat_cold_risk'] = np.maximum(((temp_f.fillna(70) - 86).clip(lower=0) / 25.0), ((40 - temp_f.fillna(70)).clip(lower=0) / 25.0)).clip(0.0, 1.0)
+    stadium_alt = normalize_altitude_feet(num_series(frame, ['stadium_altitude_ft', 'venue_altitude_ft', 'altitude_ft', 'stadium_altitude_m', 'venue_altitude_m', 'altitude_m']))
+    away_base_alt = normalize_altitude_feet(num_series(frame, ['away_base_altitude_ft', 'away_home_altitude_ft', 'away_team_altitude_ft', 'away_base_altitude_m']))
+    altitude_gap = (stadium_alt - away_base_alt).fillna(0.0)
+    out['altitude_gap_ft'] = altitude_gap
+    out['altitude_risk'] = ((altitude_gap - 2500).clip(lower=0) / 5000.0).clip(0.0, 1.0) * out['is_away_pick'].astype(float)
+    travel_km = num_series(frame, ['travel_km', 'away_travel_km', 'travel_distance_km']).fillna(num_series(frame, ['travel_miles', 'away_travel_miles']) * 1.60934)
+    tz = num_series(frame, ['timezone_change', 'timezone_shift', 'time_zone_change']).abs().fillna(0.0)
+    rest = num_series(frame, ['rest_days', 'away_rest_days']).fillna(7.0)
+    travel_component = ((travel_km.fillna(0.0) - 1200).clip(lower=0) / 5000.0).clip(0.0, 1.0)
+    tz_component = (tz / 4.0).clip(0.0, 1.0)
+    rest_component = ((3.0 - rest).clip(lower=0) / 3.0).clip(0.0, 1.0)
+    out['travel_risk'] = np.maximum.reduce([travel_component.to_numpy(float), tz_component.to_numpy(float), rest_component.to_numpy(float)]) * out['is_away_pick'].astype(float)
     return out.dropna(subset=['model_probability', 'decimal_price'])
 
 
@@ -134,7 +183,7 @@ def strategy_masks(frame: pd.DataFrame) -> dict[str, pd.Series]:
     }
 
 
-def scenario_probabilities(data: pd.DataFrame, scenario: str) -> np.ndarray:
+def scenario_probabilities(data: pd.DataFrame, scenario: str, stress: dict[str, float]) -> np.ndarray:
     p = data['model_probability'].to_numpy(float)
     market = np.clip(1.0 / data['decimal_price'].to_numpy(float), 0.01, 0.99)
     memory = data['memory_signal'].fillna(0.0).to_numpy(float)
@@ -150,15 +199,37 @@ def scenario_probabilities(data: pd.DataFrame, scenario: str) -> np.ndarray:
         true = p - 0.10
     elif scenario == 'conservative_blend':
         true = 0.5 * p + 0.5 * market + np.minimum(memory, 0.0) - 0.02
+    elif scenario == 'rain_weather_stress':
+        weather = np.maximum.reduce([data['rain_risk'].to_numpy(float), data['wind_risk'].to_numpy(float), data['heat_cold_risk'].to_numpy(float), np.full(len(data), stress['rain'])])
+        penalty = weather * data['weather_sensitivity'].to_numpy(float) * 0.08
+        true = p - penalty
+    elif scenario == 'injury_to_pick_stress':
+        injury = np.maximum(data['injury_risk'].to_numpy(float), np.full(len(data), stress['injury']))
+        opponent = np.maximum(data['opponent_injury_risk'].to_numpy(float), np.full(len(data), stress['opponent_injury']))
+        true = p - injury * 0.12 + opponent * 0.05
+    elif scenario == 'altitude_travel_stress':
+        altitude = np.maximum(data['altitude_risk'].to_numpy(float), np.full(len(data), stress['altitude']) * data['is_away_pick'].astype(float).to_numpy())
+        travel = np.maximum(data['travel_risk'].to_numpy(float), np.full(len(data), stress['travel']) * data['is_away_pick'].astype(float).to_numpy())
+        true = p - altitude * 0.08 - travel * 0.05
+    elif scenario == 'combined_variable_change':
+        weather = np.maximum.reduce([data['rain_risk'].to_numpy(float), data['wind_risk'].to_numpy(float), data['heat_cold_risk'].to_numpy(float), np.full(len(data), stress['rain'])])
+        injury = np.maximum(data['injury_risk'].to_numpy(float), np.full(len(data), stress['injury']))
+        opponent = np.maximum(data['opponent_injury_risk'].to_numpy(float), np.full(len(data), stress['opponent_injury']))
+        altitude = np.maximum(data['altitude_risk'].to_numpy(float), np.full(len(data), stress['altitude']) * data['is_away_pick'].astype(float).to_numpy())
+        travel = np.maximum(data['travel_risk'].to_numpy(float), np.full(len(data), stress['travel']) * data['is_away_pick'].astype(float).to_numpy())
+        penalty = weather * data['weather_sensitivity'].to_numpy(float) * 0.05 + injury * 0.10 + altitude * 0.06 + travel * 0.04 - opponent * 0.03
+        true = p - penalty
+        shrink = np.clip(stress['chaos'], 0.0, 0.75)
+        true = true * (1.0 - shrink) + market * shrink
     else:
         true = p
     return np.clip(true, 0.01, 0.99)
 
 
-def expected_roi(data: pd.DataFrame, scenario: str) -> float | None:
+def expected_roi(data: pd.DataFrame, scenario: str, stress: dict[str, float]) -> float | None:
     if data.empty:
         return None
-    probs = scenario_probabilities(data, scenario)
+    probs = scenario_probabilities(data, scenario, stress)
     odds = data['decimal_price'].to_numpy(float)
     return float(np.mean(probs * odds - 1.0))
 
@@ -170,10 +241,10 @@ def max_drawdown(profit_paths: np.ndarray) -> np.ndarray:
     return drawdowns.max(axis=1)
 
 
-def simulate(data: pd.DataFrame, scenario: str, iterations: int, stake: float, seed: int) -> dict[str, Any]:
+def simulate(data: pd.DataFrame, scenario: str, iterations: int, stake: float, seed: int, stress: dict[str, float]) -> dict[str, Any]:
     if data.empty:
         return {'rows': 0}
-    probs = scenario_probabilities(data, scenario)
+    probs = scenario_probabilities(data, scenario, stress)
     odds = data['decimal_price'].to_numpy(float)
     rng = np.random.default_rng(seed)
     wins = rng.random((iterations, len(data))) < probs
@@ -187,6 +258,8 @@ def simulate(data: pd.DataFrame, scenario: str, iterations: int, stake: float, s
         'scenario': scenario,
         'avg_model_prob': round(float(data['model_probability'].mean()), 6),
         'avg_odds': round(float(data['decimal_price'].mean()), 4),
+        'scenario_avg_prob': round(float(probs.mean()), 6),
+        'scenario_prob_delta': round(float(probs.mean() - data['model_probability'].mean()), 6),
         'mean_units': round(float(profits.mean()), 4),
         'mean_roi': round(float(profits.mean() / staked), 6) if staked else None,
         'profit_probability': round(float((profits > 0).mean()), 6),
@@ -215,7 +288,7 @@ def optimizer_mask(frame: pd.DataFrame, params: dict[str, Any]) -> pd.Series:
     )
 
 
-def simulation_optimizer(frame: pd.DataFrame, *, min_rows: int = 5) -> tuple[pd.DataFrame, pd.DataFrame]:
+def simulation_optimizer(frame: pd.DataFrame, stress: dict[str, float], *, min_rows: int = 5) -> tuple[pd.DataFrame, pd.DataFrame]:
     rows: list[dict[str, Any]] = []
     p_grid = [0.62, 0.65, 0.67, 0.69, 0.70, 0.72, 0.74, 0.76, 0.78, 0.80]
     ev_grid = [0.0, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05]
@@ -239,17 +312,18 @@ def simulation_optimizer(frame: pd.DataFrame, *, min_rows: int = 5) -> tuple[pd.
                             selected = frame[optimizer_mask(frame, params)]
                             if len(selected) < int(min_rows):
                                 continue
-                            rois = {scenario: expected_roi(selected, scenario) for scenario in SCENARIOS}
+                            rois = {scenario: expected_roi(selected, scenario, stress) for scenario in SCENARIOS}
                             worst_roi = min(value for value in rois.values() if value is not None)
-                            score = (rois['conservative_blend'] or -1) * 90 + (rois['market_blend'] or -1) * 35 + (rois['overconfident_5pct'] or -1) * 20 + min(len(selected), 50) / 20
-                            if (rois['overconfident_5pct'] or -1) < 0:
-                                score -= 10
-                            if (rois['conservative_blend'] or -1) < -0.03:
-                                score -= 10
-                            rows.append({**params, 'rows': int(len(selected)), 'score': round(float(score), 6), 'worst_roi': round(float(worst_roi), 6), **{f'expected_roi_{k}': round(float(v), 6) for k, v in rois.items() if v is not None}})
+                            stress_worst = min(rois.get('overconfident_5pct', 0), rois.get('rain_weather_stress', 0), rois.get('injury_to_pick_stress', 0), rois.get('altitude_travel_stress', 0), rois.get('combined_variable_change', 0))
+                            score = (rois['conservative_blend'] or -1) * 75 + (rois['market_blend'] or -1) * 30 + stress_worst * 45 + min(len(selected), 50) / 20
+                            if stress_worst < 0:
+                                score -= 12
+                            if (rois['combined_variable_change'] or -1) < -0.03:
+                                score -= 12
+                            rows.append({**params, 'rows': int(len(selected)), 'score': round(float(score), 6), 'worst_roi': round(float(worst_roi), 6), 'worst_change_roi': round(float(stress_worst), 6), **{f'expected_roi_{k}': round(float(v), 6) for k, v in rois.items() if v is not None}})
     if not rows:
         return pd.DataFrame(), pd.DataFrame()
-    table = pd.DataFrame(rows).sort_values(['score', 'expected_roi_conservative_blend', 'expected_roi_market_blend', 'rows'], ascending=False).head(50).reset_index(drop=True)
+    table = pd.DataFrame(rows).sort_values(['score', 'expected_roi_combined_variable_change', 'expected_roi_conservative_blend', 'rows'], ascending=False).head(50).reset_index(drop=True)
     best = table.iloc[0].to_dict()
     survivor = frame[optimizer_mask(frame, best)].sort_values(['robust_ev', 'ev', 'model_probability', 'edge'], ascending=False).reset_index(drop=True)
     survivor.insert(0, 'strategy', 'Simulation optimized')
@@ -258,7 +332,7 @@ def simulation_optimizer(frame: pd.DataFrame, *, min_rows: int = 5) -> tuple[pd.
 
 def survival_grade(row: pd.Series) -> str:
     scenario = str(row.get('scenario', ''))
-    if scenario not in {'market_blend', 'memory_penalty', 'overconfident_5pct', 'conservative_blend'}:
+    if scenario not in {'market_blend', 'memory_penalty', 'overconfident_5pct', 'conservative_blend', 'rain_weather_stress', 'injury_to_pick_stress', 'altitude_travel_stress', 'combined_variable_change'}:
         return 'reference'
     roi = float(row.get('mean_roi') or 0.0)
     profit_probability = float(row.get('profit_probability') or 0.0)
@@ -277,10 +351,12 @@ def recommendation_table(summary: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     rows: list[dict[str, Any]] = []
     for strategy, group in summary.groupby('strategy'):
-        real = group[group['scenario'].isin(['market_blend', 'memory_penalty', 'overconfident_5pct', 'conservative_blend'])].copy()
+        real = group[group['scenario'].isin(['market_blend', 'memory_penalty', 'overconfident_5pct', 'conservative_blend', 'rain_weather_stress', 'injury_to_pick_stress', 'altitude_travel_stress', 'combined_variable_change'])].copy()
         if real.empty:
             continue
         roi_values = pd.to_numeric(real['mean_roi'], errors='coerce').dropna()
+        change = real[real['scenario'].isin(['rain_weather_stress', 'injury_to_pick_stress', 'altitude_travel_stress', 'combined_variable_change'])]
+        change_roi = pd.to_numeric(change['mean_roi'], errors='coerce').dropna()
         profit_probs = pd.to_numeric(real['profit_probability'], errors='coerce').dropna()
         hit80 = pd.to_numeric(real['prob_hit_80_plus'], errors='coerce').dropna()
         fragile = int(real['survival_grade'].eq('fragile').sum()) if 'survival_grade' in real.columns else 0
@@ -288,6 +364,7 @@ def recommendation_table(summary: pd.DataFrame) -> pd.DataFrame:
             'strategy': strategy,
             'rows': int(pd.to_numeric(real['rows'], errors='coerce').max() or 0),
             'worst_mean_roi': None if roi_values.empty else round(float(roi_values.min()), 6),
+            'worst_change_roi': None if change_roi.empty else round(float(change_roi.min()), 6),
             'avg_mean_roi': None if roi_values.empty else round(float(roi_values.mean()), 6),
             'worst_profit_probability': None if profit_probs.empty else round(float(profit_probs.min()), 6),
             'best_prob_hit_80_plus': None if hit80.empty else round(float(hit80.max()), 6),
@@ -297,11 +374,11 @@ def recommendation_table(summary: pd.DataFrame) -> pd.DataFrame:
     if out.empty:
         return out
     out['recommendation'] = np.where(
-        (out['fragile_scenarios'].eq(0)) & (out['worst_mean_roi'].fillna(-1).ge(0.0)),
+        (out['fragile_scenarios'].eq(0)) & (out['worst_mean_roi'].fillna(-1).ge(0.0)) & (out['worst_change_roi'].fillna(-1).ge(-0.01)),
         'lock_candidate_after_human_review',
         np.where(out['avg_mean_roi'].fillna(-1).ge(0.0), 'watch_or_reduce_stake', 'do_not_lock')
     )
-    return out.sort_values(['recommendation', 'worst_mean_roi', 'avg_mean_roi', 'rows'], ascending=[True, False, False, False]).reset_index(drop=True)
+    return out.sort_values(['recommendation', 'worst_change_roi', 'worst_mean_roi', 'avg_mean_roi', 'rows'], ascending=[True, False, False, False, False]).reset_index(drop=True)
 
 
 def load_input() -> pd.DataFrame:
@@ -330,6 +407,16 @@ with st.expander(t('settings'), expanded=True):
     stake = c2.number_input(t('stake'), min_value=0.05, max_value=5.0, value=1.0, step=0.05)
     max_rows = c3.number_input(t('max_rows'), min_value=1, max_value=5000, value=500, step=25)
     min_optimizer_rows = c4.number_input(t('min_rows'), min_value=1, max_value=100, value=5, step=1)
+with st.expander(t('change_settings'), expanded=False):
+    s1, s2, s3 = st.columns(3)
+    rain = s1.slider(t('rain'), min_value=0.0, max_value=1.0, value=0.35, step=0.05)
+    injury = s2.slider(t('injury'), min_value=0.0, max_value=1.0, value=0.15, step=0.05)
+    opponent_injury = s3.slider(t('opp_injury'), min_value=0.0, max_value=1.0, value=0.00, step=0.05)
+    s4, s5, s6 = st.columns(3)
+    altitude = s4.slider(t('altitude'), min_value=0.0, max_value=1.0, value=0.25, step=0.05)
+    travel = s5.slider(t('travel'), min_value=0.0, max_value=1.0, value=0.20, step=0.05)
+    chaos = s6.slider(t('chaos'), min_value=0.0, max_value=0.75, value=0.15, step=0.05)
+stress_profile = {'rain': float(rain), 'injury': float(injury), 'opponent_injury': float(opponent_injury), 'altitude': float(altitude), 'travel': float(travel), 'chaos': float(chaos)}
 
 if st.button(t('run'), type='primary', use_container_width=True):
     if raw.empty:
@@ -339,7 +426,7 @@ if st.button(t('run'), type='primary', use_container_width=True):
     if frame.empty:
         st.warning(t('no_rows'))
         st.stop()
-    optimizer_table, survivor = simulation_optimizer(frame, min_rows=int(min_optimizer_rows))
+    optimizer_table, survivor = simulation_optimizer(frame, stress_profile, min_rows=int(min_optimizer_rows))
     masks = strategy_masks(frame)
     scenarios = SCENARIOS
     rows: list[dict[str, Any]] = []
@@ -354,14 +441,14 @@ if st.button(t('run'), type='primary', use_container_width=True):
         temp.insert(0, 'strategy', strategy)
         selected_frames.append(temp)
         for scenario in scenarios:
-            rows.append({'strategy': strategy, **simulate(selected, scenario, int(iterations), float(stake), seed=20260616 + len(rows))})
+            rows.append({'strategy': strategy, **simulate(selected, scenario, int(iterations), float(stake), seed=20260616 + len(rows), stress=stress_profile)})
     if not survivor.empty:
         st.session_state['simulation_survivor_rows'] = survivor.drop(columns=['strategy'], errors='ignore').to_dict('records')
         st.session_state['ara_latest_predictions'] = survivor.drop(columns=['strategy'], errors='ignore').to_dict('records')
         st.session_state['ara_latest_predictions_source'] = 'Simulation Lab survivor'
         selected_frames.append(survivor)
         for scenario in scenarios:
-            rows.append({'strategy': 'Simulation optimized', **simulate(survivor, scenario, int(iterations), float(stake), seed=20260616 + len(rows))})
+            rows.append({'strategy': 'Simulation optimized', **simulate(survivor, scenario, int(iterations), float(stake), seed=20260616 + len(rows), stress=stress_profile)})
         st.success(t('saved'))
     summary = pd.DataFrame(rows)
     if not summary.empty:
@@ -376,7 +463,7 @@ if st.button(t('run'), type='primary', use_container_width=True):
     selected_all = pd.concat(selected_frames, ignore_index=True, sort=False) if selected_frames else pd.DataFrame()
     st.subheader(t('details'))
     if not selected_all.empty:
-        cols = [col for col in ['strategy', 'event', 'sport', 'market_type', 'prediction', 'model_probability', 'decimal_price', 'edge', 'ev', 'robust_ev', 'robust_profit80', 'books', 'api_coverage', 'memory_signal'] if col in selected_all.columns]
+        cols = [col for col in ['strategy', 'event', 'sport', 'market_type', 'prediction', 'model_probability', 'decimal_price', 'edge', 'ev', 'robust_ev', 'robust_profit80', 'rain_risk', 'injury_risk', 'altitude_risk', 'travel_risk', 'books', 'api_coverage', 'memory_signal'] if col in selected_all.columns]
         st.dataframe(selected_all[cols], use_container_width=True, hide_index=True)
     report_parts = [summary]
     if not recommendations.empty:
