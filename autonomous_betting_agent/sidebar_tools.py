@@ -100,7 +100,7 @@ def render_sidebar_brand(st: Any) -> None:
 
 
 def render_curated_sidebar(st: Any, language: object = 'English') -> None:
-    """Render only one curated page-link block below the language selector."""
+    """Render one curated page-link block and one workflow explanation."""
     if _already_rendered(st, PAGES_RENDERED_KEY):
         return
     lang = normal_language(language)
@@ -114,6 +114,9 @@ def render_curated_sidebar(st: Any, language: object = 'English') -> None:
             except Exception:
                 st.caption(label)
         st.divider()
+        st.subheader('Flujo de trabajo' if lang == 'Español' else 'Workflow')
+        st.caption('Predictor Pro → Máxima Confianza → Odds Lock Pro → Dashboard Público → Memoria de Aprendizaje.' if lang == 'Español' else 'Pro Predictor → Highest Confidence → Odds Lock Pro → Public Proof Dashboard → Learning Memory.')
+        st.caption('Odds Lock Pro bloquea picks con timestamp; Dashboard Público muestra ROI y resultados.' if lang == 'Español' else 'Odds Lock Pro timestamps locked picks; Public Proof Dashboard shows ROI and results.')
 
 
 def sidebar_language_selector(st: Any, *, key: str, default: str = 'English') -> str:
@@ -131,9 +134,9 @@ def install_sidebar_tools() -> None:
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, '_aba_sidebar_tools_installed_v20', False):
+    if getattr(st, '_aba_sidebar_tools_installed_v21', False):
         return
-    st._aba_sidebar_tools_installed_v20 = True
+    st._aba_sidebar_tools_installed_v21 = True
     real_config = st.set_page_config
     real_md = st.markdown
     real_side_radio = st.sidebar.radio
