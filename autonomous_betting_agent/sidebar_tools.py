@@ -25,6 +25,8 @@ CSS = '''
 [data-testid="collapsedControl"]{z-index:999999!important;}
 section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"]:has(h3 span[style*="color"]),section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"]:has(h3 span[class*="green"]),section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"]:has(h3 span[class*="red"]){display:none!important;height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;}
 section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"]:has(h3 span[style*="color"]) + div[data-testid="stCaptionContainer"],section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"]:has(h3 span[class*="green"]) + div[data-testid="stCaptionContainer"],section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"]:has(h3 span[class*="red"]) + div[data-testid="stCaptionContainer"]{display:none!important;height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;}
+section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"]:first-of-type{display:none!important;height:0!important;max-height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;}
+section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"]:has(hr):first-of-type{display:none!important;height:0!important;max-height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;}
 .aba-sidebar-brand{display:inline-block!important;font-size:1.66rem!important;line-height:1.18!important;font-weight:850!important;letter-spacing:-.02em!important;margin:.25rem 0 .55rem 0!important;text-shadow:0 1px 0 rgba(0,0,0,.72),0 2px 3px rgba(0,0,0,.45)!important;filter:none!important;}
 .aba-brand-green{color:#00A85A!important;-webkit-text-fill-color:#00A85A!important;}
 .aba-brand-white{color:#FFFFFF!important;-webkit-text-fill-color:#FFFFFF!important;}
@@ -129,9 +131,9 @@ def install_sidebar_tools() -> None:
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, '_aba_sidebar_tools_installed_v19', False):
+    if getattr(st, '_aba_sidebar_tools_installed_v20', False):
         return
-    st._aba_sidebar_tools_installed_v19 = True
+    st._aba_sidebar_tools_installed_v20 = True
     real_config = st.set_page_config
     real_md = st.markdown
     real_side_radio = st.sidebar.radio
