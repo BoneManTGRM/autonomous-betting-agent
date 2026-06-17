@@ -86,17 +86,5 @@ def proof_sidebar_snapshot() -> dict[str, int]:
 
 
 def render_tool_sidebar(page_key: str, language: str = 'English') -> None:
-    lang = _lang_key(language)
-    title, purpose, next_step = PAGE_GUIDES.get(page_key, PAGE_GUIDES['pro_predictor']).get(lang, PAGE_GUIDES['pro_predictor']['en'])
-    labels = {
-        'en': {'guide': 'Tool guide', 'purpose': 'Purpose', 'next': 'Next', 'workflow': 'Workflow'},
-        'es': {'guide': 'Guía de herramienta', 'purpose': 'Propósito', 'next': 'Siguiente', 'workflow': 'Flujo'},
-    }[lang]
-    st.sidebar.markdown('### :green[ABA] Signal :red[Pro]')
-    st.sidebar.caption(APP_TAGLINE)
-    st.sidebar.divider()
-    st.sidebar.subheader(labels['guide'])
-    st.sidebar.markdown(f'**{title}**')
-    st.sidebar.caption(f"{labels['purpose']}: {purpose}")
-    st.sidebar.caption(f"{labels['next']}: {next_step}")
-    st.sidebar.caption(f"{labels['workflow']}: {' → '.join(WORKFLOW)}")
+    # The single supported sidebar is rendered by autonomous_betting_agent.sidebar_tools.
+    return None
