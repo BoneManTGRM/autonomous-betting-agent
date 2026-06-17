@@ -80,7 +80,8 @@ def sidebar_language_selector(st: Any, *, key: str, default: str = 'English') ->
     options = ['English', 'Español']
     selected = st.sidebar.radio('Idioma' if current == 'Español' else 'Language', options, index=options.index(current), key=key, horizontal=True)
     lang = sync_language(st, selected)
-    render_curated_sidebar(st, lang)
+    # st.sidebar.radio is patched by install_sidebar_tools and renders the curated sidebar.
+    # Rendering it here too caused duplicate brand/workflow sections.
     return 'es' if lang == 'Español' else 'en'
 
 
@@ -90,9 +91,9 @@ def install_sidebar_tools() -> None:
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, '_ara_sidebar_safety_v10', False):
+    if getattr(st, '_ara_sidebar_safety_v11', False):
         return
-    st._ara_sidebar_safety_v10 = True
+    st._ara_sidebar_safety_v11 = True
     real_config = st.set_page_config
     real_md = st.markdown
     real_side_radio = st.sidebar.radio
