@@ -1,3 +1,4 @@
+# deploy trigger: predictor-first-clean-sidebar-v5
 [server]
 headless = true
 
@@ -6,5 +7,4 @@ gatherUsageStats = false
 
 [client]
 showSidebarNavigation = false
-
 toolbarMode = "minimal"
