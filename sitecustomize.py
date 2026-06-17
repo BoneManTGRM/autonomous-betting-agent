@@ -246,6 +246,43 @@ def _slider_should_use_number_input(label: Any) -> bool:
     return 'agent score' in key or 'puntaje agente' in key
 
 
+def _pro_predictor_number_defaults(label: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Make Pro Predictor default to a controlled 500-event workflow.
+
+    The page source still defines conservative caps. This wrapper lifts the input caps at
+    runtime without changing model logic. Target scan: 5 sports × 100 events = ~500 events.
+    """
+    key = _label_key(label)
+    out = dict(kwargs)
+    if key in {'max sports', 'máximo de deportes', 'maximo de deportes'}:
+        out['max_value'] = max(int(out.get('max_value', 120)), 250)
+        out['value'] = min(max(int(out.get('value', 5)), 5), int(out['max_value']))
+        out['step'] = 1
+    elif key in {'max events per sport', 'máximo de eventos por deporte', 'maximo de eventos por deporte'}:
+        out['max_value'] = max(int(out.get('max_value', 100)), 500)
+        out['value'] = min(max(int(out.get('value', 100)), 100), int(out['max_value']))
+        out['step'] = 25
+    elif key in {'max high-confidence rows', 'máximo de filas de máxima confianza', 'maximo de filas de maxima confianza'}:
+        out['max_value'] = max(int(out.get('max_value', 100)), 500)
+        out['value'] = min(max(int(out.get('value', 500)), 500), int(out['max_value']))
+        out['step'] = 25
+    elif key in {'minimum books', 'mínimo de casas', 'minimo de casas'}:
+        out['value'] = min(max(int(out.get('value', 1)), 1), int(out.get('max_value', 25)))
+        out['step'] = 1
+    elif key in {'minimum model probability', 'probabilidad mínima del modelo', 'probabilidad minima del modelo'}:
+        out['value'] = min(max(float(out.get('value', 0.60)), 0.60), float(out.get('max_value', 0.99)))
+        out['step'] = 0.01
+    elif key in {'minimum edge', 'ventaja mínima', 'ventaja minima'}:
+        out['value'] = max(float(out.get('min_value', -0.25)), min(float(out.get('value', -0.02)), float(out.get('max_value', 0.50))))
+        out['step'] = 0.005
+        out.setdefault('format', '%.3f')
+    elif key in {'strong edge threshold', 'umbral de ventaja fuerte'}:
+        out['value'] = max(float(out.get('min_value', 0.0)), min(float(out.get('value', 0.03)), float(out.get('max_value', 0.50))))
+        out['step'] = 0.005
+        out.setdefault('format', '%.3f')
+    return out
+
+
 def _simulation_number_defaults(label: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
     key = _label_key(label)
     out = dict(kwargs)
@@ -270,9 +307,9 @@ def _install_page_helpers() -> None:
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, '_aba_page_helpers_installed_v4', False):
+    if getattr(st, '_aba_page_helpers_installed_v5', False):
         return
-    st._aba_page_helpers_installed_v4 = True
+    st._aba_page_helpers_installed_v5 = True
     real_st_dataframe = st.dataframe
     real_dg_dataframe = DeltaGenerator.dataframe
     real_subheader = st.subheader
@@ -346,22 +383,28 @@ def _install_page_helpers() -> None:
             raise
 
     def patched_st_number_input(label: Any, *args: Any, **kwargs: Any) -> Any:
-        if _called_from_simulation_lab():
+        if _called_from_pro_predictor():
+            kwargs = _pro_predictor_number_defaults(label, kwargs)
+        elif _called_from_simulation_lab():
             kwargs = _simulation_number_defaults(label, kwargs)
         return real_st_number_input(label, *args, **kwargs)
 
     def patched_dg_number_input(self: Any, label: Any, *args: Any, **kwargs: Any) -> Any:
-        if _called_from_simulation_lab():
+        if _called_from_pro_predictor():
+            kwargs = _pro_predictor_number_defaults(label, kwargs)
+        elif _called_from_simulation_lab():
             kwargs = _simulation_number_defaults(label, kwargs)
         return real_dg_number_input(self, label, *args, **kwargs)
 
     def patched_st_slider(label: Any, *args: Any, **kwargs: Any) -> Any:
         if _called_from_pro_predictor() and _slider_should_use_number_input(label):
+            kwargs = _pro_predictor_number_defaults(label, kwargs)
             return real_st_number_input(label, *args, **kwargs)
         return real_st_slider(label, *args, **kwargs)
 
     def patched_dg_slider(self: Any, label: Any, *args: Any, **kwargs: Any) -> Any:
         if _called_from_pro_predictor() and _slider_should_use_number_input(label):
+            kwargs = _pro_predictor_number_defaults(label, kwargs)
             return real_dg_number_input(self, label, *args, **kwargs)
         return real_dg_slider(self, label, *args, **kwargs)
 
