@@ -47,12 +47,55 @@ NAV_NOTES_ES = (
     'Usa Reiniciar Archivo de Bloqueo solo para borrar un ledger de prueba sin tocar otros.',
 )
 
+FLAT_GUIDES: dict[str, dict[str, dict[str, str]]] = {
+    'pro_predictor': {
+        'en': {'name': 'Pro Predictor', 'purpose': 'Primary live prediction search and scoring page.', 'next': 'Ultra 70 Profit Mode → Simulation Lab → Odds Lock Pro'},
+        'es': {'name': 'Predictor Pro', 'purpose': 'Página principal para búsqueda y calificación en vivo.', 'next': 'Ultra 70 Profit Mode → Simulation Lab → Odds Lock Pro'},
+    },
+    'ultra80_profit_mode': {
+        'en': {'name': 'Ultra 70 Profit Mode', 'purpose': 'Review and tier the strongest Pro Predictor rows.', 'next': 'Simulation Lab → Odds Lock Pro'},
+        'es': {'name': 'Ultra 70 Profit Mode', 'purpose': 'Revisa y clasifica las filas más fuertes de Predictor Pro.', 'next': 'Simulation Lab → Odds Lock Pro'},
+    },
+    'simulation_lab': {
+        'en': {'name': 'Simulation Lab', 'purpose': 'Stress-test selected rows before final use.', 'next': 'Odds Lock Pro'},
+        'es': {'name': 'Simulation Lab', 'purpose': 'Prueba de estrés para filas seleccionadas antes del uso final.', 'next': 'Odds Lock Pro'},
+    },
+    'what_are_the_odds': {
+        'en': {'name': 'What Are the Odds', 'purpose': 'Review odds quality, value, manual context, and decision scoring.', 'next': 'Odds Lock Pro'},
+        'es': {'name': 'What Are the Odds', 'purpose': 'Revisa calidad de cuotas, valor, contexto manual y decisión.', 'next': 'Odds Lock Pro'},
+    },
+    'odds_lock_pro': {
+        'en': {'name': 'Odds Lock Pro', 'purpose': 'Create timestamped final rows before events start.', 'next': 'Public Proof Dashboard'},
+        'es': {'name': 'Odds Lock Pro', 'purpose': 'Crea filas finales con timestamp antes de que empiecen eventos.', 'next': 'Dashboard Público'},
+    },
+    'public_proof_dashboard': {
+        'en': {'name': 'Public Proof Dashboard', 'purpose': 'Review locked rows, metrics, results, and reports.', 'next': 'Learning Memory'},
+        'es': {'name': 'Dashboard Público', 'purpose': 'Revisa filas bloqueadas, métricas, resultados y reportes.', 'next': 'Learning Memory'},
+    },
+    'learning_memory': {
+        'en': {'name': 'Learning Memory', 'purpose': 'Update calibration and long-term memory after grading.', 'next': 'Future Pro Predictor runs'},
+        'es': {'name': 'Learning Memory', 'purpose': 'Actualiza calibración y memoria después de calificar.', 'next': 'Futuras corridas de Predictor Pro'},
+    },
+    'threshold_optimizer': {
+        'en': {'name': 'Threshold Optimizer', 'purpose': 'Learn better cutoffs after enough graded results.', 'next': 'Future Pro Predictor runs'},
+        'es': {'name': 'Threshold Optimizer', 'purpose': 'Aprende mejores cortes después de suficientes resultados.', 'next': 'Futuras corridas de Predictor Pro'},
+    },
+    'reset_lock_file': {
+        'en': {'name': 'Reset Lock File', 'purpose': 'Reset one test-window ledger intentionally.', 'next': 'Odds Lock Pro'},
+        'es': {'name': 'Reset Lock File', 'purpose': 'Reinicia una ventana de prueba intencionalmente.', 'next': 'Odds Lock Pro'},
+    },
+}
+
 
 def _normal_language(value: object) -> str:
     text = str(value or '').strip().lower()
     if text.startswith('es') or 'español' in text or 'espanol' in text:
         return 'Español'
     return 'English'
+
+
+def _lang_key(value: object) -> str:
+    return 'es' if _normal_language(value) == 'Español' else 'en'
 
 
 def _is_language_selector(label: Any, options: Any) -> bool:
@@ -74,6 +117,34 @@ def _sync_language_keys(st: Any, value: str, *, include_global: bool = False) ->
             pass
 
 
+def _install_flat_sidebar_override() -> None:
+    try:
+        import streamlit as st
+        import autonomous_betting_agent.tool_sidebar as sidebar
+    except Exception:
+        return
+
+    sidebar.WORKFLOW = [item[0] for item in PREDICTOR_FIRST_NAV_TOOLS]
+
+    def flat_render_tool_sidebar(page_key: str, language: str = 'English') -> None:
+        lang = _lang_key(language)
+        guide = FLAT_GUIDES.get(page_key, FLAT_GUIDES['pro_predictor']).get(lang, FLAT_GUIDES['pro_predictor']['en'])
+        labels = {
+            'en': {'guide': 'Tool guide', 'purpose': 'Purpose', 'next': 'Next', 'workflow': 'Workflow'},
+            'es': {'guide': 'Guía de herramienta', 'purpose': 'Propósito', 'next': 'Siguiente', 'workflow': 'Flujo'},
+        }[lang]
+        st.sidebar.markdown('### :green[ABA] Signal :red[Pro]')
+        st.sidebar.caption('Powered by Reparodynamics')
+        st.sidebar.divider()
+        st.sidebar.subheader(labels['guide'])
+        st.sidebar.markdown(f"**{guide['name']}**")
+        st.sidebar.caption(f"{labels['purpose']}: {guide['purpose']}")
+        st.sidebar.caption(f"{labels['next']}: {guide['next']}")
+        st.sidebar.caption(f"{labels['workflow']}: {' → '.join(sidebar.WORKFLOW[:6])}")
+
+    sidebar.render_tool_sidebar = flat_render_tool_sidebar
+
+
 def _install_language_and_workflow_guard() -> None:
     try:
         import streamlit as st
@@ -81,9 +152,9 @@ def _install_language_and_workflow_guard() -> None:
     except Exception:
         return
 
-    if getattr(st, '_aba_language_and_workflow_guard_v1', False):
+    if getattr(st, '_aba_language_and_workflow_guard_v2', False):
         return
-    st._aba_language_and_workflow_guard_v1 = True
+    st._aba_language_and_workflow_guard_v2 = True
 
     try:
         import sitecustomize as sc
@@ -93,6 +164,8 @@ def _install_language_and_workflow_guard() -> None:
         sc.NAV_NOTES_ES = NAV_NOTES_ES
     except Exception:
         pass
+
+    _install_flat_sidebar_override()
 
     try:
         if not st.session_state.get('_aba_language_guard_initialized_v1'):
