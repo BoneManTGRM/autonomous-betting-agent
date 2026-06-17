@@ -1,4 +1,4 @@
-# deploy trigger: curated-sidebar-v1
+# deploy trigger: show-default-pages-again
 [server]
 headless = true
 
@@ -6,5 +6,5 @@ headless = true
 gatherUsageStats = false
 
 [client]
-showSidebarNavigation = false
+showSidebarNavigation = true
 toolbarMode = "minimal"
