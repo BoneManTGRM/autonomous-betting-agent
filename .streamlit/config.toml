@@ -1,4 +1,4 @@
-# deploy trigger: restore-sidebar-pages-v2
+# deploy trigger: hide-native-nav-keep-custom-sidebar-v1
 [server]
 headless = true
 
@@ -6,7 +6,6 @@ headless = true
 gatherUsageStats = false
 
 [client]
-# Keep native sidebar page navigation enabled so st.navigation(position="sidebar")
-# remains visible after branding/sidebar edits.
-showSidebarNavigation = true
+# Native Streamlit file discovery lists every page in /pages. Keep it off.
+showSidebarNavigation = false
 toolbarMode = "minimal"
