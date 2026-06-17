@@ -10,7 +10,6 @@ PAGE_LANGUAGE_KEYS = [
     'command_center_language',
     'game_intelligence_language',
     'deployment_health_language',
-    'scanner_pro_language',
     'pro_predictor_language',
     'what_are_the_odds_language',
     'what_are_the_odds_pro_language',
@@ -80,12 +79,12 @@ def _session_language() -> str | None:
     return None
 
 
-def current_language_label(default: object = 'Español') -> str:
+def current_language_label(default: object = 'English') -> str:
     session = _session_language()
     if session:
         return session
     query = query_param_language()
-    if query == 'Español':
+    if query in OPTIONS:
         return query
     return label(default)
 
@@ -96,6 +95,7 @@ def render_language_selector(*, key: str) -> str:
     def _sync_language() -> None:
         set_global_language(st.session_state.get(key) or current)
 
-    selected = st.sidebar.selectbox('Language / Idioma', OPTIONS, index=OPTIONS.index(current), key=key, on_change=_sync_language)
+    # Use radio instead of selectbox so old cached sitecustomize sidebar hooks cannot render legacy navigation.
+    selected = st.sidebar.radio('Language', OPTIONS, index=OPTIONS.index(current), key=key, on_change=_sync_language, horizontal=True)
     set_global_language(selected)
-    return _code(selected) or 'es'
+    return _code(selected) or 'en'
