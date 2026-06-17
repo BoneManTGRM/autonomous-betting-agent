@@ -16,7 +16,7 @@ try:
 except Exception:
     pass
 
-APP_NAME = 'ARA Signal Pro'
+APP_NAME = 'ABA Signal Pro'
 APP_TAGLINE = 'Powered by Reparodynamics'
 APP_BUILD = 'stable-sidebar-shell-v2-native-width'
 REPO_ROOT = Path(__file__).resolve().parent
