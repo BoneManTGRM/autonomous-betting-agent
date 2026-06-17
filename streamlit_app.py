@@ -61,7 +61,6 @@ DEFAULT_TOGGLE_VALUES = {
 }
 
 CORE_PAGES = [
-    st.Page("pages/scanner_pro.py", title="Scanner Pro"),
     st.Page("pages/pro_predictor.py", title=PREDICTOR_TOOL_NAME),
     st.Page("pages/ultra80_profit_mode.py", title="Ultra 70 Profit Mode"),
     st.Page("pages/simulation_lab.py", title="Simulation Lab"),
