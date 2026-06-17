@@ -8,6 +8,6 @@ try:
 except Exception:
     pass
 
-APP_NAME = 'ARA Signal Pro'
+APP_NAME = 'ABA Signal Pro'
 APP_TAGLINE = 'Powered by Reparodynamics'
 PREDICTOR_TOOL_NAME = 'Pro Predictor'
