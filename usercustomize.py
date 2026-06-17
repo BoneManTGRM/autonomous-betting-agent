@@ -9,6 +9,12 @@ except Exception:
     pass
 
 try:
+    from autonomous_betting_agent.proof_dashboard_patch import install_proof_dashboard_patch
+    install_proof_dashboard_patch()
+except Exception:
+    pass
+
+try:
     from autonomous_betting_agent.local_users import install_streamlit_local_user_selector
     install_streamlit_local_user_selector()
 except Exception:
@@ -29,6 +35,35 @@ TOOLS_ES = (
     'Predictor Pro', 'Ultra 70 Profit Mode', 'Laboratorio de Simulación', 'Optimizador de Umbrales',
     'Cuotas y Valor', 'Bloqueo de Cuotas Pro', 'Dashboard Público de Prueba', 'Reiniciar Archivo de Bloqueo', 'Memoria de Aprendizaje',
 )
+
+MOBILE_SIDEBAR_CSS = """
+<style>
+[data-testid="collapsedControl"] {
+    z-index: 999999 !important;
+}
+@media (max-width: 768px) {
+    section[data-testid="stSidebar"] {
+        width: min(82vw, 310px) !important;
+        min-width: min(82vw, 310px) !important;
+        max-width: min(82vw, 310px) !important;
+        box-shadow: 0 0 0 9999px rgba(0,0,0,.35) !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+        padding-top: .5rem !important;
+        padding-left: .85rem !important;
+        padding-right: .85rem !important;
+    }
+    .block-container {
+        padding-left: .9rem !important;
+        padding-right: .9rem !important;
+        max-width: 100vw !important;
+    }
+    div[data-testid="stToolbar"] {
+        right: .25rem !important;
+    }
+}
+</style>
+"""
 
 
 def _normal_language(value: object) -> str:
@@ -71,7 +106,7 @@ def _clean_text(value: Any) -> Any:
 
 def _render_clean_sidebar(st: Any, language: object) -> None:
     lang = _normal_language(language)
-    key = '_aba_clean_sidebar_plain_rendered_v1'
+    key = '_aba_clean_sidebar_plain_rendered_v2'
     if st.session_state.get(key):
         return
     st.session_state[key] = True
@@ -97,15 +132,46 @@ def _render_clean_sidebar(st: Any, language: object) -> None:
         st.caption(workflow)
 
 
+def _install_mobile_sidebar_guard() -> None:
+    try:
+        import streamlit as st
+    except Exception:
+        return
+    if getattr(st, '_aba_mobile_sidebar_guard_v1', False):
+        return
+    st._aba_mobile_sidebar_guard_v1 = True
+    real_set_page_config = st.set_page_config
+    real_markdown = st.markdown
+
+    def inject_css_once() -> None:
+        if st.session_state.get('_aba_mobile_sidebar_css_v1'):
+            return
+        st.session_state['_aba_mobile_sidebar_css_v1'] = True
+        try:
+            real_markdown(MOBILE_SIDEBAR_CSS, unsafe_allow_html=True)
+        except Exception:
+            pass
+
+    def patched_set_page_config(*args: Any, **kwargs: Any) -> Any:
+        kwargs['initial_sidebar_state'] = 'collapsed'
+        result = real_set_page_config(*args, **kwargs)
+        inject_css_once()
+        return result
+
+    st.set_page_config = patched_set_page_config
+
+
 def _install_clean_sidebar_patch() -> None:
     try:
         import streamlit as st
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, '_aba_clean_sidebar_plain_installed_v1', False):
+    if getattr(st, '_aba_clean_sidebar_plain_installed_v2', False):
         return
-    st._aba_clean_sidebar_plain_installed_v1 = True
+    st._aba_clean_sidebar_plain_installed_v2 = True
+
+    _install_mobile_sidebar_guard()
 
     real_st_radio = st.radio
     real_dg_radio = getattr(DeltaGenerator, 'radio', None)
