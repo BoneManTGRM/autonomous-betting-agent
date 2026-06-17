@@ -14,37 +14,37 @@ LANG = 'es' if st.sidebar.selectbox('Language / Idioma', ['English', 'Español']
 TEXT = {
     'en': {
         'title': 'Ultra 70 Lock + Profit Mode',
-        'caption': 'Locks 70%+ positive-value rows for Odds Lock Pro, while keeping strict 80% proof and watch rows separate.',
+        'caption': 'Builds 70%+ lock tiers without blocking the whole board: B+ positive-value locks, B adaptive pattern locks, and C watch rows.',
         'source': 'Prediction source', 'session': 'Use latest Pro Predictor session', 'upload': 'Upload Pro Predictor CSV', 'upload_label': 'Upload CSV',
-        'run': 'Build Ultra 70 value-lock list', 'no_rows': 'No rows available. Run Pro Predictor first or upload a CSV.',
+        'run': 'Build Ultra 70 adaptive lock list', 'no_rows': 'No rows available. Run Pro Predictor first or upload a CSV.',
         'no_pass': 'No rows passed the selected tier. That is normal when the filters are strict.',
-        'all_rows': 'All reviewed rows', 'strict_rows': 'A — Strict 80 proof', 'max_rows_tab': 'B+ — Ultra 70 positive-value locks', 'reserve_rows': 'C — Value watch / review', 'selected_rows': 'Selected handoff',
+        'all_rows': 'All reviewed rows', 'strict_rows': 'A — Strict 80 proof', 'max_rows_tab': 'B/B+ — Ultra 70 adaptive locks', 'reserve_rows': 'C — Value watch / review', 'selected_rows': 'Selected handoff',
         'download': 'Download selected CSV', 'download_strict': 'Download strict 80 proof CSV', 'download_all': 'Download reviewed CSV',
-        'reviewed': 'Rows reviewed', 'strict': 'Strict 80 proof', 'max_profit': 'B+ value locks', 'reserve': 'Watch/review', 'handoff': 'Handoff rows', 'avg_prob': 'Avg model probability', 'avg_ev': 'Avg EV/unit', 'avg_profit70': 'Avg profit at 70%', 'next': 'Next action',
+        'reviewed': 'Rows reviewed', 'strict': 'Strict 80 proof', 'max_profit': 'B/B+ locks', 'reserve': 'Watch/review', 'handoff': 'Handoff rows', 'avg_prob': 'Avg model probability', 'avg_ev': 'Avg EV/unit', 'avg_profit70': 'Avg profit at 70%', 'next': 'Next action',
         'rules': 'Tier rules',
-        'rule_text': 'A = strict 80% proof tier. B+ = Ultra 70 lock tier: 70%+ model probability AND positive value checks. C = 70% weak-value favorites plus 60–70% positive-value watch rows. Only A+B+ should be sent to Odds Lock Pro by default.',
-        'proof': 'Lock before start time. Track A, B+, and C separately. B+ is the practical Ultra 70 value-lock list; A remains the only strict 80% proof tier.',
-        'handoff_mode': 'Handoff mode', 'strict_only': 'A only — strict 80 proof', 'max_volume': 'A+B+ — Ultra 70 value locks', 'research_volume': 'A+B+C — value locks plus watch',
-        'one_per_event': 'Keep only the best pick per event', 'max_a': 'Max A rows', 'max_b': 'Max B+ rows', 'max_c': 'Max C rows',
+        'rule_text': 'A = strict 80% proof. B+ = 70%+ with clean positive value. B = 70%+ adaptive pattern lock when EV/edge are near breakeven and confidence/pattern support is strong. C = weak-value favorites plus 60–70% value watch rows. This prevents all results from being blocked while still labeling confidence honestly.',
+        'proof': 'Lock before start time. Track A, B+, B, and C separately. B+ is strongest. B is usable but should be watched/staked smaller until patterns prove out.',
+        'handoff_mode': 'Handoff mode', 'strict_only': 'A only — strict 80 proof', 'max_volume': 'A+B/B+ — Ultra 70 adaptive locks', 'research_volume': 'A+B+C — locks plus watch rows',
+        'one_per_event': 'Keep only the best pick per event', 'max_a': 'Max A rows', 'max_b': 'Max B/B+ rows', 'max_c': 'Max C rows',
         'saved': 'Selected rows saved as the active handoff list for Odds Lock Pro.', 'blockers': 'Top rejection/blocker reasons', 'quality_note': 'Conflict guard active: when multiple picks come from the same event, the system keeps the strongest row by tier quality score.',
-        'robust_note': 'Ultra 70 now requires value for the lock tier: probability 70%+ is not enough by itself. Negative-EV or negative-edge favorites are moved to watch/review instead of Odds Lock Pro.',
+        'robust_note': 'Pattern signals now improve adaptive confidence instead of acting only as blockers. Weak value is downgraded to B or C instead of killing the whole board.',
     },
     'es': {
         'title': 'Modo Ultra 70 Bloqueo + Rentabilidad',
-        'caption': 'Bloquea filas de 70%+ con valor positivo para Odds Lock Pro y mantiene la prueba estricta 80% y filas de revisión separadas.',
+        'caption': 'Crea niveles de bloqueo 70%+ sin bloquear todo el tablero: B+ con valor positivo, B adaptativo por patrón y C para revisión.',
         'source': 'Fuente de predicciones', 'session': 'Usar última sesión de Predictor Pro', 'upload': 'Subir CSV de Predictor Pro', 'upload_label': 'Subir CSV',
-        'run': 'Crear lista Ultra 70 con valor', 'no_rows': 'No hay filas disponibles. Ejecuta Predictor Pro primero o sube un CSV.',
+        'run': 'Crear lista Ultra 70 adaptativa', 'no_rows': 'No hay filas disponibles. Ejecuta Predictor Pro primero o sube un CSV.',
         'no_pass': 'Ninguna fila pasó el nivel seleccionado. Eso es normal con filtros estrictos.',
-        'all_rows': 'Todas las filas revisadas', 'strict_rows': 'A — Prueba estricta 80', 'max_rows_tab': 'B+ — Bloqueos Ultra 70 con valor', 'reserve_rows': 'C — Valor vigilancia / revisión', 'selected_rows': 'Traspaso seleccionado',
+        'all_rows': 'Todas las filas revisadas', 'strict_rows': 'A — Prueba estricta 80', 'max_rows_tab': 'B/B+ — Bloqueos Ultra 70 adaptativos', 'reserve_rows': 'C — Valor vigilancia / revisión', 'selected_rows': 'Traspaso seleccionado',
         'download': 'Descargar CSV seleccionado', 'download_strict': 'Descargar CSV prueba estricta 80', 'download_all': 'Descargar CSV revisado',
-        'reviewed': 'Filas revisadas', 'strict': 'Prueba estricta 80', 'max_profit': 'B+ bloqueos con valor', 'reserve': 'Vigilar/revisar', 'handoff': 'Filas traspaso', 'avg_prob': 'Probabilidad promedio', 'avg_ev': 'EV promedio/unidad', 'avg_profit70': 'Ganancia promedio al 70%', 'next': 'Siguiente acción',
+        'reviewed': 'Filas revisadas', 'strict': 'Prueba estricta 80', 'max_profit': 'Bloqueos B/B+', 'reserve': 'Vigilar/revisar', 'handoff': 'Filas traspaso', 'avg_prob': 'Probabilidad promedio', 'avg_ev': 'EV promedio/unidad', 'avg_profit70': 'Ganancia promedio al 70%', 'next': 'Siguiente acción',
         'rules': 'Reglas por nivel',
-        'rule_text': 'A = prueba estricta 80%. B+ = nivel Ultra 70 bloqueable: 70%+ probabilidad del modelo Y controles de valor positivo. C = favoritos 70% con valor débil más filas 60–70% con valor positivo para vigilar. Por defecto solo A+B+ debe ir a Odds Lock Pro.',
-        'proof': 'Bloquear antes del inicio. Rastrear A, B+ y C por separado. B+ es la lista práctica Ultra 70 con valor; A sigue siendo el único nivel de prueba estricta 80%.',
-        'handoff_mode': 'Modo de traspaso', 'strict_only': 'Solo A — prueba estricta 80', 'max_volume': 'A+B+ — Bloqueos Ultra 70 con valor', 'research_volume': 'A+B+C — bloqueos con valor más vigilancia',
-        'one_per_event': 'Mantener solo el mejor pick por evento', 'max_a': 'Máx filas A', 'max_b': 'Máx filas B+', 'max_c': 'Máx filas C',
+        'rule_text': 'A = prueba estricta 80%. B+ = 70%+ con valor positivo limpio. B = bloqueo adaptativo 70%+ cuando EV/ventaja están cerca de breakeven y hay soporte fuerte de confianza/patrón. C = favoritos con valor débil más filas 60–70% para vigilar. Esto evita bloquear todos los resultados y mantiene la confianza etiquetada honestamente.',
+        'proof': 'Bloquear antes del inicio. Rastrear A, B+, B y C por separado. B+ es el más fuerte. B se puede usar, pero con vigilancia/menor stake hasta que los patrones se prueben.',
+        'handoff_mode': 'Modo de traspaso', 'strict_only': 'Solo A — prueba estricta 80', 'max_volume': 'A+B/B+ — Bloqueos Ultra 70 adaptativos', 'research_volume': 'A+B+C — bloqueos más vigilancia',
+        'one_per_event': 'Mantener solo el mejor pick por evento', 'max_a': 'Máx filas A', 'max_b': 'Máx filas B/B+', 'max_c': 'Máx filas C',
         'saved': 'Filas seleccionadas guardadas como lista activa para Odds Lock Pro.', 'blockers': 'Principales razones de rechazo/bloqueo', 'quality_note': 'Protección de conflicto activa: cuando salen varios picks del mismo evento, el sistema conserva la fila más fuerte según el puntaje de calidad del nivel.',
-        'robust_note': 'Ultra 70 ahora requiere valor para bloquear: 70%+ de probabilidad no basta por sí solo. Favoritos con EV negativo o ventaja negativa pasan a vigilar/revisar en vez de Odds Lock Pro.',
+        'robust_note': 'Las señales de patrón ahora aumentan la confianza adaptativa en vez de funcionar solo como bloqueadores. El valor débil baja a B o C en vez de matar todo el tablero.',
     },
 }
 
@@ -76,7 +76,7 @@ def clean_numeric(frame: pd.DataFrame, column: str) -> pd.Series:
         'ultra80_profit_at_80_percent', 'profit_at_80_percent', 'expected_value_per_unit',
         'model_market_edge', 'pattern_ara_memory_signal', '_robust_expected_value',
         '_robust_profit_at_80_percent', '_robust_profit_at_70_percent', '_price_range_risk',
-        'computed_ev_decimal', 'estimated_ev_decimal', 'model_edge',
+        'computed_ev_decimal', 'estimated_ev_decimal', 'model_edge', '_adaptive_confidence',
     }
     if 'prob' in column.lower() or column in percent_like:
         values = values.where(values <= 1.0, values / 100.0)
@@ -164,6 +164,7 @@ def edge_series(frame: pd.DataFrame) -> pd.Series:
 
 def quality_score(frame: pd.DataFrame) -> pd.Series:
     probability = clean_numeric(frame, 'model_probability_clean').fillna(clean_numeric(frame, 'model_probability')).fillna(0.0)
+    adaptive_confidence = clean_numeric(frame, '_adaptive_confidence').fillna(probability).fillna(0.0)
     ev = value_series(frame).fillna(0.0)
     profit70 = clean_numeric(frame, '_robust_profit_at_70_percent').fillna(0.0)
     profit80 = clean_numeric(frame, 'ultra80_profit_at_80_percent').fillna(clean_numeric(frame, '_robust_profit_at_80_percent')).fillna(0.0)
@@ -173,7 +174,7 @@ def quality_score(frame: pd.DataFrame) -> pd.Series:
     agent_score = clean_numeric(frame, 'agent_score').fillna(0.0) / 100.0
     scanner = clean_numeric(frame, 'scanner_strength_score').fillna(0.0) / 100.0
     pattern = clean_numeric(frame, 'pattern_ara_memory_signal').fillna(clean_numeric(frame, 'ara_memory_signal')).fillna(0.0)
-    return (probability * 50.0) + (edge.clip(-0.10, 0.20) * 80.0) + (ev.clip(-0.10, 0.25) * 35.0) + (profit70.clip(-0.10, 0.25) * 25.0) + (profit80.clip(-0.10, 0.25) * 10.0) + (robust_ev.clip(-0.10, 0.25) * 35.0) + (agent_score * 15.0) + (scanner * 8.0) + (pattern.clip(-0.05, 0.05) * 70.0) - (price_risk.clip(0.0, 0.50) * 20.0)
+    return (probability * 35.0) + (adaptive_confidence * 25.0) + (edge.clip(-0.10, 0.20) * 80.0) + (ev.clip(-0.10, 0.25) * 35.0) + (profit70.clip(-0.10, 0.25) * 25.0) + (profit80.clip(-0.10, 0.25) * 10.0) + (robust_ev.clip(-0.10, 0.25) * 35.0) + (agent_score * 15.0) + (scanner * 8.0) + (pattern.clip(-0.05, 0.05) * 90.0) - (price_risk.clip(0.0, 0.50) * 20.0)
 
 
 def event_key_frame(frame: pd.DataFrame) -> pd.Series:
@@ -194,7 +195,8 @@ def limit_and_resolve_conflicts(frame: pd.DataFrame, *, tier: str, max_rows: int
     out.insert(0, 'volume_tier', tier)
     out['_tier_quality_score'] = quality_score(out)
     out['_event_key'] = event_key_frame(out)
-    out = out.sort_values(['_tier_quality_score', 'agent_score', 'model_probability_clean'], ascending=False, na_position='last')
+    sort_cols = [col for col in ['_tier_quality_score', '_adaptive_confidence', 'agent_score', 'model_probability_clean'] if col in out.columns]
+    out = out.sort_values(sort_cols, ascending=False, na_position='last') if sort_cols else out
     if one_per_event and '_event_key' in out.columns:
         out = out.drop_duplicates(subset=['_event_key'], keep='first')
     if int(max_rows) > 0:
@@ -212,14 +214,25 @@ def build_tiers(reviewed: pd.DataFrame, *, max_a: int, max_b: int, max_c: int, o
     ev = value_series(reviewed).fillna(0.0)
     edge = edge_series(reviewed).fillna(0.0)
     books = clean_numeric(reviewed, 'bookmaker_count').fillna(clean_numeric(reviewed, 'books'))
-    agent_score = clean_numeric(reviewed, 'agent_score')
+    agent_score = clean_numeric(reviewed, 'agent_score').fillna(0.0)
+    scanner_strength = clean_numeric(reviewed, 'scanner_strength_score').fillna(0.0)
     pattern_signal = clean_numeric(reviewed, 'pattern_ara_memory_signal').fillna(clean_numeric(reviewed, 'ara_memory_signal')).fillna(0.0)
     robust_ev = clean_numeric(reviewed, '_robust_expected_value').fillna(ev)
     robust_profit80 = clean_numeric(reviewed, '_robust_profit_at_80_percent')
     price_risk = clean_numeric(reviewed, '_price_range_risk').fillna(0.0)
     draw = bool_series(reviewed, 'is_draw_prediction')
     safe_timing = non_hard_blocked(reviewed)
+
+    pattern_boost = pattern_signal.clip(lower=0.0, upper=0.04) * 0.50
+    value_boost = ev.clip(lower=0.0, upper=0.05) * 0.15
+    edge_boost = edge.clip(lower=0.0, upper=0.05) * 0.20
+    agent_boost = ((agent_score - 50.0).clip(lower=0.0, upper=50.0) / 50.0) * 0.015
+    reviewed['_adaptive_confidence'] = (probability + pattern_boost + value_boost + edge_boost + agent_boost).clip(lower=0.01, upper=0.99)
+
     value_ok = ev.ge(0.0).fillna(False) & edge.ge(0.0).fillna(False) & robust_ev.ge(-0.005).fillna(False)
+    near_value_ok = ev.ge(-0.015).fillna(False) & edge.ge(-0.020).fillna(False) & robust_ev.ge(-0.020).fillna(False)
+    pattern_support = pattern_signal.ge(0.003).fillna(False) | agent_score.ge(55).fillna(False) | scanner_strength.ge(60).fillna(False)
+    adaptive_pattern_ok = near_value_ok & (pattern_support | probability.ge(0.74).fillna(False))
 
     strict_mask = (
         strict_base
@@ -235,14 +248,13 @@ def build_tiers(reviewed: pd.DataFrame, *, max_a: int, max_b: int, max_c: int, o
         & safe_timing
         & ~draw
         & probability.ge(0.70).fillna(False)
-        & value_ok
+        & (value_ok | adaptive_pattern_ok)
         & books.ge(1).fillna(False)
-        & agent_score.ge(0).fillna(True)
         & pattern_signal.ge(-0.10).fillna(True)
         & price_risk.le(0.90).fillna(True)
     )
 
-    weak_70_watch = probability.ge(0.70).fillna(False) & ~(value_ok)
+    weak_70_watch = probability.ge(0.70).fillna(False) & ~(value_ok | adaptive_pattern_ok)
     value_60_70_watch = probability.ge(0.60).fillna(False) & probability.lt(0.70).fillna(False) & ev.ge(0.0).fillna(False) & edge.ge(0.0).fillna(False)
     reserve_mask = (
         ~strict_mask
@@ -259,12 +271,18 @@ def build_tiers(reviewed: pd.DataFrame, *, max_a: int, max_b: int, max_c: int, o
     used_keys = set(event_key_frame(strict)) if one_per_event and not strict.empty else set()
 
     lock70_source = reviewed[lock70_mask].copy()
+    if not lock70_source.empty:
+        lock70_source['_ultra70_path'] = 'B_adaptive_pattern_lock'
+        clean_value_idx = lock70_source.index[value_ok.loc[lock70_source.index]]
+        lock70_source.loc[clean_value_idx, '_ultra70_path'] = 'B_plus_positive_value_lock'
     if one_per_event and used_keys and not lock70_source.empty:
         lock70_source = lock70_source[~event_key_frame(lock70_source).isin(used_keys)]
-    lock70 = limit_and_resolve_conflicts(lock70_source, tier='B_plus_ultra70_positive_value_lock', max_rows=max_b, one_per_event=one_per_event)
+    lock70 = limit_and_resolve_conflicts(lock70_source, tier='B_ultra70_adaptive_lock', max_rows=max_b, one_per_event=one_per_event)
     used_keys |= set(event_key_frame(lock70)) if one_per_event and not lock70.empty else set()
 
     reserve_source = reviewed[reserve_mask].copy()
+    if not reserve_source.empty:
+        reserve_source['_ultra70_path'] = 'C_value_watch_or_weak_value_review'
     if one_per_event and used_keys and not reserve_source.empty:
         reserve_source = reserve_source[~event_key_frame(reserve_source).isin(used_keys)]
     reserve = limit_and_resolve_conflicts(reserve_source, tier='C_value_watch_review', max_rows=max_c, one_per_event=one_per_event)
@@ -282,7 +300,7 @@ def selected_handoff(strict: pd.DataFrame, lock70: pd.DataFrame, reserve: pd.Dat
 def display_columns(frame: pd.DataFrame) -> list[str]:
     return [
         col for col in [
-            'volume_tier', 'event', 'sport', 'market_type', 'prediction', 'model_probability_clean', 'decimal_price',
+            'volume_tier', '_ultra70_path', '_adaptive_confidence', 'event', 'sport', 'market_type', 'prediction', 'model_probability_clean', 'decimal_price',
             '_robust_decimal_price', 'market_implied_probability', 'model_market_edge', 'expected_value_per_unit',
             '_robust_expected_value', 'ultra80_profit_at_80_percent', '_robust_profit_at_80_percent', '_robust_profit_at_70_percent', '_price_range_risk',
             'bookmaker_count', 'api_coverage_score', 'pattern_ara_memory_signal', 'line_value_signal', 'agent_score',
@@ -362,7 +380,7 @@ if st.button(t('run'), type='primary', use_container_width=True):
         st.session_state['ultra80_reserve_rows'] = reserve.to_dict('records')
         st.session_state['pro_predictor_latest_rows'] = handoff.to_dict('records')
         st.session_state['ara_latest_predictions'] = handoff.to_dict('records')
-        st.session_state['ara_latest_predictions_source'] = f'Ultra 70 Value Lock Mode — {handoff_mode}'
+        st.session_state['ara_latest_predictions_source'] = f'Ultra 70 Adaptive Lock Mode — {handoff_mode}'
         st.success(t('saved'))
     else:
         st.warning(t('no_pass'))
@@ -394,7 +412,7 @@ if st.button(t('run'), type='primary', use_container_width=True):
     with tabs[1]:
         show_table(strict, t('download_strict'), 'strict80_proof.csv')
     with tabs[2]:
-        show_table(lock70, 'Download Ultra 70 positive-value lock CSV' if LANG == 'en' else 'Descargar CSV Ultra 70 con valor positivo', 'ultra70_positive_value_locks.csv')
+        show_table(lock70, 'Download Ultra 70 adaptive locks CSV' if LANG == 'en' else 'Descargar CSV Ultra 70 adaptativo', 'ultra70_adaptive_locks.csv')
     with tabs[3]:
         show_table(reserve, 'Download value-watch CSV' if LANG == 'en' else 'Descargar CSV de vigilancia de valor', 'ultra70_value_watch_review.csv')
     with tabs[4]:
