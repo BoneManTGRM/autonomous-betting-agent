@@ -1,4 +1,4 @@
-# deploy trigger: predictor-first-clean-sidebar-v5
+# deploy trigger: restore-pages
 [server]
 headless = true
 
@@ -6,5 +6,5 @@ headless = true
 gatherUsageStats = false
 
 [client]
-showSidebarNavigation = false
+showSidebarNavigation = true
 toolbarMode = "minimal"
