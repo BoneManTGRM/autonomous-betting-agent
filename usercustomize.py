@@ -17,9 +17,3 @@ try:
     install_streamlit_local_user_selector()
 except Exception:
     pass
-
-try:
-    from autonomous_betting_agent.sidebar_tools import install_sidebar_tools
-    install_sidebar_tools()
-except Exception:
-    pass
