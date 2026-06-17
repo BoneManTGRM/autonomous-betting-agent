@@ -75,6 +75,23 @@ MARKET_LABELS = {
 }
 
 
+THREE_API_EXCLUDED_SPORT_TOKENS = (" tennis ", " atp ", " wta ")
+
+
+def _sport_text(*values: Any) -> str:
+    return " " + " ".join(str(value or "").lower().replace("-", " ").replace("_", " ").split()) + " "
+
+
+def is_three_api_supported_sport(sport_key: Any, sport_title: Any = "", group: Any = "", description: Any = "") -> bool:
+    """Return False for sports that should not be included in a three-API Pro Predictor scan.
+
+    Tennis is intentionally excluded until SportsDataIO tennis access is requested/enabled. This
+    keeps Pro Predictor focused on rows where Odds API + SportsDataIO + WeatherAPI can all be used.
+    """
+    text = _sport_text(sport_key, sport_title, group, description)
+    return not any(token in text for token in THREE_API_EXCLUDED_SPORT_TOKENS)
+
+
 def looks_like_placeholder_key(value: Any) -> bool:
     key = str(value or "").strip().lower()
     if not key:
@@ -113,18 +130,18 @@ def _get_json(path: str, params: Dict[str, Any]) -> Any:
 
 def list_sports(api_key: str, include_all: bool = False) -> List[SportInfo]:
     payload = _get_json("/v4/sports/", {"apiKey": api_key, "all": str(include_all).lower()})
-    sports = []
+    sports: List[SportInfo] = []
     for item in payload:
-        sports.append(
-            SportInfo(
-                key=str(item.get("key", "")),
-                group=str(item.get("group", "")),
-                title=str(item.get("title", "")),
-                description=str(item.get("description", "")),
-                active=bool(item.get("active", False)),
-                has_outrights=bool(item.get("has_outrights", False)),
-            )
+        sport = SportInfo(
+            key=str(item.get("key", "")),
+            group=str(item.get("group", "")),
+            title=str(item.get("title", "")),
+            description=str(item.get("description", "")),
+            active=bool(item.get("active", False)),
+            has_outrights=bool(item.get("has_outrights", False)),
         )
+        if is_three_api_supported_sport(sport.key, sport.title, sport.group, sport.description):
+            sports.append(sport)
     return sports
 
 
@@ -135,6 +152,8 @@ def fetch_odds(
     markets: str = "h2h,spreads,totals",
     odds_format: str = "decimal",
 ) -> List[Dict[str, Any]]:
+    if not is_three_api_supported_sport(sport_key):
+        return []
     params = {
         "apiKey": api_key,
         "regions": regions,
@@ -215,6 +234,8 @@ def _market_lines(bookmakers: Iterable[Dict[str, Any]], market_key: str) -> List
 
 
 def summarize_event(event: Dict[str, Any]) -> Optional[LiveEventSummary]:
+    if not is_three_api_supported_sport(event.get("sport_key", ""), event.get("sport_title", "")):
+        return None
     price_map = _prices_by_outcome(event.get("bookmakers", []))
     if len(price_map) < 2:
         return None
@@ -334,9 +355,11 @@ def scan_market(
     markets: str = "h2h,spreads,totals",
     learned_state_path: str | Path | None = "learned_state.json",
 ) -> List[LiveEventSummary]:
+    if not is_three_api_supported_sport(sport_key):
+        return []
     events = fetch_odds(api_key, sport_key=sport_key, regions=regions, markets=markets)
     calibrator = _load_calibrator(learned_state_path)
-    summaries = []
+    summaries: List[LiveEventSummary] = []
     for event in events[:max_events]:
         summary = summarize_event(event)
         if summary is not None:
