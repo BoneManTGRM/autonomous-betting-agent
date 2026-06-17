@@ -23,13 +23,14 @@ CSS = '''
 <style>
 [data-testid="stSidebarNav"],section[data-testid="stSidebar"] [data-testid="stSidebarNav"],section[data-testid="stSidebar"] nav[aria-label="Page navigation"],section[data-testid="stSidebar"] nav[aria-label="pages"],section[data-testid="stSidebar"] nav[aria-label="Pages"]{display:none!important;height:0!important;max-height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;}
 [data-testid="collapsedControl"]{z-index:999999!important;}
+section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"]:has(h3 span[style*="color"]),section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"]:has(h3 span[class*="green"]),section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"]:has(h3 span[class*="red"]){display:none!important;height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;}
+section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"]:has(h3 span[style*="color"]) + div[data-testid="stCaptionContainer"],section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"]:has(h3 span[class*="green"]) + div[data-testid="stCaptionContainer"],section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"]:has(h3 span[class*="red"]) + div[data-testid="stCaptionContainer"]{display:none!important;height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;}
 .aba-sidebar-brand{display:inline-block!important;font-size:1.66rem!important;line-height:1.18!important;font-weight:850!important;letter-spacing:-.02em!important;margin:.25rem 0 .55rem 0!important;text-shadow:0 1px 0 rgba(0,0,0,.72),0 2px 3px rgba(0,0,0,.45)!important;filter:none!important;}
 .aba-brand-green{color:#00A85A!important;-webkit-text-fill-color:#00A85A!important;}
 .aba-brand-white{color:#FFFFFF!important;-webkit-text-fill-color:#FFFFFF!important;}
 .aba-brand-red{color:#FF3B3B!important;-webkit-text-fill-color:#FF3B3B!important;}
 .aba-sidebar-tagline{color:rgba(250,250,250,.62)!important;font-size:1.02rem!important;margin:0 0 1.35rem 0!important;}
 .aba-sidebar-brand ~ .aba-sidebar-brand,.aba-sidebar-tagline ~ .aba-sidebar-tagline{display:none!important;}
-section[data-testid="stSidebar"] h3:has(span[style*="color"]),section[data-testid="stSidebar"] h3:has(span[style*="color"]) *,section[data-testid="stSidebar"] h3:has(span[class*="green"]),section[data-testid="stSidebar"] h3:has(span[class*="green"]) *,section[data-testid="stSidebar"] h3:has(span[class*="red"]),section[data-testid="stSidebar"] h3:has(span[class*="red"]) *{text-shadow:0 1px 0 rgba(0,0,0,.72),0 2px 3px rgba(0,0,0,.45)!important;filter:none!important;}
 @media(max-width:900px){section[data-testid="stSidebar"] [data-testid="stSidebarContent"]{padding:.75rem .9rem!important;overflow-x:hidden!important}.block-container{padding-left:.85rem!important;padding-right:.85rem!important;max-width:100vw!important}}
 </style>
 '''
@@ -128,9 +129,9 @@ def install_sidebar_tools() -> None:
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, '_aba_sidebar_tools_installed', False):
+    if getattr(st, '_aba_sidebar_tools_installed_v19', False):
         return
-    st._aba_sidebar_tools_installed = True
+    st._aba_sidebar_tools_installed_v19 = True
     real_config = st.set_page_config
     real_md = st.markdown
     real_side_radio = st.sidebar.radio
