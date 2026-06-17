@@ -29,11 +29,40 @@ def get_secret(*names: str) -> str:
 builtins.get_secret = get_secret
 
 
+def _is_orphan_workflow_heading(body: Any) -> bool:
+    text = str(body or '').strip().lower()
+    return text in {'workflow', 'flujo de trabajo'}
+
+
 def _install_all_runtime_hooks() -> None:
     try:
         import streamlit as st
+        from streamlit.delta_generator import DeltaGenerator
         from autonomous_betting_agent import sidebar_tools
         sidebar_tools.install_sidebar_tools()
+
+        real_st_subheader = st.subheader
+        real_sidebar_subheader = st.sidebar.subheader
+        real_dg_subheader = DeltaGenerator.subheader
+
+        def safe_subheader(body: Any, *args: Any, **kwargs: Any) -> Any:
+            if _is_orphan_workflow_heading(body):
+                return st.empty()
+            return real_st_subheader(body, *args, **kwargs)
+
+        def safe_sidebar_subheader(body: Any, *args: Any, **kwargs: Any) -> Any:
+            if _is_orphan_workflow_heading(body):
+                return st.sidebar.empty()
+            return real_sidebar_subheader(body, *args, **kwargs)
+
+        def safe_dg_subheader(self: Any, body: Any, *args: Any, **kwargs: Any) -> Any:
+            if _is_orphan_workflow_heading(body):
+                return self.empty()
+            return real_dg_subheader(self, body, *args, **kwargs)
+
+        st.subheader = safe_subheader
+        st.sidebar.subheader = safe_sidebar_subheader
+        DeltaGenerator.subheader = safe_dg_subheader
 
         def render_pages_only(streamlit_module: Any, language: object = 'English') -> None:
             if sidebar_tools._already_rendered(streamlit_module, sidebar_tools.PAGES_RENDERED_KEY):
@@ -41,7 +70,7 @@ def _install_all_runtime_hooks() -> None:
             lang = sidebar_tools.normal_language(language)
             with streamlit_module.sidebar:
                 streamlit_module.divider()
-                streamlit_module.subheader('Herramientas' if lang == 'Español' else 'Tools')
+                streamlit_module.markdown('### Herramientas' if lang == 'Español' else '### Tools')
                 for en, es, path in sidebar_tools.PAGES:
                     label = es if lang == 'Español' else en
                     try:
