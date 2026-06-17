@@ -9,7 +9,7 @@ from autonomous_betting_agent.memory_read_patch import install_memory_read_merge
 
 APP_NAME = "ABA Signal Pro"
 APP_TAGLINE = "Powered by Reparodynamics"
-APP_BUILD = "predictor-first-clean-sidebar-v4"
+APP_BUILD = "predictor-first-clean-sidebar-v5"
 PREDICTOR_TOOL_NAME = "Pro Predictor"
 BRANDED_REPORT_PREFIX = f"{APP_NAME}\n{APP_TAGLINE}"
 REPO_ROOT = Path(__file__).resolve().parent
@@ -25,6 +25,12 @@ _REAL_ST_NUMBER_INPUT = st.number_input
 _REAL_ST_SLIDER = st.slider
 _REAL_ST_TEXT_INPUT = st.text_input
 _REAL_ST_TOGGLE = st.toggle
+_REAL_ST_CHECKBOX = st.checkbox
+_REAL_ST_DOWNLOAD_BUTTON = st.download_button
+_REAL_ST_TABS = st.tabs
+_REAL_ST_SUBHEADER = st.subheader
+_REAL_ST_EXPANDER = st.expander
+_REAL_ST_SELECTBOX = st.selectbox
 _REAL_DG_CAPTION = DeltaGenerator.caption
 _REAL_DG_INFO = DeltaGenerator.info
 _REAL_DG_MARKDOWN = DeltaGenerator.markdown
@@ -34,6 +40,10 @@ _REAL_DG_SELECTBOX = DeltaGenerator.selectbox
 _REAL_DG_SLIDER = DeltaGenerator.slider
 _REAL_DG_TEXT_INPUT = DeltaGenerator.text_input
 _REAL_DG_TOGGLE = DeltaGenerator.toggle
+_REAL_DG_CHECKBOX = DeltaGenerator.checkbox
+_REAL_DG_DOWNLOAD_BUTTON = getattr(DeltaGenerator, "download_button", None)
+_REAL_DG_SUBHEADER = DeltaGenerator.subheader
+_REAL_DG_EXPANDER = DeltaGenerator.expander
 
 _REAL_SET_PAGE_CONFIG(
     page_title=APP_NAME,
@@ -145,12 +155,24 @@ def _clean_ui_text(value):
         value.replace("Scanner Pro / ", "")
         .replace(" / Scanner Pro", "")
         .replace("Scanner Pro → ", "")
+        .replace("Scanner Pro", PREDICTOR_TOOL_NAME)
         .replace("scanner/scanner", "predictor")
         .replace("scanner-only", "discovery-only")
-        .replace("Scanner Pro", PREDICTOR_TOOL_NAME)
+        .replace("scanner rank", "prediction rank")
+        .replace("Scanner rank", "Prediction rank")
+        .replace("scanner strength", "signal strength")
+        .replace("Scanner strength", "Signal strength")
+        .replace("scan strength", "signal strength")
+        .replace("Scan strength", "Signal strength")
         .replace("scanner", "predictor")
+        .replace("Scanner", "Predictor")
         .replace("escáner", "predictor")
+        .replace("Escáner", "Predictor")
     )
+
+
+def _clean_ui_list(values):
+    return [_clean_ui_text(value) for value in values]
 
 
 def render_sidebar_brand() -> None:
@@ -185,6 +207,30 @@ def scrubbed_write(*args, **kwargs):
     return _REAL_ST_WRITE(*[_clean_ui_text(arg) for arg in args], **kwargs)
 
 
+def scrubbed_subheader(body, *args, **kwargs):
+    return _REAL_ST_SUBHEADER(_clean_ui_text(body), *args, **kwargs)
+
+
+def scrubbed_expander(label, *args, **kwargs):
+    return _REAL_ST_EXPANDER(_clean_ui_text(label), *args, **kwargs)
+
+
+def scrubbed_tabs(tabs, *args, **kwargs):
+    return _REAL_ST_TABS(_clean_ui_list(tabs), *args, **kwargs)
+
+
+def scrubbed_checkbox(label, *args, **kwargs):
+    return _REAL_ST_CHECKBOX(_clean_ui_text(label), *args, **kwargs)
+
+
+def scrubbed_download_button(label, data=None, *args, **kwargs):
+    return _REAL_ST_DOWNLOAD_BUTTON(_clean_ui_text(label), data, *args, **kwargs)
+
+
+def scrubbed_selectbox(label, options, *args, **kwargs):
+    return _REAL_ST_SELECTBOX(_clean_ui_text(label), options, *args, **kwargs)
+
+
 def scrubbed_dg_caption(self, body, *args, **kwargs):
     return _REAL_DG_CAPTION(self, _clean_ui_text(body), *args, **kwargs)
 
@@ -199,6 +245,24 @@ def scrubbed_dg_markdown(self, body, *args, **kwargs):
 
 def scrubbed_dg_write(self, *args, **kwargs):
     return _REAL_DG_WRITE(self, *[_clean_ui_text(arg) for arg in args], **kwargs)
+
+
+def scrubbed_dg_subheader(self, body, *args, **kwargs):
+    return _REAL_DG_SUBHEADER(self, _clean_ui_text(body), *args, **kwargs)
+
+
+def scrubbed_dg_expander(self, label, *args, **kwargs):
+    return _REAL_DG_EXPANDER(self, _clean_ui_text(label), *args, **kwargs)
+
+
+def scrubbed_dg_checkbox(self, label, *args, **kwargs):
+    return _REAL_DG_CHECKBOX(self, _clean_ui_text(label), *args, **kwargs)
+
+
+def scrubbed_dg_download_button(self, label, data=None, *args, **kwargs):
+    if _REAL_DG_DOWNLOAD_BUTTON is None:
+        return _REAL_ST_DOWNLOAD_BUTTON(_clean_ui_text(label), data, *args, **kwargs)
+    return _REAL_DG_DOWNLOAD_BUTTON(self, _clean_ui_text(label), data, *args, **kwargs)
 
 
 def mobile_safe_file_uploader(label, *args, **kwargs):
@@ -279,6 +343,12 @@ st.caption = scrubbed_caption
 st.info = scrubbed_info
 st.markdown = scrubbed_markdown
 st.write = scrubbed_write
+st.subheader = scrubbed_subheader
+st.expander = scrubbed_expander
+st.tabs = scrubbed_tabs
+st.checkbox = scrubbed_checkbox
+st.download_button = scrubbed_download_button
+st.selectbox = scrubbed_selectbox
 st.file_uploader = mobile_safe_file_uploader
 st.number_input = defaulted_st_number_input
 st.slider = defaulted_st_slider
@@ -288,6 +358,11 @@ DeltaGenerator.caption = scrubbed_dg_caption
 DeltaGenerator.info = scrubbed_dg_info
 DeltaGenerator.markdown = scrubbed_dg_markdown
 DeltaGenerator.write = scrubbed_dg_write
+DeltaGenerator.subheader = scrubbed_dg_subheader
+DeltaGenerator.expander = scrubbed_dg_expander
+DeltaGenerator.checkbox = scrubbed_dg_checkbox
+if _REAL_DG_DOWNLOAD_BUTTON is not None:
+    DeltaGenerator.download_button = scrubbed_dg_download_button
 DeltaGenerator.number_input = defaulted_dg_number_input
 DeltaGenerator.selectbox = branded_dg_selectbox
 DeltaGenerator.slider = defaulted_dg_slider
