@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import builtins
 import os
+from typing import Any
 
 
 def get_secret(*names: str) -> str:
@@ -30,8 +31,26 @@ builtins.get_secret = get_secret
 
 def _install_all_runtime_hooks() -> None:
     try:
-        from autonomous_betting_agent.sidebar_tools import install_sidebar_tools
-        install_sidebar_tools()
+        import streamlit as st
+        from autonomous_betting_agent import sidebar_tools
+        sidebar_tools.install_sidebar_tools()
+
+        def render_pages_only(streamlit_module: Any, language: object = 'English') -> None:
+            if sidebar_tools._already_rendered(streamlit_module, sidebar_tools.PAGES_RENDERED_KEY):
+                return
+            lang = sidebar_tools.normal_language(language)
+            with streamlit_module.sidebar:
+                streamlit_module.divider()
+                streamlit_module.subheader('Herramientas' if lang == 'Español' else 'Tools')
+                for en, es, path in sidebar_tools.PAGES:
+                    label = es if lang == 'Español' else en
+                    try:
+                        streamlit_module.page_link(path, label=label)
+                    except Exception:
+                        streamlit_module.caption(label)
+                streamlit_module.divider()
+
+        sidebar_tools.render_curated_sidebar = render_pages_only
     except Exception:
         pass
     try:
