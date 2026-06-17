@@ -13,7 +13,7 @@ except Exception:
 
 APP_NAME = "ARA Signal Pro"
 APP_TAGLINE = "Powered by Reparodynamics"
-APP_BUILD = "clean-sidebar-order-v2"
+APP_BUILD = "clean-sidebar-order-v3-hide-native-nav"
 REPO_ROOT = Path(__file__).resolve().parent
 REPO_MEMORY_PATH = REPO_ROOT / "data" / "ara_permanent_learning_memory.csv"
 
@@ -45,15 +45,15 @@ CORE_PAGES = [
 ]
 
 TOOL_LINKS = [
-    ("pages/pro_predictor.py", "Pro Predictor"),
-    ("pages/ultra80_profit_mode.py", "Ultra 70 Profit Mode"),
-    ("pages/simulation_lab.py", "Simulation Lab"),
-    ("pages/threshold_optimizer.py", "Threshold Optimizer"),
-    ("pages/what_are_the_odds.py", "What Are the Odds"),
-    ("pages/odds_lock_pro.py", "Odds Lock Pro"),
-    ("pages/public_proof_dashboard.py", "Public Proof Dashboard"),
-    ("pages/learn_memory.py", "Learning Memory"),
-    ("pages/reset_lock_file.py", "Reset Lock File"),
+    ("pages/pro_predictor.py", "Pro Predictor", "Predictor Pro"),
+    ("pages/ultra80_profit_mode.py", "Ultra 70 Profit Mode", "Ultra 70 Profit Mode"),
+    ("pages/simulation_lab.py", "Simulation Lab", "Laboratorio de Simulación"),
+    ("pages/threshold_optimizer.py", "Threshold Optimizer", "Optimizador de Umbrales"),
+    ("pages/what_are_the_odds.py", "What Are the Odds", "Cuotas y Valor"),
+    ("pages/odds_lock_pro.py", "Odds Lock Pro", "Bloqueo de Cuotas Pro"),
+    ("pages/public_proof_dashboard.py", "Public Proof Dashboard", "Dashboard Público de Prueba"),
+    ("pages/learn_memory.py", "Learning Memory", "Memoria de Aprendizaje"),
+    ("pages/reset_lock_file.py", "Reset Lock File", "Reiniciar Archivo de Bloqueo"),
 ]
 
 LANGUAGE_KEYS = (
@@ -71,11 +71,26 @@ LANGUAGE_KEYS = (
     "what_are_the_odds_language",
 )
 
-WORKFLOW_TEXT = "Pro Predictor → Highest Confidence → Odds Lock Pro → Public Proof Dashboard → Learning Memory."
-WORKFLOW_DETAIL = "Odds Lock Pro timestamps locked picks; Public Proof Dashboard shows ROI and results."
+WORKFLOW_TEXT_EN = "Pro Predictor → Highest Confidence → Odds Lock Pro → Public Proof Dashboard → Learning Memory."
+WORKFLOW_DETAIL_EN = "Odds Lock Pro timestamps locked picks; Public Proof Dashboard shows ROI and results."
+WORKFLOW_TEXT_ES = "Predictor Pro → Máxima Confianza → Odds Lock Pro → Dashboard Público → Memoria."
+WORKFLOW_DETAIL_ES = "Odds Lock Pro bloquea picks con timestamp; Dashboard Público muestra ROI y resultados."
 
 CSS = """
 <style>
+/* Kill Streamlit's automatic multipage file-discovery nav. It lists every file in /pages. */
+[data-testid="stSidebarNav"],
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"],
+section[data-testid="stSidebar"] nav[aria-label="Page navigation"],
+section[data-testid="stSidebar"] nav[aria-label="pages"],
+section[data-testid="stSidebar"] nav[aria-label="Pages"] {
+    display: none !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
 [data-testid="collapsedControl"] { z-index: 999999 !important; }
 @media (max-width: 900px) {
     section[data-testid="stSidebar"] {
@@ -144,27 +159,30 @@ def install_report_branding() -> None:
 
 def render_sidebar_after_language(language: object = "English") -> None:
     """Render custom sidebar immediately below the page-level language control."""
-    if st.session_state.get("_ara_sidebar_after_language_rendered_v2"):
+    if st.session_state.get("_ara_sidebar_after_language_rendered_v3"):
         return
-    st.session_state["_ara_sidebar_after_language_rendered_v2"] = True
+    st.session_state["_ara_sidebar_after_language_rendered_v3"] = True
     current_language = _normal_language(language)
     tools_label = "Herramientas" if current_language == "Español" else "Pages"
     workflow_label = "Flujo" if current_language == "Español" else "Workflow"
+    workflow_text = WORKFLOW_TEXT_ES if current_language == "Español" else WORKFLOW_TEXT_EN
+    workflow_detail = WORKFLOW_DETAIL_ES if current_language == "Español" else WORKFLOW_DETAIL_EN
     with st.sidebar:
         st.divider()
         st.markdown("### :green[ARA] Signal :red[Pro]")
         st.caption(APP_TAGLINE)
         st.divider()
         st.subheader(tools_label)
-        for path, label in TOOL_LINKS:
+        for path, english_label, spanish_label in TOOL_LINKS:
+            label = spanish_label if current_language == "Español" else english_label
             try:
                 st.page_link(path, label=label)
             except Exception:
                 st.caption(label)
         st.divider()
         st.subheader(workflow_label)
-        st.caption(WORKFLOW_TEXT)
-        st.caption(WORKFLOW_DETAIL)
+        st.caption(workflow_text)
+        st.caption(workflow_detail)
 
 
 def _language_radio(label: Any, options: Any, *args: Any, key: str | None = None, **kwargs: Any) -> Any:
