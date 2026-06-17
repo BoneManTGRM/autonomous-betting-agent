@@ -79,7 +79,10 @@ THREE_API_EXCLUDED_SPORT_TOKENS = (" tennis ", " atp ", " wta ")
 
 
 def _sport_text(*values: Any) -> str:
-    return " " + " ".join(str(value or "").lower().replace("-", " ").replace("_", " ").split()) + " "
+    parts: list[str] = []
+    for item in values:
+        parts.extend(str(item or "").lower().replace("-", " ").replace("_", " ").split())
+    return " " + " ".join(parts) + " "
 
 
 def is_three_api_supported_sport(sport_key: Any, sport_title: Any = "", group: Any = "", description: Any = "") -> bool:
