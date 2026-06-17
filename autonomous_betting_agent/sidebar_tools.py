@@ -17,12 +17,16 @@ PAGES = (
 )
 LANG_KEYS = ('global_language','app_language','pro_predictor_language','ultra80_profit_mode_language','simulation_lab_language','threshold_optimizer_language','what_are_the_odds_language','what_are_the_odds_pro_language','odds_lock_pro_language','public_proof_dashboard_language','reset_lock_file_language','learn_memory_language','learning_memory_language')
 BRIGHT_GOLD = '#FFD54A'
+BRAND_RENDERED_KEY = '_aba_sidebar_brand_rendered_current_call'
+PAGES_RENDERED_KEY = '_aba_sidebar_pages_rendered_current_call'
+SIDEBAR_CALL_ACTIVE_KEY = '_aba_sidebar_language_call_active'
 CSS = f'''
 <style>
 [data-testid="stSidebarNav"],section[data-testid="stSidebar"] [data-testid="stSidebarNav"],section[data-testid="stSidebar"] nav[aria-label="Page navigation"],section[data-testid="stSidebar"] nav[aria-label="pages"],section[data-testid="stSidebar"] nav[aria-label="Pages"]{{display:none!important;height:0!important;max-height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;}}
 [data-testid="collapsedControl"]{{z-index:999999!important;}}
 .aba-sidebar-brand{{color:{BRIGHT_GOLD}!important;-webkit-text-fill-color:{BRIGHT_GOLD}!important;font-size:1.66rem!important;line-height:1.18!important;font-weight:850!important;letter-spacing:-.02em!important;text-shadow:0 0 14px rgba(255,213,74,.38)!important;margin:.25rem 0 .55rem 0!important;}}
 .aba-sidebar-tagline{{color:rgba(250,250,250,.62)!important;font-size:1.02rem!important;margin:0 0 1.35rem 0!important;}}
+.aba-sidebar-brand ~ .aba-sidebar-brand,.aba-sidebar-tagline ~ .aba-sidebar-tagline{{display:none!important;}}
 section[data-testid="stSidebar"] h3:has(span[style*="color"]),section[data-testid="stSidebar"] h3:has(span[style*="color"]) *,section[data-testid="stSidebar"] h3:has(span[class*="green"]),section[data-testid="stSidebar"] h3:has(span[class*="green"]) *,section[data-testid="stSidebar"] h3:has(span[class*="red"]),section[data-testid="stSidebar"] h3:has(span[class*="red"]) *{{color:{BRIGHT_GOLD}!important;-webkit-text-fill-color:{BRIGHT_GOLD}!important;font-size:1.16em!important;line-height:1.18!important;font-weight:800!important;text-shadow:0 0 14px rgba(255,213,74,.38)!important;}}
 @media(max-width:900px){{section[data-testid="stSidebar"] [data-testid="stSidebarContent"]{{padding:.75rem .9rem!important;overflow-x:hidden!important}}.block-container{{padding-left:.85rem!important;padding-right:.85rem!important;max-width:100vw!important}}}}
 </style>
@@ -60,7 +64,27 @@ def inject_sidebar_css(st: Any) -> None:
         pass
 
 
+def _reset_current_sidebar_call(st: Any) -> None:
+    try:
+        st.session_state[BRAND_RENDERED_KEY] = False
+        st.session_state[PAGES_RENDERED_KEY] = False
+    except Exception:
+        pass
+
+
+def _already_rendered(st: Any, key: str) -> bool:
+    try:
+        if st.session_state.get(key):
+            return True
+        st.session_state[key] = True
+    except Exception:
+        pass
+    return False
+
+
 def render_sidebar_brand(st: Any) -> None:
+    if _already_rendered(st, BRAND_RENDERED_KEY):
+        return
     inject_sidebar_css(st)
     with st.sidebar:
         st.markdown(f'<div class="aba-sidebar-brand">{APP_NAME}</div>', unsafe_allow_html=True)
@@ -68,7 +92,9 @@ def render_sidebar_brand(st: Any) -> None:
 
 
 def render_curated_sidebar(st: Any, language: object = 'English') -> None:
-    """Render only the curated page links below the language selector."""
+    """Render only one curated page-link block below the language selector."""
+    if _already_rendered(st, PAGES_RENDERED_KEY):
+        return
     lang = normal_language(language)
     with st.sidebar:
         st.divider()
@@ -97,9 +123,9 @@ def install_sidebar_tools() -> None:
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, '_ara_sidebar_safety_v17', False):
+    if getattr(st, '_aba_sidebar_tools_installed', False):
         return
-    st._ara_sidebar_safety_v17 = True
+    st._aba_sidebar_tools_installed = True
     real_config = st.set_page_config
     real_md = st.markdown
     real_side_radio = st.sidebar.radio
@@ -119,27 +145,56 @@ def install_sidebar_tools() -> None:
         css()
         return out
 
-    def after(value: object) -> object:
-        css()
-        render_curated_sidebar(st, sync_language(st, value))
-        return value
+    def begin_language_call() -> bool:
+        try:
+            if st.session_state.get(SIDEBAR_CALL_ACTIVE_KEY):
+                return False
+            st.session_state[SIDEBAR_CALL_ACTIVE_KEY] = True
+            _reset_current_sidebar_call(st)
+        except Exception:
+            pass
+        return True
+
+    def end_language_call() -> None:
+        try:
+            st.session_state[SIDEBAR_CALL_ACTIVE_KEY] = False
+        except Exception:
+            pass
 
     def radio(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
-        if is_language_widget(label, options):
-            render_sidebar_brand(st)
+        if not is_language_widget(label, options):
+            return real_side_radio(label, options, *args, **kwargs)
+        outer = begin_language_call()
+        try:
+            if outer:
+                render_sidebar_brand(st)
             value = real_side_radio(label, options, *args, **kwargs)
-            return after(value)
-        return real_side_radio(label, options, *args, **kwargs)
+            if outer:
+                css()
+                render_curated_sidebar(st, sync_language(st, value))
+            return value
+        finally:
+            if outer:
+                end_language_call()
 
     def selectbox(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
         if not is_language_widget(label, options):
             return real_side_select(label, options, *args, **kwargs)
-        render_sidebar_brand(st)
-        opts = list(options)
-        key = kwargs.get('key')
-        current = normal_language(st.session_state.get(key or 'global_language', 'English'))
-        value = real_side_radio('Idioma' if current == 'Español' else 'Language', opts, index=opts.index(current) if current in opts else 0, key=key, horizontal=True)
-        return after(value)
+        outer = begin_language_call()
+        try:
+            if outer:
+                render_sidebar_brand(st)
+            opts = list(options)
+            key = kwargs.get('key')
+            current = normal_language(st.session_state.get(key or 'global_language', 'English'))
+            value = real_side_radio('Idioma' if current == 'Español' else 'Language', opts, index=opts.index(current) if current in opts else 0, key=key, horizontal=True)
+            if outer:
+                css()
+                render_curated_sidebar(st, sync_language(st, value))
+            return value
+        finally:
+            if outer:
+                end_language_call()
 
     def dg_select(self: Any, label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
         if is_language_widget(label, options):
@@ -147,11 +202,20 @@ def install_sidebar_tools() -> None:
         return real_dg_select(self, label, options, *args, **kwargs)
 
     def dg_radio(self: Any, label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
-        if is_language_widget(label, options):
-            render_sidebar_brand(st)
+        if not is_language_widget(label, options):
+            return real_dg_radio(self, label, options, *args, **kwargs) if real_dg_radio else real_side_radio(label, options, *args, **kwargs)
+        outer = begin_language_call()
+        try:
+            if outer:
+                render_sidebar_brand(st)
             value = real_dg_radio(self, label, options, *args, **kwargs) if real_dg_radio else real_side_radio(label, options, *args, **kwargs)
-            return after(value)
-        return real_dg_radio(self, label, options, *args, **kwargs) if real_dg_radio else real_side_radio(label, options, *args, **kwargs)
+            if outer:
+                css()
+                render_curated_sidebar(st, sync_language(st, value))
+            return value
+        finally:
+            if outer:
+                end_language_call()
 
     st.set_page_config = page_config
     st.sidebar.radio = radio
