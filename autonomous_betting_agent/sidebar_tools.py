@@ -15,7 +15,7 @@ PAGES = (
     ('Reset Lock File', 'Reiniciar Archivo de Bloqueo', 'pages/reset_lock_file.py'),
 )
 LANG_KEYS = ('global_language','app_language','pro_predictor_language','ultra80_profit_mode_language','simulation_lab_language','threshold_optimizer_language','what_are_the_odds_language','what_are_the_odds_pro_language','odds_lock_pro_language','public_proof_dashboard_language','reset_lock_file_language','learn_memory_language','learning_memory_language')
-SIDEBAR_RENDERED_KEY = '_ara_curated_sidebar_rendered_this_script_run'
+PAGES_RENDERED_KEY = '_ara_curated_pages_rendered_this_script_run'
 CSS = '''
 <style>
 [data-testid="stSidebarNav"],section[data-testid="stSidebar"] [data-testid="stSidebarNav"],section[data-testid="stSidebar"] nav[aria-label="Page navigation"],section[data-testid="stSidebar"] nav[aria-label="pages"],section[data-testid="stSidebar"] nav[aria-label="Pages"]{display:none!important;height:0!important;max-height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;}
@@ -58,34 +58,35 @@ def inject_sidebar_css(st: Any) -> None:
 
 def reset_sidebar_render_guard(st: Any) -> None:
     try:
-        st.session_state[SIDEBAR_RENDERED_KEY] = False
+        st.session_state[PAGES_RENDERED_KEY] = False
     except Exception:
         pass
 
 
 def render_curated_sidebar(st: Any, language: object = 'English') -> None:
+    """Render the curated page links once.
+
+    Brand and workflow are already being drawn by the page shell/legacy layout.
+    Rendering them here caused duplicates. This function intentionally only
+    restores the missing page links.
+    """
     try:
-        if st.session_state.get(SIDEBAR_RENDERED_KEY):
+        if st.session_state.get(PAGES_RENDERED_KEY):
             return
-        st.session_state[SIDEBAR_RENDERED_KEY] = True
+        st.session_state[PAGES_RENDERED_KEY] = True
     except Exception:
         pass
     lang = normal_language(language)
     with st.sidebar:
         st.divider()
-        st.markdown('### :green[ARA] Signal :red[Pro]')
-        st.caption(APP_TAGLINE)
-        st.divider()
         st.subheader('Herramientas' if lang == 'Español' else 'Tools')
         for en, es, path in PAGES:
+            label = es if lang == 'Español' else en
             try:
-                st.page_link(path, label=es if lang == 'Español' else en)
+                st.page_link(path, label=label)
             except Exception:
-                st.caption(es if lang == 'Español' else en)
+                st.caption(label)
         st.divider()
-        st.subheader('Flujo de trabajo' if lang == 'Español' else 'Workflow')
-        st.caption('Predictor Pro → Máxima Confianza → Odds Lock Pro → Dashboard Público → Memoria de Aprendizaje.' if lang == 'Español' else 'Pro Predictor → Highest Confidence → Odds Lock Pro → Public Proof Dashboard → Learning Memory.')
-        st.caption('Odds Lock Pro bloquea picks con timestamp; Dashboard Público muestra ROI y resultados.' if lang == 'Español' else 'Odds Lock Pro timestamps locked picks; Public Proof Dashboard shows ROI and results.')
 
 
 def sidebar_language_selector(st: Any, *, key: str, default: str = 'English') -> str:
@@ -103,9 +104,9 @@ def install_sidebar_tools() -> None:
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, '_ara_sidebar_safety_v12', False):
+    if getattr(st, '_ara_sidebar_safety_v13', False):
         return
-    st._ara_sidebar_safety_v12 = True
+    st._ara_sidebar_safety_v13 = True
     real_config = st.set_page_config
     real_md = st.markdown
     real_side_radio = st.sidebar.radio
