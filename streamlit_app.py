@@ -9,6 +9,7 @@ from autonomous_betting_agent.memory_read_patch import install_memory_read_merge
 
 APP_NAME = "ABA Signal Pro"
 APP_TAGLINE = "Powered by Reparodynamics"
+APP_BUILD = "predictor-first-clean-sidebar-v3"
 PREDICTOR_TOOL_NAME = "Pro Predictor"
 BRANDED_REPORT_PREFIX = f"{APP_NAME}\n{APP_TAGLINE}"
 REPO_ROOT = Path(__file__).resolve().parent
@@ -72,6 +73,20 @@ CORE_PAGES = [
     st.Page("pages/learn_memory.py", title="Learning Memory"),
 ]
 
+TOOL_LINKS = [
+    ("pages/pro_predictor.py", PREDICTOR_TOOL_NAME),
+    ("pages/ultra80_profit_mode.py", "Ultra 70 Profit Mode"),
+    ("pages/simulation_lab.py", "Simulation Lab"),
+    ("pages/what_are_the_odds.py", "What Are the Odds"),
+    ("pages/odds_lock_pro.py", "Odds Lock Pro"),
+    ("pages/public_proof_dashboard.py", "Public Proof Dashboard"),
+    ("pages/learn_memory.py", "Learning Memory"),
+    ("pages/threshold_optimizer.py", "Threshold Optimizer"),
+    ("pages/reset_lock_file.py", "Reset Lock File"),
+]
+
+WORKFLOW_TEXT = "Pro Predictor → Ultra 70 Profit Mode → Simulation Lab → Odds Lock Pro → Public Proof Dashboard → Learning Memory"
+
 
 def safe_set_page_config(*args, **kwargs):
     """Ignore page-level config calls after the app shell has already configured Streamlit."""
@@ -115,10 +130,31 @@ def _apply_toggle_default(label, kwargs):
     return kwargs
 
 
+def _clean_ui_text(value):
+    if not isinstance(value, str):
+        return value
+    return (
+        value.replace("Scanner Pro / ", "")
+        .replace(" / Scanner Pro", "")
+        .replace("Scanner Pro → ", "")
+        .replace("Scanner Pro", PREDICTOR_TOOL_NAME)
+    )
+
+
 def render_sidebar_brand() -> None:
     st.sidebar.markdown("### :green[ABA] Signal :red[Pro]")
     st.sidebar.caption(APP_TAGLINE)
+    st.sidebar.caption(f"Build: {APP_BUILD}")
     st.sidebar.divider()
+    st.sidebar.subheader("Tools")
+    for path, label in TOOL_LINKS:
+        try:
+            st.sidebar.page_link(path, label=label)
+        except Exception:
+            st.sidebar.caption(label)
+    st.sidebar.divider()
+    st.sidebar.subheader("Workflow")
+    st.sidebar.caption(WORKFLOW_TEXT)
 
 
 def mobile_safe_file_uploader(label, *args, **kwargs):
@@ -133,43 +169,43 @@ def mobile_safe_file_uploader(label, *args, **kwargs):
 
 
 def branded_dg_selectbox(self, label, *args, **kwargs):
-    return _REAL_DG_SELECTBOX(self, label, *args, **kwargs)
+    return _REAL_DG_SELECTBOX(self, _clean_ui_text(label), *args, **kwargs)
 
 
 def defaulted_st_number_input(label, *args, **kwargs):
-    return _REAL_ST_NUMBER_INPUT(label, *args, **_apply_number_default(label, kwargs))
+    return _REAL_ST_NUMBER_INPUT(_clean_ui_text(label), *args, **_apply_number_default(label, kwargs))
 
 
 def defaulted_st_slider(label, *args, **kwargs):
     if _slider_should_use_number_input(label):
-        return _REAL_ST_NUMBER_INPUT(label, *args, **_apply_slider_default(label, kwargs))
-    return _REAL_ST_SLIDER(label, *args, **_apply_slider_default(label, kwargs))
+        return _REAL_ST_NUMBER_INPUT(_clean_ui_text(label), *args, **_apply_slider_default(label, kwargs))
+    return _REAL_ST_SLIDER(_clean_ui_text(label), *args, **_apply_slider_default(label, kwargs))
 
 
 def defaulted_st_text_input(label, *args, **kwargs):
-    return _REAL_ST_TEXT_INPUT(label, *args, **_apply_text_default(label, kwargs))
+    return _REAL_ST_TEXT_INPUT(_clean_ui_text(label), *args, **_apply_text_default(label, kwargs))
 
 
 def defaulted_st_toggle(label, *args, **kwargs):
-    return _REAL_ST_TOGGLE(label, *args, **_apply_toggle_default(label, kwargs))
+    return _REAL_ST_TOGGLE(_clean_ui_text(label), *args, **_apply_toggle_default(label, kwargs))
 
 
 def defaulted_dg_number_input(self, label, *args, **kwargs):
-    return _REAL_DG_NUMBER_INPUT(self, label, *args, **_apply_number_default(label, kwargs))
+    return _REAL_DG_NUMBER_INPUT(self, _clean_ui_text(label), *args, **_apply_number_default(label, kwargs))
 
 
 def defaulted_dg_slider(self, label, *args, **kwargs):
     if _slider_should_use_number_input(label):
-        return _REAL_DG_NUMBER_INPUT(self, label, *args, **_apply_slider_default(label, kwargs))
-    return _REAL_DG_SLIDER(self, label, *args, **_apply_slider_default(label, kwargs))
+        return _REAL_DG_NUMBER_INPUT(self, _clean_ui_text(label), *args, **_apply_slider_default(label, kwargs))
+    return _REAL_DG_SLIDER(self, _clean_ui_text(label), *args, **_apply_slider_default(label, kwargs))
 
 
 def defaulted_dg_text_input(self, label, *args, **kwargs):
-    return _REAL_DG_TEXT_INPUT(self, label, *args, **_apply_text_default(label, kwargs))
+    return _REAL_DG_TEXT_INPUT(self, _clean_ui_text(label), *args, **_apply_text_default(label, kwargs))
 
 
 def defaulted_dg_toggle(self, label, *args, **kwargs):
-    return _REAL_DG_TOGGLE(self, label, *args, **_apply_toggle_default(label, kwargs))
+    return _REAL_DG_TOGGLE(self, _clean_ui_text(label), *args, **_apply_toggle_default(label, kwargs))
 
 
 def install_report_branding() -> None:
@@ -208,9 +244,7 @@ DeltaGenerator.toggle = defaulted_dg_toggle
 
 try:
     render_sidebar_brand()
-    current_page = st.navigation(CORE_PAGES, position="sidebar")
+    current_page = st.navigation(CORE_PAGES, position="hidden")
     current_page.run()
 except AttributeError:
-    # Fallback for very old Streamlit versions. requirements.txt pins Streamlit
-    # high enough for st.navigation, but this keeps local older installs usable.
     import pages.pro_predictor  # noqa: F401,E402
