@@ -27,7 +27,7 @@ TEXT = {
         'handoff_mode': 'Handoff mode', 'strict_only': 'A only — strict 80 proof', 'max_volume': 'A+B/B+ — Ultra 70 adaptive locks', 'research_volume': 'A+B+C — locks plus watch rows',
         'one_per_event': 'Keep only the best pick per event', 'max_a': 'Max A rows', 'max_b': 'Max B/B+ rows', 'max_c': 'Max C rows',
         'saved': 'Selected rows saved as the active handoff list for Odds Lock Pro.', 'blockers': 'Top rejection/blocker reasons', 'quality_note': 'Conflict guard active: when multiple picks come from the same event, the system keeps the strongest row by tier quality score.',
-        'robust_note': 'Pattern signals now improve adaptive confidence instead of acting only as blockers. Weak value is downgraded to B or C instead of killing the whole board.',
+        'robust_note': 'Pattern signals now improve adaptive confidence instead of acting only as blockers. Weak value and missing proof metadata are downgraded to B/C instead of killing the whole simulation board.',
     },
     'es': {
         'title': 'Modo Ultra 70 Bloqueo + Rentabilidad',
@@ -44,7 +44,7 @@ TEXT = {
         'handoff_mode': 'Modo de traspaso', 'strict_only': 'Solo A — prueba estricta 80', 'max_volume': 'A+B/B+ — Bloqueos Ultra 70 adaptativos', 'research_volume': 'A+B+C — bloqueos más vigilancia',
         'one_per_event': 'Mantener solo el mejor pick por evento', 'max_a': 'Máx filas A', 'max_b': 'Máx filas B/B+', 'max_c': 'Máx filas C',
         'saved': 'Filas seleccionadas guardadas como lista activa para Odds Lock Pro.', 'blockers': 'Principales razones de rechazo/bloqueo', 'quality_note': 'Protección de conflicto activa: cuando salen varios picks del mismo evento, el sistema conserva la fila más fuerte según el puntaje de calidad del nivel.',
-        'robust_note': 'Las señales de patrón ahora aumentan la confianza adaptativa en vez de funcionar solo como bloqueadores. El valor débil baja a B o C en vez de matar todo el tablero.',
+        'robust_note': 'Las señales de patrón ahora aumentan la confianza adaptativa. Valor débil y metadata de prueba faltante bajan a B/C en vez de matar todo el tablero de simulación.',
     },
 }
 
@@ -110,15 +110,31 @@ def source_frame() -> tuple[pd.DataFrame, str]:
 
 
 def non_hard_blocked(frame: pd.DataFrame) -> pd.Series:
+    """Return rows usable for Ultra 70 simulation tiers.
+
+    Strict-80 proof reasons such as missing event start, low API coverage, not enough books,
+    weak agent score, and missing odds source are intentionally soft here. They should lower
+    the tier or block Odds Lock Pro later, but they should not wipe out the simulation pool.
+    """
+    if frame is None or frame.empty:
+        return pd.Series(dtype=bool)
     reasons = text_series(frame, 'ultra80_reasons') + ' | ' + text_series(frame, 'decision_reasons')
-    hard_tokens = (
-        'historical_result_present', 'bad_timing', 'prediction_timestamp_not_before_start',
-        'event_already_started_without_prediction_timestamp', 'missing_event', 'missing_prediction',
-        'missing_model_probability', 'missing_decimal_price', 'blocks_draws', 'negative_line_movement',
+    hard_exact = {
+        'historical_result_present', 'missing_event', 'missing_prediction',
+        'missing_model_probability', 'missing_decimal_price', 'blocks_draws',
+    }
+    hard_contains = (
+        'prediction_timestamp_not_before_start',
+        'event_already_started_without_prediction_timestamp',
     )
     blocked = pd.Series(False, index=frame.index)
-    for token in hard_tokens:
-        blocked = blocked | reasons.str.contains(token, regex=False)
+    for idx, text in reasons.items():
+        tokens = {str(item).strip() for item in str(text).split('|') if str(item).strip()}
+        if tokens & hard_exact:
+            blocked.loc[idx] = True
+            continue
+        if any(any(fragment in token for fragment in hard_contains) for token in tokens):
+            blocked.loc[idx] = True
     return ~blocked
 
 
