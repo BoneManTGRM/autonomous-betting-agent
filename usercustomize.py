@@ -38,12 +38,12 @@ PREDICTOR_FIRST_NAV_TOOLS: tuple[tuple[str, str, str], ...] = (
 
 NAV_NOTES_EN = (
     'Workflow: Pro Predictor → Ultra 70 Profit Mode → Simulation Lab → Odds Lock Pro → Public Proof Dashboard → Learning Memory.',
-    'Start in Pro Predictor. Scanner Pro is not part of the active workflow.',
+    'Start in Pro Predictor for live searches and high-confidence rows.',
     'Use Reset Lock File only when clearing one test-window proof ledger without touching other windows.',
 )
 NAV_NOTES_ES = (
     'Flujo: Predictor Pro → Ultra 70 Profit Mode → Laboratorio de Simulación → Bloqueo de Cuotas Pro → Dashboard Público → Memoria.',
-    'Empieza en Predictor Pro. Scanner Pro no forma parte del flujo activo.',
+    'Empieza en Predictor Pro para búsquedas en vivo y filas de máxima confianza.',
     'Usa Reiniciar Archivo de Bloqueo solo para borrar un ledger de prueba sin tocar otros.',
 )
 
@@ -96,6 +96,12 @@ def _normal_language(value: object) -> str:
 
 def _lang_key(value: object) -> str:
     return 'es' if _normal_language(value) == 'Español' else 'en'
+
+
+def _clean_ui_text(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    return value.replace('Scanner Pro / ', '').replace(' / Scanner Pro', '').replace('Scanner Pro → ', '').replace('Scanner Pro', 'Pro Predictor')
 
 
 def _is_language_selector(label: Any, options: Any) -> bool:
@@ -152,9 +158,9 @@ def _install_language_and_workflow_guard() -> None:
     except Exception:
         return
 
-    if getattr(st, '_aba_language_and_workflow_guard_v2', False):
+    if getattr(st, '_aba_language_and_workflow_guard_v3', False):
         return
-    st._aba_language_and_workflow_guard_v2 = True
+    st._aba_language_and_workflow_guard_v3 = True
 
     try:
         import sitecustomize as sc
@@ -177,6 +183,14 @@ def _install_language_and_workflow_guard() -> None:
 
     real_st_selectbox = st.selectbox
     real_dg_selectbox = DeltaGenerator.selectbox
+    real_caption = st.caption
+    real_markdown = st.markdown
+    real_write = st.write
+    real_info = st.info
+    real_dg_caption = DeltaGenerator.caption
+    real_dg_markdown = DeltaGenerator.markdown
+    real_dg_write = DeltaGenerator.write
+    real_dg_info = DeltaGenerator.info
 
     def preferred_index(options: Any) -> int:
         opts = list(options)
@@ -210,8 +224,40 @@ def _install_language_and_workflow_guard() -> None:
             return value
         return real_dg_selectbox(self, label, options, *args, **kwargs)
 
+    def patched_caption(body: Any, *args: Any, **kwargs: Any) -> Any:
+        return real_caption(_clean_ui_text(body), *args, **kwargs)
+
+    def patched_markdown(body: Any, *args: Any, **kwargs: Any) -> Any:
+        return real_markdown(_clean_ui_text(body), *args, **kwargs)
+
+    def patched_write(*args: Any, **kwargs: Any) -> Any:
+        return real_write(*[_clean_ui_text(arg) for arg in args], **kwargs)
+
+    def patched_info(body: Any, *args: Any, **kwargs: Any) -> Any:
+        return real_info(_clean_ui_text(body), *args, **kwargs)
+
+    def patched_dg_caption(self: Any, body: Any, *args: Any, **kwargs: Any) -> Any:
+        return real_dg_caption(self, _clean_ui_text(body), *args, **kwargs)
+
+    def patched_dg_markdown(self: Any, body: Any, *args: Any, **kwargs: Any) -> Any:
+        return real_dg_markdown(self, _clean_ui_text(body), *args, **kwargs)
+
+    def patched_dg_write(self: Any, *args: Any, **kwargs: Any) -> Any:
+        return real_dg_write(self, *[_clean_ui_text(arg) for arg in args], **kwargs)
+
+    def patched_dg_info(self: Any, body: Any, *args: Any, **kwargs: Any) -> Any:
+        return real_dg_info(self, _clean_ui_text(body), *args, **kwargs)
+
     st.selectbox = patched_st_selectbox
     DeltaGenerator.selectbox = patched_dg_selectbox
+    st.caption = patched_caption
+    st.markdown = patched_markdown
+    st.write = patched_write
+    st.info = patched_info
+    DeltaGenerator.caption = patched_dg_caption
+    DeltaGenerator.markdown = patched_dg_markdown
+    DeltaGenerator.write = patched_dg_write
+    DeltaGenerator.info = patched_dg_info
 
 
 _install_language_and_workflow_guard()
