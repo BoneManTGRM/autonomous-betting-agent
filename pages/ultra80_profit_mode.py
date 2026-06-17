@@ -177,7 +177,7 @@ def event_key_frame(frame: pd.DataFrame) -> pd.Series:
 def limit_and_resolve_conflicts(frame: pd.DataFrame, *, tier: str, max_rows: int, one_per_event: bool) -> pd.DataFrame:
     if frame.empty:
         return frame.copy()
-    out = frame.copy()
+    out = frame.copy().drop(columns=['volume_tier', '_tier_quality_score', '_event_key'], errors='ignore')
     out.insert(0, 'volume_tier', tier)
     out['_tier_quality_score'] = quality_score(out)
     out['_event_key'] = event_key_frame(out)
