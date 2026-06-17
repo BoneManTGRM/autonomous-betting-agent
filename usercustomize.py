@@ -34,17 +34,16 @@ PREDICTOR_FIRST_NAV_TOOLS: tuple[tuple[str, str, str], ...] = (
     ('What Are the Odds', 'Cuotas y Valor', 'pages/what_are_the_odds.py'),
     ('Threshold Optimizer', 'Optimizador de Umbrales', 'pages/threshold_optimizer.py'),
     ('Reset Lock File', 'Reiniciar Archivo de Bloqueo', 'pages/reset_lock_file.py'),
-    ('Scanner Pro', 'Scanner Pro', 'pages/scanner_pro.py'),
 )
 
 NAV_NOTES_EN = (
     'Workflow: Pro Predictor → Ultra 70 Profit Mode → Simulation Lab → Odds Lock Pro → Public Proof Dashboard → Learning Memory.',
-    'Start in Pro Predictor. Scanner Pro is optional legacy/research support and is no longer the main starting point.',
+    'Start in Pro Predictor. Scanner Pro is not part of the active workflow.',
     'Use Reset Lock File only when clearing one test-window proof ledger without touching other windows.',
 )
 NAV_NOTES_ES = (
     'Flujo: Predictor Pro → Ultra 70 Profit Mode → Laboratorio de Simulación → Bloqueo de Cuotas Pro → Dashboard Público → Memoria.',
-    'Empieza en Predictor Pro. Scanner Pro queda como soporte opcional/legacy, no como punto principal.',
+    'Empieza en Predictor Pro. Scanner Pro no forma parte del flujo activo.',
     'Usa Reiniciar Archivo de Bloqueo solo para borrar un ledger de prueba sin tocar otros.',
 )
 
