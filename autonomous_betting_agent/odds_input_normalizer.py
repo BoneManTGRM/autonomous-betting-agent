@@ -159,6 +159,11 @@ def normalize_odds_input(frame: pd.DataFrame) -> pd.DataFrame:
 def install_odds_breakdown_normalizer() -> None:
     """Ensure every odds breakdown call receives canonical odds/probability fields."""
     try:
+        from .roi_ui_patch import install_roi_metric_patch
+        install_roi_metric_patch()
+    except Exception:
+        pass
+    try:
         from . import odds_breakdown
     except Exception:
         return
