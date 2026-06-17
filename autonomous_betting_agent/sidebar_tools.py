@@ -10,63 +10,91 @@ PAGES = (
     ('What Are the Odds', 'Cuotas y Valor', 'pages/what_are_the_odds.py'),
     ('Odds Lock Pro', 'Odds Lock Pro', 'pages/odds_lock_pro.py'),
     ('Public Proof Dashboard', 'Dashboard Público', 'pages/public_proof_dashboard.py'),
-    ('Reset Lock File', 'Reiniciar Archivo', 'pages/reset_lock_file.py'),
     ('Learning Memory', 'Memoria', 'pages/learn_memory.py'),
+    ('Reset Lock File', 'Reiniciar Archivo', 'pages/reset_lock_file.py'),
 )
-KEYS = ('global_language', 'pro_predictor_language', 'odds_lock_pro_language', 'public_proof_dashboard_language', 'learn_memory_language')
-CSS = '<style>@media(max-width:900px){section[data-testid="stSidebar"]{width:min(88vw,380px)!important;min-width:min(88vw,380px)!important;max-width:min(88vw,380px)!important}.block-container{padding-left:.85rem!important;padding-right:.85rem!important}}</style>'
+LANG_KEYS = (
+    'global_language', 'app_language', 'simulation_lab_language', 'pro_predictor_language',
+    'ultra80_profit_mode_language', 'odds_lock_pro_language', 'public_proof_dashboard_language',
+    'reset_lock_file_language', 'learn_memory_language', 'learning_memory_language',
+    'threshold_optimizer_language', 'what_are_the_odds_language',
+)
+CSS = '''
+<style>
+[data-testid="collapsedControl"]{z-index:999999!important;}
+@media(max-width:900px){
+section[data-testid="stSidebar"]{width:min(86vw,360px)!important;min-width:min(86vw,360px)!important;max-width:min(86vw,360px)!important;box-shadow:0 0 0 9999px rgba(0,0,0,.32)!important;}
+section[data-testid="stSidebar"] [data-testid="stSidebarContent"]{padding:.75rem .9rem!important;}
+.block-container{padding-left:.85rem!important;padding-right:.85rem!important;max-width:100vw!important;}
+}
+</style>
+'''
 
 
-def lang(value: object) -> str:
-    s = str(value or '').lower()
-    return 'Español' if s.startswith('es') or 'español' in s or 'espanol' in s else 'English'
+def _lang(value: object) -> str:
+    text = str(value or '').lower()
+    return 'Español' if text.startswith('es') or 'español' in text or 'espanol' in text else 'English'
 
 
-def is_language(label: Any, options: Any) -> bool:
+def _is_language(label: Any, options: Any) -> bool:
     try:
         opts = list(options)
     except Exception:
         return False
-    return 'English' in opts and 'Español' in opts and 'language' in str(label or '').lower()
+    label_text = str(label or '').lower()
+    return 'English' in opts and 'Español' in opts and ('language' in label_text or 'idioma' in label_text)
 
 
-def sync(st: Any, value: object) -> str:
-    l = lang(value)
-    for k in KEYS:
+def _sync_language(st: Any, value: object) -> str:
+    language = _lang(value)
+    for key in LANG_KEYS:
         try:
-            st.session_state[k] = l
+            st.session_state[key] = language
         except Exception:
             pass
-    return l
+    return language
 
 
-def brand(st: Any) -> None:
-    if st.session_state.get('_aba_sidebar_brand_fixed'):
+def _render_brand(st: Any) -> None:
+    if st.session_state.get('_aba_brand_curated_v1'):
         return
-    st.session_state['_aba_sidebar_brand_fixed'] = True
+    st.session_state['_aba_brand_curated_v1'] = True
     with st.sidebar:
         st.markdown('### :green[ABA] Signal :red[Pro]')
         st.caption('Powered by Reparodynamics')
         st.markdown('---')
 
 
-def nav(st: Any, value: object) -> None:
-    if st.session_state.get('_aba_sidebar_pages_fixed'):
+def _render_pages(st: Any, language: object) -> None:
+    if st.session_state.get('_aba_pages_curated_v1'):
         return
-    st.session_state['_aba_sidebar_pages_fixed'] = True
-    l = lang(value)
+    st.session_state['_aba_pages_curated_v1'] = True
+    language = _lang(language)
     with st.sidebar:
-        st.markdown('### Herramientas' if l == 'Español' else '### Pages')
-        for en, es, path in PAGES:
+        st.markdown('### Herramientas' if language == 'Español' else '### Pages')
+        for english, spanish, path in PAGES:
             try:
-                st.page_link(path, label=es if l == 'Español' else en)
+                st.page_link(path, label=spanish if language == 'Español' else english)
             except Exception:
-                st.caption(es if l == 'Español' else en)
+                st.caption(spanish if language == 'Español' else english)
         st.markdown('---')
-        st.markdown('### Flujo' if l == 'Español' else '### Workflow')
-        notes = ('Predictor Pro → Máxima Confianza → Odds Lock Pro → Dashboard Público → Memoria.', 'Picks bloqueados y ROI viven en Odds Lock Pro / Dashboard Público.') if l == 'Español' else ('Pro Predictor → Highest Confidence → Odds Lock Pro → Public Proof Dashboard → Learning Memory.', 'Locked picks and ROI live in Odds Lock Pro / Public Proof Dashboard.')
+        st.markdown('### Flujo' if language == 'Español' else '### Workflow')
+        notes = (
+            ('Predictor Pro → Máxima Confianza → Odds Lock Pro → Dashboard Público → Memoria.',
+             'Odds Lock Pro bloquea picks con timestamp; Dashboard Público muestra ROI y resultados.')
+            if language == 'Español'
+            else
+            ('Pro Predictor → Highest Confidence → Odds Lock Pro → Public Proof Dashboard → Learning Memory.',
+             'Odds Lock Pro timestamps locked picks; Public Proof Dashboard shows ROI and results.')
+        )
         for note in notes:
             st.caption(note)
+
+
+def _render_after_language(st: Any, value: object) -> object:
+    language = _sync_language(st, value)
+    _render_pages(st, language)
+    return value
 
 
 def install_sidebar_tools() -> None:
@@ -75,41 +103,77 @@ def install_sidebar_tools() -> None:
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, '_aba_sidebar_tools_fixed_v1', False):
+    if getattr(st, '_aba_curated_sidebar_installed_v1', False):
         return
-    st._aba_sidebar_tools_fixed_v1 = True
-    old_config = st.set_page_config
-    old_markdown = st.markdown
-    old_radio = getattr(DeltaGenerator, 'radio', None)
-    old_select = DeltaGenerator.selectbox
+    st._aba_curated_sidebar_installed_v1 = True
 
-    def config(*args: Any, **kwargs: Any) -> Any:
+    old_set_page_config = st.set_page_config
+    old_markdown = st.markdown
+    old_st_radio = st.radio
+    old_st_selectbox = st.selectbox
+    old_sidebar_radio = st.sidebar.radio
+    old_sidebar_selectbox = st.sidebar.selectbox
+    old_dg_radio = getattr(DeltaGenerator, 'radio', None)
+    old_dg_selectbox = DeltaGenerator.selectbox
+
+    def page_config(*args: Any, **kwargs: Any) -> Any:
         kwargs.setdefault('initial_sidebar_state', 'expanded')
-        out = old_config(*args, **kwargs)
+        out = old_set_page_config(*args, **kwargs)
         try:
             old_markdown(CSS, unsafe_allow_html=True)
-            brand(st)
+            _render_brand(st)
         except Exception:
             pass
         return out
 
-    def radio(self: Any, label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
-        if is_language(label, options):
-            brand(st)
-            value = old_radio(self, label, options, *args, **kwargs) if old_radio is not None else st.radio(label, options, *args, **kwargs)
-            nav(st, sync(st, value))
-            return value
-        return old_radio(self, label, options, *args, **kwargs) if old_radio is not None else st.radio(label, options, *args, **kwargs)
+    def sidebar_radio(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
+        if _is_language(label, options):
+            _render_brand(st)
+            value = old_sidebar_radio(label, options, *args, **kwargs)
+            return _render_after_language(st, value)
+        return old_sidebar_radio(label, options, *args, **kwargs)
 
-    def select(self: Any, label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
-        if is_language(label, options):
-            brand(st)
-            value = old_select(self, label, options, *args, **kwargs)
-            nav(st, sync(st, value))
-            return value
-        return old_select(self, label, options, *args, **kwargs)
+    def sidebar_selectbox(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
+        if _is_language(label, options):
+            _render_brand(st)
+            value = old_sidebar_selectbox(label, options, *args, **kwargs)
+            return _render_after_language(st, value)
+        return old_sidebar_selectbox(label, options, *args, **kwargs)
 
-    st.set_page_config = config
-    if old_radio is not None:
-        DeltaGenerator.radio = radio
-    DeltaGenerator.selectbox = select
+    def st_radio(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
+        value = old_st_radio(label, options, *args, **kwargs)
+        if _is_language(label, options):
+            _render_after_language(st, value)
+        return value
+
+    def st_selectbox(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
+        value = old_st_selectbox(label, options, *args, **kwargs)
+        if _is_language(label, options):
+            _render_after_language(st, value)
+        return value
+
+    def dg_radio(self: Any, label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
+        if _is_language(label, options):
+            _render_brand(st)
+            value = old_dg_radio(self, label, options, *args, **kwargs) if old_dg_radio else old_st_radio(label, options, *args, **kwargs)
+            return _render_after_language(st, value)
+        return old_dg_radio(self, label, options, *args, **kwargs) if old_dg_radio else old_st_radio(label, options, *args, **kwargs)
+
+    def dg_selectbox(self: Any, label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
+        if _is_language(label, options):
+            _render_brand(st)
+            value = old_dg_selectbox(self, label, options, *args, **kwargs)
+            return _render_after_language(st, value)
+        return old_dg_selectbox(self, label, options, *args, **kwargs)
+
+    st.set_page_config = page_config
+    st.radio = st_radio
+    st.selectbox = st_selectbox
+    try:
+        st.sidebar.radio = sidebar_radio
+        st.sidebar.selectbox = sidebar_selectbox
+    except Exception:
+        pass
+    if old_dg_radio:
+        DeltaGenerator.radio = dg_radio
+    DeltaGenerator.selectbox = dg_selectbox

@@ -1,4 +1,4 @@
-# deploy trigger: restore-pages
+# deploy trigger: curated-sidebar-v1
 [server]
 headless = true
 
@@ -6,5 +6,5 @@ headless = true
 gatherUsageStats = false
 
 [client]
-showSidebarNavigation = true
+showSidebarNavigation = false
 toolbarMode = "minimal"
