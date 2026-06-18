@@ -21,6 +21,14 @@ def test_curated_sidebar_uses_signal_board_and_renders_links() -> None:
     assert 'render_curated_sidebar(st,' in sitecustomize
 
 
+def test_sitecustomize_skips_streamlit_hooks_in_ci() -> None:
+    text = (repo_root() / 'sitecustomize.py').read_text(encoding='utf-8')
+    assert "def _running_in_ci()" in text
+    assert "os.getenv('CI'" in text
+    assert "os.getenv('GITHUB_ACTIONS'" in text
+    assert 'if _running_in_ci()' in text
+
+
 def test_pro_predictor_default_patch_values() -> None:
     from autonomous_betting_agent.pro_predictor_defaults_patch import MULTI_DEFAULTS, NUMBER_DEFAULTS, PROFILE_VALUES
 
