@@ -2,9 +2,9 @@ area,area_type,group_value,records,avg_predicted,actual_hit_rate,actual_minus_pr
 Sport: ATP Halle Open,sport,ATP Halle Open,10,0.67,0.5,-0.17,0.575556,-0.094444,0.502377,0.2789,sport,0.076798,lower_trust
 ATP Halle Open / 60-70%,sport_probability_bucket,ATP Halle Open|60-70%,10,0.67,0.5,-0.17,0.575556,-0.094444,0.502377,0.2789,sport_probability_bucket,0.076798,lower_trust
 ATP Halle Open / estimated_score,sport_market,ATP Halle Open|estimated_score,10,0.67,0.5,-0.17,0.575556,-0.094444,0.502377,0.2789,sport_market,0.076798,lower_trust
-Probability bucket: 60-70%,probability_bucket,60-70%,56,0.67,0.696429,0.026429,0.693125,0.023125,0.8144,0.212114,probability_bucket,0.04625,watch
-Probability source: fallback_high_confidence,probability_source,fallback_high_confidence,56,0.67,0.696429,0.026429,0.693125,0.023125,0.8144,0.212114,probability_source,0.04625,watch
-Market: estimated_score,market_type,estimated_score,56,0.67,0.696429,0.026429,0.693125,0.023125,0.8144,0.212114,market_type,0.04625,watch
+Probability bucket: 60-70%,probability_bucket,60-70%,58,0.67,0.706897,0.036897,0.702424,0.032424,0.817514,0.208555,probability_bucket,0.064848,watch
+Probability source: fallback_high_confidence,probability_source,fallback_high_confidence,58,0.67,0.706897,0.036897,0.702424,0.032424,0.817514,0.208555,probability_source,0.064848,watch
+Market: estimated_score,market_type,estimated_score,58,0.67,0.706897,0.036897,0.702424,0.032424,0.817514,0.208555,market_type,0.064848,watch
 Sport: WNBA,sport,WNBA,6,0.67,0.833333,0.163333,0.74,0.07,0.526822,0.165567,sport,0.041573,raise_trust
 WNBA / 60-70%,sport_probability_bucket,WNBA|60-70%,6,0.67,0.833333,0.163333,0.74,0.07,0.526822,0.165567,sport_probability_bucket,0.041573,raise_trust
 WNBA / estimated_score,sport_market,WNBA|estimated_score,6,0.67,0.833333,0.163333,0.74,0.07,0.526822,0.165567,sport_market,0.041573,raise_trust
