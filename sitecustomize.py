@@ -51,20 +51,31 @@ def _install_sidebar_fallback() -> None:
         from autonomous_betting_agent.sidebar_nav import APP_TAGLINE, SIDEBAR_CSS, normalize_language, render_tools_only
     except Exception:
         return
-    if getattr(st, '_aba_sidebar_fallback_v12', False):
+    if getattr(st, '_aba_sidebar_fallback_v13', False):
         return
 
     original_sidebar_radio = st.sidebar.radio
     original_sidebar_selectbox = st.sidebar.selectbox
+    original_sidebar_text_input = st.sidebar.text_input
+    original_sidebar_caption = st.sidebar.caption
     original_dg_radio = DeltaGenerator.radio
     original_dg_selectbox = DeltaGenerator.selectbox
+    original_dg_text_input = DeltaGenerator.text_input
+    original_dg_caption = DeltaGenerator.caption
+
+    def _shared_language() -> str:
+        for key in ('global_language', 'pro_predictor_language', 'signal_board_language', 'odds_lock_pro_language'):
+            value = st.session_state.get(key)
+            if value in ('English', 'Español'):
+                return value
+        return 'English'
 
     def _draw_prefix() -> None:
-        if st.session_state.get('_aba_sidebar_rendered_v12'):
+        if st.session_state.get('_aba_sidebar_rendered_v13'):
             return
         try:
             with st.sidebar:
-                st.session_state['_aba_sidebar_rendered_v12'] = True
+                st.session_state['_aba_sidebar_rendered_v13'] = True
                 st.markdown(SIDEBAR_CSS, unsafe_allow_html=True)
                 st.markdown('### :green[ABA] Signal :red[Pro]')
                 st.caption(APP_TAGLINE)
@@ -73,54 +84,78 @@ def _install_sidebar_fallback() -> None:
             pass
 
     def _draw_tools(value: Any) -> None:
-        if st.session_state.get('_aba_sidebar_tools_rendered_v12'):
+        if st.session_state.get('_aba_sidebar_tools_rendered_v13'):
             return
         try:
             with st.sidebar:
-                st.session_state['_aba_sidebar_tools_rendered_v12'] = True
+                st.session_state['_aba_sidebar_tools_rendered_v13'] = True
                 render_tools_only(st, normalize_language(value))
         except Exception:
             pass
 
-    def sidebar_radio(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
-        if _is_language_widget(label, options) and not st.session_state.get('_aba_sidebar_rendered_v12'):
-            _draw_prefix()
-            kwargs['horizontal'] = True
+    def _handle_language_widget(label: Any, options: Any, *args: Any, original: Any, self_obj: Any = None, **kwargs: Any) -> Any:
+        if not _is_language_widget(label, options):
+            if self_obj is None:
+                return original(label, options, *args, **kwargs)
+            return original(self_obj, label, options, *args, **kwargs)
+        if st.session_state.get('_aba_sidebar_rendered_v13') or st.session_state.get('_aba_sidebar_rendered_v12'):
+            return _shared_language()
+        _draw_prefix()
+        kwargs['horizontal'] = True
+        if self_obj is None:
             value = original_sidebar_radio('Language', options, *args, **kwargs)
-            _draw_tools(value)
-            return value
-        return original_sidebar_radio(label, options, *args, **kwargs)
+        else:
+            value = original_dg_radio(self_obj, 'Language', options, *args, **kwargs)
+        _draw_tools(value)
+        return value
+
+    def sidebar_radio(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
+        return _handle_language_widget(label, options, *args, original=original_sidebar_radio, **kwargs)
 
     def sidebar_selectbox(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
-        if _is_language_widget(label, options) and not st.session_state.get('_aba_sidebar_rendered_v12'):
-            _draw_prefix()
-            value = original_sidebar_radio('Language', options, *args, horizontal=True, **kwargs)
-            _draw_tools(value)
-            return value
-        return original_sidebar_selectbox(label, options, *args, **kwargs)
+        return _handle_language_widget(label, options, *args, original=original_sidebar_selectbox, **kwargs)
 
     def dg_radio(self: Any, label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
-        if _is_language_widget(label, options) and not st.session_state.get('_aba_sidebar_rendered_v12'):
-            _draw_prefix()
-            kwargs['horizontal'] = True
-            value = original_dg_radio(self, 'Language', options, *args, **kwargs)
-            _draw_tools(value)
-            return value
-        return original_dg_radio(self, label, options, *args, **kwargs)
+        return _handle_language_widget(label, options, *args, original=original_dg_radio, self_obj=self, **kwargs)
 
     def dg_selectbox(self: Any, label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
-        if _is_language_widget(label, options) and not st.session_state.get('_aba_sidebar_rendered_v12'):
-            _draw_prefix()
-            value = original_dg_radio(self, 'Language', options, *args, horizontal=True, **kwargs)
-            _draw_tools(value)
-            return value
-        return original_dg_selectbox(self, label, options, *args, **kwargs)
+        return _handle_language_widget(label, options, *args, original=original_dg_selectbox, self_obj=self, **kwargs)
+
+    def _is_test_window_label(label: Any) -> bool:
+        text = str(label or '').strip().lower()
+        return text in {'test window id', 'id de ventana de prueba'}
+
+    def sidebar_text_input(label: Any, *args: Any, **kwargs: Any) -> Any:
+        if _is_test_window_label(label):
+            return st.session_state.get(kwargs.get('key') or 'aba_test_window_id', kwargs.get('value', 'test_01'))
+        return original_sidebar_text_input(label, *args, **kwargs)
+
+    def dg_text_input(self: Any, label: Any, *args: Any, **kwargs: Any) -> Any:
+        if _is_test_window_label(label):
+            return st.session_state.get(kwargs.get('key') or 'aba_test_window_id', kwargs.get('value', 'test_01'))
+        return original_dg_text_input(self, label, *args, **kwargs)
+
+    def sidebar_caption(body: Any, *args: Any, **kwargs: Any) -> Any:
+        text = str(body or '').lower()
+        if text.startswith('active test ledger') or text.startswith('ledger de prueba activo'):
+            return st.empty()
+        return original_sidebar_caption(body, *args, **kwargs)
+
+    def dg_caption(self: Any, body: Any, *args: Any, **kwargs: Any) -> Any:
+        text = str(body or '').lower()
+        if text.startswith('active test ledger') or text.startswith('ledger de prueba activo'):
+            return self.empty()
+        return original_dg_caption(self, body, *args, **kwargs)
 
     st.sidebar.radio = sidebar_radio
     st.sidebar.selectbox = sidebar_selectbox
+    st.sidebar.text_input = sidebar_text_input
+    st.sidebar.caption = sidebar_caption
     DeltaGenerator.radio = dg_radio
     DeltaGenerator.selectbox = dg_selectbox
-    st._aba_sidebar_fallback_v12 = True
+    DeltaGenerator.text_input = dg_text_input
+    DeltaGenerator.caption = dg_caption
+    st._aba_sidebar_fallback_v13 = True
 
 
 def _install_runtime_helpers() -> None:
