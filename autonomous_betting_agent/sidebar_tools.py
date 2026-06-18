@@ -14,9 +14,9 @@ PAGES = (
     ('Reset Lock File', 'Reiniciar Archivo de Bloqueo', 'pages/reset_lock_file.py'),
 )
 LANG_KEYS = ('global_language','app_language','pro_predictor_language','ultra80_profit_mode_language','simulation_lab_language','threshold_optimizer_language','what_are_the_odds_language','what_are_the_odds_pro_language','odds_lock_pro_language','public_proof_dashboard_language','reset_lock_file_language','learn_memory_language','learning_memory_language')
-BRAND_RENDERED_KEY = '_aba_sidebar_brand_once_v24'
-PAGES_RENDERED_KEY = '_aba_sidebar_pages_once_v24'
-SIDEBAR_CALL_ACTIVE_KEY = '_aba_sidebar_language_active_v24'
+BRAND_RENDERED_KEY = '_aba_sidebar_brand_once_v25'
+PAGES_RENDERED_KEY = '_aba_sidebar_pages_once_v25'
+SIDEBAR_CALL_ACTIVE_KEY = '_aba_sidebar_language_active_v25'
 CSS = '''
 <style>
 [data-testid="stSidebarNav"],section[data-testid="stSidebar"] [data-testid="stSidebarNav"],section[data-testid="stSidebar"] nav[aria-label="Page navigation"],section[data-testid="stSidebar"] nav[aria-label="pages"],section[data-testid="stSidebar"] nav[aria-label="Pages"]{display:none!important;height:0!important;max-height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;}
@@ -89,7 +89,7 @@ def render_sidebar_brand(st: Any) -> None:
         return
     inject_sidebar_css(st)
     with st.sidebar:
-        st.markdown('<div class="aba-sidebar-brand"><span class="aba-brand-green">ABA</span> <span class="aba-brand-white">Signal</span> <span class="aba-brand-red">Pro</span></div>', unsafe_allow_html=True)
+        st.markdown('<div class="aba-sidebar-brand"><span class="aba-brand-green">ARA</span> <span class="aba-brand-white">Signal</span> <span class="aba-brand-red">Pro</span></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="aba-sidebar-tagline">{APP_TAGLINE}</div>', unsafe_allow_html=True)
 
 
@@ -123,9 +123,9 @@ def install_sidebar_tools() -> None:
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, '_aba_sidebar_tools_installed_v24', False):
+    if getattr(st, '_aba_sidebar_tools_installed_v25', False):
         return
-    st._aba_sidebar_tools_installed_v24 = True
+    st._aba_sidebar_tools_installed_v25 = True
     real_config = st.set_page_config
     real_md = st.markdown
     real_side_radio = st.sidebar.radio
