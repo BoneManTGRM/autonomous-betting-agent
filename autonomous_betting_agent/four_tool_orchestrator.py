@@ -180,8 +180,8 @@ def page_health(frame: pd.DataFrame | list[dict[str, Any]], *, page: str) -> dic
         next_action = 'send_to_pro_predictor' if status == 'ready_for_pro_predictor' else 'rescan_with_more_books_or_sport_keys'
     elif page_key == 'pro_predictor':
         blockers = _missing_requirements(normalized, PREDICTOR_REQUIREMENTS)
-        status = 'ready_for_ultra80_or_value_review' if predictor_coverage >= 0.80 else 'needs_prediction_fields'
-        next_action = 'send_to_ultra80_profit_mode' if status == 'ready_for_ultra80_or_value_review' else 'rerun_with_odds_and_event_times'
+        status = 'ready_for_what_are_the_odds' if predictor_coverage >= 0.80 else 'needs_prediction_fields'
+        next_action = 'send_to_what_are_the_odds' if status == 'ready_for_what_are_the_odds' else 'rerun_with_odds_and_event_times'
     elif page_key == 'ultra80_profit_mode':
         blockers = _missing_requirements(normalized, ULTRA80_REQUIREMENTS)
         status = 'ready_for_odds_lock_pro' if ultra80 > 0 and ultra80_coverage >= 0.80 else 'no_ultra80_rows_ready'
@@ -239,8 +239,25 @@ def page_health(frame: pd.DataFrame | list[dict[str, Any]], *, page: str) -> dic
         'avg_agent_score': avg_agent_score,
         'avg_scanner_strength': avg_scanner_strength,
         'missing_or_blocking_fields': blockers,
+        'blockers': blockers,
     }
 
 
 def page_health_frame(frame: pd.DataFrame | list[dict[str, Any]], *, page: str) -> pd.DataFrame:
     return pd.DataFrame([page_health(frame, page=page)])
+
+
+def four_tool_recommendation(frame: pd.DataFrame | list[dict[str, Any]]) -> str:
+    learning = page_health(frame, page='learning_memory')
+    if learning['status'] in {'ready_to_train_strongly', 'ready_to_train_with_sample_warning'}:
+        return 'learning_memory'
+    value = page_health(frame, page='what_are_the_odds')
+    if value['status'] == 'ready_for_lock_or_learning':
+        return 'odds_lock_pro' if value.get('lock_ready_rows', 0) else 'what_are_the_odds'
+    predictor = page_health(frame, page='pro_predictor')
+    if predictor['status'] == 'ready_for_what_are_the_odds':
+        return 'what_are_the_odds'
+    scanner = page_health(frame, page='scanner_pro')
+    if scanner['status'] == 'ready_for_pro_predictor':
+        return 'pro_predictor'
+    return 'review_manually'
