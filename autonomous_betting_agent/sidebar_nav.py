@@ -61,13 +61,12 @@ def render_app_sidebar(page_key: str, *, language_key: str | None = None, select
     current = _current_language(st)
     index = 1 if current == 'Español' else 0
     with st.sidebar:
+        st._aba_sidebar_explicit_rendering = True
         st.markdown('### :green[ABA] Signal :red[Pro]')
         st.caption(APP_TAGLINE)
         st.markdown('---')
-        if selector == 'selectbox':
-            value = st.selectbox('Language / Idioma', ['English', 'Español'], index=index, key=key)
-        else:
-            value = st.radio('Language', ['English', 'Español'], index=index, key=key, horizontal=True)
+        value = st.radio('Language', ['English', 'Español'], index=index, key=key, horizontal=True)
+        st._aba_sidebar_explicit_rendering = False
         _sync_language(st, value, current_key=key)
         lang = normalize_language(value)
         st.markdown('---')
