@@ -152,6 +152,14 @@ def _sync_held_picks(st: Any) -> None:
                 pass
 
 
+def _install_extra_runtime_patches() -> None:
+    try:
+        from .direct_pick_lock_patch import install_direct_pick_lock_patch
+        install_direct_pick_lock_patch()
+    except Exception:
+        pass
+
+
 def install_streamlit_local_user_selector() -> None:
     try:
         import streamlit as st
@@ -159,6 +167,7 @@ def install_streamlit_local_user_selector() -> None:
         return
     _install_profile_control_defaults(st)
     _sync_held_picks(st)
+    _install_extra_runtime_patches()
     if st.session_state.get('_local_user_selector_rendered'):
         return
     st.session_state['_local_user_selector_rendered'] = True
