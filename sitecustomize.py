@@ -4,6 +4,19 @@ import builtins
 import os
 from typing import Any
 
+APP_NAME = 'ABA Signal Pro'
+APP_TAGLINE = 'Powered by Reparodynamics'
+LANGUAGE_KEYS = [
+    'global_language',
+    'pro_predictor_language',
+    'signal_board_language',
+    'threshold_optimizer_language',
+    'what_are_the_odds_language',
+    'odds_lock_pro_language',
+    'public_proof_dashboard_language',
+    'learning_memory_language',
+]
+
 
 def get_secret(*names: str) -> str:
     try:
@@ -48,23 +61,55 @@ def _is_language_widget(label: Any, options: Any) -> bool:
     return 'English' in values and 'Español' in values and ('language' in text or 'idioma' in text)
 
 
-def _render_page_links(st: Any) -> None:
-    if st.session_state.get('_aba_sidebar_page_links_rendered_v4'):
+def _shared_language(st: Any) -> str:
+    for key in LANGUAGE_KEYS:
+        value = st.session_state.get(key)
+        if value in ('English', 'Español'):
+            return value
+    return 'English'
+
+
+def _prepare_language_kwargs(st: Any, options: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
+    try:
+        values = list(options)
+    except Exception:
+        return kwargs
+    if 'index' not in kwargs and 'English' in values and 'Español' in values:
+        current = _shared_language(st)
+        if current in values:
+            kwargs = dict(kwargs)
+            kwargs['index'] = values.index(current)
+    return kwargs
+
+
+def _sync_language(st: Any, value: Any) -> None:
+    if value not in ('English', 'Español'):
         return
-    st.session_state['_aba_sidebar_page_links_rendered_v4'] = True
+    for key in LANGUAGE_KEYS:
+        try:
+            st.session_state[key] = value
+        except Exception:
+            pass
+
+
+def _render_page_links(st: Any) -> None:
+    if st.session_state.get('_aba_sidebar_page_links_rendered_v5'):
+        return
+    st.session_state['_aba_sidebar_page_links_rendered_v5'] = True
     pages = [
         ('Signal Board', 'pages/signal_board.py'),
         ('Pro Predictor', 'pages/pro_predictor.py'),
-        ('Simulation Lab', 'pages/simulation_lab.py'),
         ('Threshold Optimizer', 'pages/threshold_optimizer.py'),
         ('What Are the Odds', 'pages/what_are_the_odds.py'),
         ('Odds Lock Pro', 'pages/odds_lock_pro.py'),
         ('Public Proof Dashboard', 'pages/public_proof_dashboard.py'),
         ('Learning Memory', 'pages/learn_memory.py'),
-        ('Reset Lock File', 'pages/reset_lock_file.py'),
     ]
     try:
         with st.sidebar:
+            st.markdown('---')
+            st.markdown('### :green[ABA] Signal :red[Pro]')
+            st.caption(APP_TAGLINE)
             st.markdown('---')
             st.markdown('### Tools')
             for label, path in pages:
@@ -84,7 +129,7 @@ def _install_sidebar_page_links() -> None:
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, '_aba_sidebar_page_links_patch_v4', False):
+    if getattr(st, '_aba_sidebar_page_links_patch_v5', False):
         return
 
     original_sidebar_radio = st.sidebar.radio
@@ -93,26 +138,42 @@ def _install_sidebar_page_links() -> None:
     original_dg_selectbox = DeltaGenerator.selectbox
 
     def sidebar_radio(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
+        language_widget = _is_language_widget(label, options)
+        if language_widget:
+            kwargs = _prepare_language_kwargs(st, options, kwargs)
         value = original_sidebar_radio(label, options, *args, **kwargs)
-        if _is_language_widget(label, options):
+        if language_widget:
+            _sync_language(st, value)
             _render_page_links(st)
         return value
 
     def sidebar_selectbox(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
+        language_widget = _is_language_widget(label, options)
+        if language_widget:
+            kwargs = _prepare_language_kwargs(st, options, kwargs)
         value = original_sidebar_selectbox(label, options, *args, **kwargs)
-        if _is_language_widget(label, options):
+        if language_widget:
+            _sync_language(st, value)
             _render_page_links(st)
         return value
 
     def dg_radio(self: Any, label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
+        language_widget = _is_language_widget(label, options)
+        if language_widget:
+            kwargs = _prepare_language_kwargs(st, options, kwargs)
         value = original_dg_radio(self, label, options, *args, **kwargs)
-        if _is_language_widget(label, options):
+        if language_widget:
+            _sync_language(st, value)
             _render_page_links(st)
         return value
 
     def dg_selectbox(self: Any, label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
+        language_widget = _is_language_widget(label, options)
+        if language_widget:
+            kwargs = _prepare_language_kwargs(st, options, kwargs)
         value = original_dg_selectbox(self, label, options, *args, **kwargs)
-        if _is_language_widget(label, options):
+        if language_widget:
+            _sync_language(st, value)
             _render_page_links(st)
         return value
 
@@ -120,7 +181,7 @@ def _install_sidebar_page_links() -> None:
     st.sidebar.selectbox = sidebar_selectbox
     DeltaGenerator.radio = dg_radio
     DeltaGenerator.selectbox = dg_selectbox
-    st._aba_sidebar_page_links_patch_v4 = True
+    st._aba_sidebar_page_links_patch_v5 = True
 
 
 def _install_streamlit_content_guards() -> None:
