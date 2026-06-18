@@ -2,29 +2,28 @@ from __future__ import annotations
 
 from typing import Any
 
+APP_TAGLINE = 'Powered by Reparodynamics'
+LANGUAGE_KEYS = [
+    'global_language',
+    'signal_board_language',
+    'pro_predictor_language',
+    'threshold_optimizer_language',
+    'what_are_the_odds_language',
+    'odds_lock_pro_language',
+    'public_proof_dashboard_language',
+    'learning_memory_language',
+    'simulation_lab_language',
+]
 TOOLS: tuple[tuple[str, str, str], ...] = (
-    ('Scanner Pro', 'Scanner Pro', 'pages/scanner_pro.py'),
+    ('Signal Board', 'Signal Board', 'pages/signal_board.py'),
     ('Pro Predictor', 'Predictor Pro', 'pages/pro_predictor.py'),
-    ('Ultra 80 Profit Mode', 'Modo Ultra 80 Rentable', 'pages/ultra80_profit_mode.py'),
     ('Simulation Lab', 'Laboratorio de Simulación', 'pages/simulation_lab.py'),
-    ('Threshold Optimizer', 'Optimizador de Umbrales', 'pages/threshold_optimizer.py'),
-    ('What Are the Odds', 'Cuotas y Valor', 'pages/what_are_the_odds.py'),
-    ('Odds Lock Pro', 'Bloqueo de Cuotas Pro', 'pages/odds_lock_pro.py'),
+    ('Threshold Optimizer', 'Optimizador de Umbral', 'pages/threshold_optimizer.py'),
+    ('What Are the Odds', 'What Are the Odds', 'pages/what_are_the_odds.py'),
+    ('Odds Lock Pro', 'Odds Lock Pro', 'pages/odds_lock_pro.py'),
     ('Public Proof Dashboard', 'Dashboard Público de Prueba', 'pages/public_proof_dashboard.py'),
-    ('Reset Lock File', 'Reiniciar Archivo de Bloqueo', 'pages/reset_lock_file.py'),
     ('Learning Memory', 'Memoria de Aprendizaje', 'pages/learn_memory.py'),
 )
-
-NOTES = {
-    'en': (
-        'Workflow: Scanner Pro → Pro Predictor → Ultra 80 Profit Mode → Simulation Lab → Odds Lock Pro → Public Proof Dashboard → Threshold Optimizer → Learning Memory.',
-        'Use Reset Lock File to clear one test-window proof ledger without touching other test windows.',
-    ),
-    'es': (
-        'Flujo: Scanner Pro → Predictor Pro → Modo Ultra 80 Rentable → Laboratorio de Simulación → Bloqueo de Cuotas Pro → Dashboard Público de Prueba → Optimizador de Umbrales → Memoria de Aprendizaje.',
-        'Usa Reiniciar Archivo de Bloqueo para borrar el ledger de una ventana de prueba sin tocar las demás.',
-    ),
-}
 
 
 def normalize_language(value: Any) -> str:
@@ -34,27 +33,57 @@ def normalize_language(value: Any) -> str:
     return 'en'
 
 
-def render_sidebar_nav(language: Any = 'en', *, show_workflow: bool = True) -> None:
-    """Render stable navigation links directly on every page.
+def _current_language(st: Any) -> str:
+    for key in LANGUAGE_KEYS:
+        value = st.session_state.get(key)
+        if value in ('English', 'Español'):
+            return value
+    return 'English'
 
-    This does not rely on Streamlit's native multipage sidebar or a startup hook,
-    so it works on Streamlit Cloud/mobile even when sitecustomize is not loaded.
-    """
-    try:
-        import streamlit as st
-    except Exception:
-        return
+
+def _sync_language(st: Any, value: str) -> None:
+    if value not in ('English', 'Español'):
+        value = 'English'
+    for key in LANGUAGE_KEYS:
+        st.session_state[key] = value
+
+
+def render_app_sidebar(page_key: str, *, language_key: str | None = None, selector: str = 'radio') -> str:
+    import streamlit as st
+
+    key = language_key or f'{page_key}_language'
+    current = _current_language(st)
+    index = 1 if current == 'Español' else 0
+    with st.sidebar:
+        st.markdown('### :green[ABA] Signal :red[Pro]')
+        st.caption(APP_TAGLINE)
+        st.markdown('---')
+        if selector == 'selectbox':
+            value = st.selectbox('Language / Idioma', ['English', 'Español'], index=index, key=key)
+        else:
+            value = st.radio('Language', ['English', 'Español'], index=index, key=key, horizontal=True)
+        _sync_language(st, value)
+        lang = normalize_language(value)
+        st.markdown('---')
+        st.markdown('### ' + ('Herramientas' if lang == 'es' else 'Tools'))
+        for english, spanish, path in TOOLS:
+            label = spanish if lang == 'es' else english
+            try:
+                st.page_link(path, label=label)
+            except Exception:
+                st.caption(label)
+    return lang
+
+
+def render_sidebar_nav(language: Any = 'en', *, show_workflow: bool = False) -> None:
+    import streamlit as st
+
     lang = normalize_language(language)
     st.sidebar.markdown('---')
-    st.sidebar.markdown('### Herramientas' if lang == 'es' else '### Tools')
+    st.sidebar.markdown('### ' + ('Herramientas' if lang == 'es' else 'Tools'))
     for english, spanish, path in TOOLS:
         label = spanish if lang == 'es' else english
         try:
             st.sidebar.page_link(path, label=label)
         except Exception:
             st.sidebar.caption(label)
-    if show_workflow:
-        st.sidebar.markdown('---')
-        st.sidebar.markdown('### Flujo' if lang == 'es' else '### Workflow')
-        for note in NOTES[lang]:
-            st.sidebar.caption(note)
