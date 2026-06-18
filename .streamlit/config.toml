@@ -1,4 +1,4 @@
-# deploy trigger: hide-native-nav-keep-custom-sidebar-v1
+# deploy trigger: enable-native-nav-signal-board-v2
 [server]
 headless = true
 
@@ -6,6 +6,6 @@ headless = true
 gatherUsageStats = false
 
 [client]
-# Native Streamlit file discovery lists every page in /pages. Keep it off.
-showSidebarNavigation = false
+# Required for st.navigation(..., position='sidebar') to render the page list.
+showSidebarNavigation = true
 toolbarMode = "minimal"
