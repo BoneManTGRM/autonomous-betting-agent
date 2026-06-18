@@ -10,23 +10,21 @@ try:
 except Exception:
     install_memory_read_merge = None  # type: ignore[assignment]
 
-try:
-    from autonomous_betting_agent.sidebar_tools import install_sidebar_tools
-    install_sidebar_tools()
-except Exception:
-    pass
-
 APP_NAME = 'ABA Signal Pro'
 APP_TAGLINE = 'Powered by Reparodynamics'
-APP_BUILD = 'stable-sidebar-shell-v3-signal-board'
+APP_BUILD = 'stable-native-sidebar-v1-signal-board'
 REPO_ROOT = Path(__file__).resolve().parent
 REPO_MEMORY_PATH = REPO_ROOT / 'data' / 'ara_permanent_learning_memory.csv'
 
 _REAL_SET_PAGE_CONFIG = st.set_page_config
-_REAL_SET_PAGE_CONFIG(page_title=APP_NAME, layout='wide', initial_sidebar_state='collapsed')
+_REAL_SET_PAGE_CONFIG(page_title=APP_NAME, layout='wide', initial_sidebar_state='expanded')
 
-# Child pages call set_page_config. The shell owns the page config to prevent conflicts.
+# Child pages call set_page_config. The shell owns page config to prevent conflicts.
 st.set_page_config = lambda *args, **kwargs: None
+
+st.sidebar.markdown('### :green[ABA] Signal :red[Pro]')
+st.sidebar.caption(APP_TAGLINE)
+st.sidebar.markdown('---')
 
 CORE_PAGES = [
     st.Page('pages/signal_board.py', title='Signal Board'),
@@ -68,8 +66,7 @@ if install_memory_read_merge is not None:
 install_report_branding()
 
 try:
-    # Hidden routing prevents Streamlit's automatic giant /pages file list.
-    page = st.navigation(CORE_PAGES, position='hidden')
+    page = st.navigation(CORE_PAGES, position='sidebar', expanded=True)
     page.run()
 except AttributeError:
     import pages.signal_board  # noqa: F401,E402
