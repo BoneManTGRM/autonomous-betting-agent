@@ -39,14 +39,12 @@ def _is_orphan_workflow_heading(body: Any) -> bool:
     return cleaned in {'workflow', 'flujo de trabajo'}
 
 
-def _install_all_runtime_hooks() -> None:
+def _install_streamlit_content_guards() -> None:
     if _running_in_ci():
         return
     try:
         import streamlit as st
         from streamlit.delta_generator import DeltaGenerator
-        from autonomous_betting_agent import sidebar_tools
-        sidebar_tools.install_sidebar_tools()
 
         real_st_subheader = st.subheader
         real_sidebar_subheader = st.sidebar.subheader
@@ -133,26 +131,12 @@ def _install_all_runtime_hooks() -> None:
         st.write = safe_write
         st.sidebar.write = safe_sidebar_write
         DeltaGenerator.write = safe_dg_write
-
-        def render_pages_only(streamlit_module: Any, language: object = 'English') -> None:
-            if sidebar_tools._already_rendered(streamlit_module, sidebar_tools.PAGES_RENDERED_KEY):
-                return
-            lang = sidebar_tools.normal_language(language)
-            with streamlit_module.sidebar:
-                streamlit_module.divider()
-                streamlit_module.markdown('### Herramientas' if lang == 'Español' else '### Tools')
-                for en, es, path in sidebar_tools.PAGES:
-                    label = es if lang == 'Español' else en
-                    try:
-                        streamlit_module.page_link(path, label=label)
-                    except Exception:
-                        streamlit_module.caption(label)
-                streamlit_module.divider()
-
-        sidebar_tools.render_curated_sidebar = render_pages_only
-        sidebar_tools.render_curated_sidebar(st, st.session_state.get('global_language', st.session_state.get('pro_predictor_language', 'English')))
     except Exception:
         pass
+
+
+def _install_all_runtime_hooks() -> None:
+    _install_streamlit_content_guards()
     try:
         from autonomous_betting_agent.pro_predictor_defaults_patch import install_pro_predictor_defaults_patch
         install_pro_predictor_defaults_patch()
