@@ -59,17 +59,11 @@ def inject_sidebar_css(st_module: Any) -> None:
 
 
 def render_sidebar_brand(st_module: Any) -> None:
-    if st_module.session_state.get('_aba_sidebar_legacy_brand_rendered'):
-        return
-    st_module.session_state['_aba_sidebar_legacy_brand_rendered'] = True
     st_module.sidebar.markdown('### :green[ABA] Signal :red[Pro]')
     st_module.sidebar.caption(APP_TAGLINE)
 
 
 def render_curated_sidebar(st_module: Any, language: object = 'English') -> None:
-    if st_module.session_state.get('_aba_sidebar_legacy_tools_rendered'):
-        return
-    st_module.session_state['_aba_sidebar_legacy_tools_rendered'] = True
     inject_sidebar_css(st_module)
     st_module.sidebar.markdown('---')
     render_sidebar_brand(st_module)
