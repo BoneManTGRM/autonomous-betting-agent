@@ -4,7 +4,7 @@ from typing import Any
 
 import streamlit as st
 
-APP_NAME = "ARA Signal Pro"
+APP_NAME = "ABA Signal Pro"
 APP_TAGLINE = "Powered by Reparodynamics"
 
 st.set_page_config(
@@ -142,7 +142,7 @@ def nav_text(key: str) -> str:
 
 
 # Brand stays in the sidebar without replacing navigation.
-st.sidebar.markdown("### :green[ARA] Signal :red[Pro]")
+st.sidebar.markdown("### :green[ABA] Signal :red[Pro]")
 st.sidebar.caption(APP_TAGLINE)
 st.sidebar.markdown("---")
 
