@@ -29,6 +29,10 @@ def get_secret(*names: str) -> str:
 builtins.get_secret = get_secret
 
 
+def _running_in_ci() -> bool:
+    return os.getenv('CI', '').lower() == 'true' or os.getenv('GITHUB_ACTIONS', '').lower() == 'true'
+
+
 def _is_orphan_workflow_heading(body: Any) -> bool:
     text = str(body or '').strip().lower()
     cleaned = text.replace('#', '').replace('*', '').strip()
@@ -36,6 +40,8 @@ def _is_orphan_workflow_heading(body: Any) -> bool:
 
 
 def _install_all_runtime_hooks() -> None:
+    if _running_in_ci():
+        return
     try:
         import streamlit as st
         from streamlit.delta_generator import DeltaGenerator
