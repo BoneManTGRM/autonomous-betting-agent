@@ -17,13 +17,29 @@ from autonomous_betting_agent.live_odds import list_sports, scan_market
 from autonomous_betting_agent.multi_source_fusion import fuse_row
 from autonomous_betting_agent.scanner_strength import score_scanner_frame, scanner_strength_summary
 
-APP_VERSION = 'pro-predictor-v16-baseline-accuracy-guard'
+APP_VERSION = 'pro-predictor-v17-score-volume-250'
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LEARNED_STATE_PATH = REPO_ROOT / 'learned_state.json'
 DEFAULT_SPORT_KEYS = ['basketball_nba', 'baseball_mlb', 'soccer_epl']
 
 st.set_page_config(page_title='Pro Predictor', layout='wide')
 LANG = 'es' if st.sidebar.radio('Language', ['English', 'Español'], key='pro_predictor_language', horizontal=True) == 'Español' else 'en'
+with st.sidebar:
+    st.markdown('---')
+    st.markdown('### Tools')
+    for _label, _path in [
+        ('Signal Board', 'pages/signal_board.py'),
+        ('Pro Predictor', 'pages/pro_predictor.py'),
+        ('Threshold Optimizer', 'pages/threshold_optimizer.py'),
+        ('What Are the Odds', 'pages/what_are_the_odds.py'),
+        ('Odds Lock Pro', 'pages/odds_lock_pro.py'),
+        ('Public Proof Dashboard', 'pages/public_proof_dashboard.py'),
+        ('Learning Memory', 'pages/learn_memory.py'),
+    ]:
+        try:
+            st.page_link(_path, label=_label)
+        except Exception:
+            st.caption(_label)
 
 TEXT = {
     'en': {
@@ -72,14 +88,14 @@ PROFILE_DEFAULTS = {
     'baseline_accuracy': {
         'min_books': 1,
         'min_model_prob': 0.58,
-        'min_edge': -0.08,
+        'min_edge': -0.03,
         'strong_edge': 0.04,
-        'min_strength': 35.0,
-        'max_high_conf': 125,
-        'min_high_prob': 0.58,
-        'min_high_edge': -0.08,
-        'min_high_strength': 35.0,
-        'min_high_agent': 35.0,
+        'min_strength': 38.0,
+        'max_high_conf': 250,
+        'min_high_prob': 0.60,
+        'min_high_edge': -0.03,
+        'min_high_strength': 40.0,
+        'min_high_agent': 40.0,
     },
     'balanced_confidence': {
         'min_books': 1,
@@ -375,10 +391,10 @@ with left:
     team_filter = st.text_input(t('team_filter'), value='')
     manual_keys = parse_manual_keys(st.text_input(t('manual_keys'), value='', help='basketball_nba, baseball_mlb, soccer_epl'))
 with right:
-    regions = st.multiselect(t('regions'), ['us', 'us2', 'uk', 'eu', 'au'], default=['us', 'eu'])
+    regions = st.multiselect(t('regions'), ['us', 'us2', 'uk', 'eu', 'au'], default=['us', 'us2', 'eu', 'uk'])
     markets = st.multiselect(t('markets'), ['h2h', 'spreads', 'totals'], default=['h2h'])
-    max_sports = st.number_input(t('max_sports'), min_value=1, max_value=250, value=5, step=1)
-    max_events = st.number_input(t('max_events'), min_value=1, max_value=500, value=100, step=25)
+    max_sports = st.number_input(t('max_sports'), min_value=1, max_value=250, value=50, step=1)
+    max_events = st.number_input(t('max_events'), min_value=1, max_value=500, value=500, step=25)
     latest_event_date = st.date_input(t('latest_date'), value=next_sunday())
 
 with st.expander('Filters' if LANG == 'en' else 'Filtros', expanded=True):
