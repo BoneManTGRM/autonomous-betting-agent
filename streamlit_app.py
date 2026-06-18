@@ -18,7 +18,7 @@ except Exception:
 
 APP_NAME = 'ABA Signal Pro'
 APP_TAGLINE = 'Powered by Reparodynamics'
-APP_BUILD = 'stable-sidebar-shell-v2-no-ultra70'
+APP_BUILD = 'stable-sidebar-shell-v3-signal-board'
 REPO_ROOT = Path(__file__).resolve().parent
 REPO_MEMORY_PATH = REPO_ROOT / 'data' / 'ara_permanent_learning_memory.csv'
 
@@ -29,6 +29,7 @@ _REAL_SET_PAGE_CONFIG(page_title=APP_NAME, layout='wide', initial_sidebar_state=
 st.set_page_config = lambda *args, **kwargs: None
 
 CORE_PAGES = [
+    st.Page('pages/signal_board.py', title='Signal Board'),
     st.Page('pages/pro_predictor.py', title='Pro Predictor'),
     st.Page('pages/simulation_lab.py', title='Simulation Lab'),
     st.Page('pages/threshold_optimizer.py', title='Threshold Optimizer'),
@@ -71,4 +72,4 @@ try:
     page = st.navigation(CORE_PAGES, position='hidden')
     page.run()
 except AttributeError:
-    import pages.pro_predictor  # noqa: F401,E402
+    import pages.signal_board  # noqa: F401,E402
