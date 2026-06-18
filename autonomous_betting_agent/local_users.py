@@ -130,12 +130,35 @@ def _install_profile_control_defaults(st: Any) -> None:
     st.session_state['_profile_control_defaults_applied'] = True
 
 
+def _sync_held_picks(st: Any) -> None:
+    try:
+        from .pick_hold_store import HELD_KEYS, load_held_rows, save_held_rows
+    except Exception:
+        return
+    workspace_id = str(st.session_state.get('aba_test_window_id') or 'test_01')
+    for key in HELD_KEYS:
+        rows = st.session_state.get(key) or []
+        if rows:
+            try:
+                save_held_rows(key, rows, workspace_id)
+            except Exception:
+                pass
+        else:
+            try:
+                saved = load_held_rows(key, workspace_id)
+                if saved:
+                    st.session_state[key] = saved
+            except Exception:
+                pass
+
+
 def install_streamlit_local_user_selector() -> None:
     try:
         import streamlit as st
     except Exception:
         return
     _install_profile_control_defaults(st)
+    _sync_held_picks(st)
     if st.session_state.get('_local_user_selector_rendered'):
         return
     st.session_state['_local_user_selector_rendered'] = True
