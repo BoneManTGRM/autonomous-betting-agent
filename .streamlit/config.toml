@@ -1,4 +1,4 @@
-# deploy trigger: sidebar-stale-deploy-check-20260618
+# deploy trigger: single-sidebar-no-duplicates-v11
 [server]
 headless = true
 
