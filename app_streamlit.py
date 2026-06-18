@@ -4,7 +4,7 @@ from typing import Any
 
 import streamlit as st
 
-APP_NAME = "ABA Signal Pro"
+APP_NAME = "ARA Signal Pro"
 APP_TAGLINE = "Powered by Reparodynamics"
 
 st.set_page_config(
@@ -122,9 +122,6 @@ NAV_LABELS = {
         "public_proof_dashboard": "Public Proof Dashboard",
         "learning_memory": "Learning Memory",
         "reset_lock_file": "Reset Lock File",
-        "workflow": "Workflow",
-        "workflow_path": "Pro Predictor → Highest Confidence → Odds Lock Pro → Public Proof Dashboard → Learning Memory.",
-        "workflow_note": "Odds Lock Pro timestamps locked picks; Public Proof Dashboard shows ROI and results.",
     },
     "es": {
         "pro_predictor": "Predictor Pro",
@@ -136,9 +133,6 @@ NAV_LABELS = {
         "public_proof_dashboard": "Dashboard Público de Prueba",
         "learning_memory": "Memoria de Aprendizaje",
         "reset_lock_file": "Reiniciar Archivo de Bloqueo",
-        "workflow": "Flujo de trabajo",
-        "workflow_path": "Predictor Pro → Máxima Confianza → Odds Lock Pro → Dashboard Público → Memoria de Aprendizaje.",
-        "workflow_note": "Odds Lock Pro marca picks bloqueados con hora; el Dashboard Público muestra ROI y resultados.",
     },
 }
 
@@ -148,7 +142,7 @@ def nav_text(key: str) -> str:
 
 
 # Brand stays in the sidebar without replacing navigation.
-st.sidebar.markdown("### :green[ABA] Signal :red[Pro]")
+st.sidebar.markdown("### :green[ARA] Signal :red[Pro]")
 st.sidebar.caption(APP_TAGLINE)
 st.sidebar.markdown("---")
 
@@ -176,13 +170,3 @@ def _ignore_late_page_config(*args, **kwargs):
 # Existing page files still call set_page_config; ignore those after the main app config.
 st.set_page_config = _ignore_late_page_config
 current_page.run()
-
-# Re-read language after the page renders so the bottom workflow text matches the visible selector.
-LANG_VALUE = st.session_state.get("global_language", st.session_state.get("pro_predictor_language", "English"))
-LANG = "es" if LANG_VALUE == "Español" else "en"
-
-# Explainer stays at the bottom of the sidebar after page controls render.
-st.sidebar.markdown("---")
-st.sidebar.markdown(f"### {nav_text('workflow')}")
-st.sidebar.caption(nav_text("workflow_path"))
-st.sidebar.caption(nav_text("workflow_note"))
