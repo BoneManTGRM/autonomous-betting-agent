@@ -1,4 +1,4 @@
-# deploy trigger: enable-native-nav-signal-board-v2
+# deploy trigger: custom-bottom-sidebar-links-v3
 [server]
 headless = true
 
@@ -6,6 +6,6 @@ headless = true
 gatherUsageStats = false
 
 [client]
-# Required for st.navigation(..., position='sidebar') to render the page list.
-showSidebarNavigation = true
+# Keep native Streamlit page list hidden. Pages are rendered below language selector by sitecustomize/page links.
+showSidebarNavigation = false
 toolbarMode = "minimal"
