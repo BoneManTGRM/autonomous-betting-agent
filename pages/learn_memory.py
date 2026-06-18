@@ -26,7 +26,7 @@ from autonomous_betting_agent.learning_memory_tools import (
     valid_bank_row,
 )
 from autonomous_betting_agent.learning_strength import learning_memory_health
-from autonomous_betting_agent.ui_language import render_language_selector
+from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LEARNED_STATE_PATH = REPO_ROOT / 'learned_state.json'
@@ -36,7 +36,7 @@ DEFAULT_GITHUB_REPOSITORY = 'BoneManTGRM/autonomous-betting-agent'
 DEFAULT_GITHUB_BRANCH = 'main'
 
 st.set_page_config(page_title='Memoria de Aprendizaje', layout='wide')
-LANG = render_language_selector(key='learning_memory_language')
+LANG = render_app_sidebar('learning_memory', language_key='learning_memory_language', selector='radio')
 
 TEXT = {
     'en': {
