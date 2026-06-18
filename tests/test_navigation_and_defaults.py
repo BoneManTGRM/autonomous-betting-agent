@@ -8,9 +8,12 @@ def repo_root() -> Path:
 
 
 def test_main_navigation_uses_signal_board_and_hides_ultra70() -> None:
-    text = (repo_root() / 'app_streamlit.py').read_text(encoding='utf-8')
-    assert 'pages/signal_board.py' in text
-    assert 'pages/ultra80_profit_mode.py' not in text
+    app = (repo_root() / 'app_streamlit.py').read_text(encoding='utf-8')
+    shell = (repo_root() / 'streamlit_app.py').read_text(encoding='utf-8')
+    assert 'pages/signal_board.py' in app
+    assert 'pages/signal_board.py' in shell
+    assert 'pages/ultra80_profit_mode.py' not in app
+    assert 'pages/ultra80_profit_mode.py' not in shell
 
 
 def test_curated_sidebar_uses_signal_board_and_renders_links() -> None:
