@@ -16,6 +16,12 @@ def test_main_navigation_uses_signal_board_and_hides_ultra70() -> None:
     assert 'pages/ultra80_profit_mode.py' not in shell
 
 
+def test_streamlit_config_allows_sidebar_navigation() -> None:
+    config = (repo_root() / '.streamlit' / 'config.toml').read_text(encoding='utf-8')
+    assert 'showSidebarNavigation = true' in config
+    assert 'showSidebarNavigation = false' not in config
+
+
 def test_native_sidebar_navigation_is_not_hidden_by_sitecustomize() -> None:
     sitecustomize = (repo_root() / 'sitecustomize.py').read_text(encoding='utf-8')
     shell = (repo_root() / 'streamlit_app.py').read_text(encoding='utf-8')
