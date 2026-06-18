@@ -32,6 +32,10 @@ TEXT = {
         'download': 'Download current signal board CSV',
         'guide': 'Simple workflow',
         'guide_text': '1) Run Pro Predictor. 2) Review this Signal Board. 3) Send A/B/C to Research/Test locking. 4) Grade results. 5) Use Threshold Optimizer to learn which buckets are winning.',
+        'tools': 'Tools',
+        'open_signal': 'Signal Board',
+        'open_proof': 'Public Proof Dashboard',
+        'open_memory': 'Learning Memory',
     },
     'es': {
         'title': 'ABA Signal Board',
@@ -55,12 +59,39 @@ TEXT = {
         'download': 'Descargar CSV del tablero actual',
         'guide': 'Flujo simple',
         'guide_text': '1) Ejecuta Predictor Pro. 2) Revisa este Signal Board. 3) Envía A/B/C al bloqueo Investigación/Prueba. 4) Califica resultados. 5) Usa el Optimizador para aprender qué buckets ganan.',
+        'tools': 'Herramientas',
+        'open_signal': 'Signal Board',
+        'open_proof': 'Dashboard Público de Prueba',
+        'open_memory': 'Memoria de Aprendizaje',
     },
 }
 
 
 def t(key: str) -> str:
     return TEXT[LANG].get(key, TEXT['en'].get(key, key))
+
+
+def sidebar_nav() -> None:
+    links = [
+        (t('open_signal'), 'pages/signal_board.py'),
+        (t('open_predictor'), 'pages/pro_predictor.py'),
+        (t('open_threshold'), 'pages/threshold_optimizer.py'),
+        (t('open_odds'), 'pages/what_are_the_odds.py'),
+        (t('open_lock'), 'pages/odds_lock_pro.py'),
+        (t('open_proof'), 'pages/public_proof_dashboard.py'),
+        (t('open_memory'), 'pages/learn_memory.py'),
+    ]
+    with st.sidebar:
+        st.markdown('---')
+        st.markdown(f"### {t('tools')}")
+        for label, path in links:
+            try:
+                st.page_link(path, label=label)
+            except Exception:
+                st.caption(label)
+
+
+sidebar_nav()
 
 
 def session_source() -> tuple[str, pd.DataFrame]:
@@ -137,6 +168,11 @@ source, raw = session_source()
 
 if raw.empty:
     st.warning(t('no_rows'))
+    if st.button(t('open_predictor'), type='primary', use_container_width=True):
+        try:
+            st.switch_page('pages/pro_predictor.py')
+        except Exception:
+            pass
     st.page_link('pages/pro_predictor.py', label=t('open_predictor'))
     st.stop()
 
