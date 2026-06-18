@@ -1,4 +1,4 @@
-# deploy trigger: restore-stable-native-nav-v4
+# deploy trigger: clean-custom-tools-sidebar-v5
 [server]
 headless = true
 
@@ -6,6 +6,6 @@ headless = true
 gatherUsageStats = false
 
 [client]
-# Stable setting: keep Streamlit's native page list visible so navigation never disappears.
-showSidebarNavigation = true
+# Hide Streamlit's automatic pages/ file list. Use the app's custom Tools menu instead.
+showSidebarNavigation = false
 toolbarMode = "minimal"
