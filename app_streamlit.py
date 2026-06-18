@@ -113,11 +113,16 @@ def _current_language() -> str:
     return 'English'
 
 
-def _sync_language(value: str) -> None:
+def _sync_language(value: str, *, current_key: str | None = None) -> None:
     if value not in ('English', 'Español'):
         value = 'English'
     for key in LANGUAGE_KEYS:
-        st.session_state[key] = value
+        if key == current_key:
+            continue
+        try:
+            st.session_state[key] = value
+        except Exception:
+            pass
 
 
 def _is_language_widget(label: Any, options: Any) -> bool:
@@ -147,7 +152,7 @@ with st.sidebar:
     st.caption(APP_TAGLINE)
     st.markdown('---')
     _language = st.radio('Language', ['English', 'Español'], index=1 if _current_language() == 'Español' else 0, key='global_language', horizontal=True)
-    _sync_language(_language)
+    _sync_language(_language, current_key='global_language')
     st.markdown('---')
     st.markdown('### ' + ('Herramientas' if _language == 'Español' else 'Tools'))
     for _label, _path in PAGE_LINKS:
@@ -165,7 +170,10 @@ def _hidden_language_radio(label: Any, options: Any, *args: Any, **kwargs: Any) 
     if _is_language_widget(label, options):
         key = kwargs.get('key')
         if key:
-            st.session_state[key] = st.session_state.get('global_language', 'English')
+            try:
+                st.session_state[key] = st.session_state.get('global_language', 'English')
+            except Exception:
+                pass
         return st.session_state.get('global_language', 'English')
     return _real_sidebar_radio(label, options, *args, **kwargs)
 
@@ -174,7 +182,10 @@ def _hidden_language_selectbox(label: Any, options: Any, *args: Any, **kwargs: A
     if _is_language_widget(label, options):
         key = kwargs.get('key')
         if key:
-            st.session_state[key] = st.session_state.get('global_language', 'English')
+            try:
+                st.session_state[key] = st.session_state.get('global_language', 'English')
+            except Exception:
+                pass
         return st.session_state.get('global_language', 'English')
     return _real_sidebar_selectbox(label, options, *args, **kwargs)
 
