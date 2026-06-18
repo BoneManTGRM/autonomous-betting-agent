@@ -5,9 +5,11 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from autonomous_betting_agent.sidebar_nav import render_app_sidebar
+
 st.set_page_config(page_title='ABA Signal Board', layout='wide')
 
-LANG = 'es' if st.sidebar.selectbox('Language / Idioma', ['English', 'Español'], key='signal_board_language') == 'Español' else 'en'
+LANG = render_app_sidebar('signal_board', language_key='signal_board_language', selector='radio')
 
 TEXT = {
     'en': {

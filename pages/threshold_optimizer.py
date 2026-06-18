@@ -6,8 +6,10 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from autonomous_betting_agent.sidebar_nav import render_app_sidebar
+
 st.set_page_config(page_title='Threshold Optimizer', layout='wide')
-LANG = 'es' if st.sidebar.selectbox('Language / Idioma', ['English', 'Español'], key='threshold_optimizer_language') == 'Español' else 'en'
+LANG = render_app_sidebar('threshold_optimizer', language_key='threshold_optimizer_language', selector='radio')
 
 TEXT = {
     'en': {

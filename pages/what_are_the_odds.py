@@ -6,6 +6,8 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from autonomous_betting_agent.sidebar_nav import render_app_sidebar
+
 from autonomous_betting_agent.agent_decision_engine import agent_decision_summary, build_agent_decisions, lock_ready_candidates, playable_candidates
 from autonomous_betting_agent.api_snapshot_memory import build_api_snapshots, snapshot_memory_summary
 from autonomous_betting_agent.clv_intelligence import build_clv_intelligence, clv_by_segment, clv_summary
@@ -18,12 +20,10 @@ from autonomous_betting_agent.post_loss_autopsy import autopsy_summary, build_lo
 from autonomous_betting_agent.row_normalizer import normalize_frame, safe_text
 from autonomous_betting_agent.scanner_strength import score_scanner_frame, scanner_strength_summary
 from autonomous_betting_agent.sport_specific_models import build_sport_specific_decisions, sport_model_summary
-from autonomous_betting_agent.tool_sidebar import render_tool_sidebar
 from autonomous_betting_agent.walk_forward_lab import walk_forward_summary, walk_forward_validate
 
 st.set_page_config(page_title='What Are the Odds', layout='wide')
-LANG = 'es' if st.sidebar.selectbox('Language / Idioma', ['English', 'Español'], key='what_are_the_odds_pro_language') == 'Español' else 'en'
-render_tool_sidebar('what_are_the_odds', 'Español' if LANG == 'es' else 'English')
+LANG = render_app_sidebar('what_are_the_odds', language_key='what_are_the_odds_pro_language', selector='radio')
 
 TEXT = {
     'en': {

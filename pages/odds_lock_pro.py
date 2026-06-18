@@ -5,6 +5,8 @@ from typing import Any, Mapping
 import pandas as pd
 import streamlit as st
 
+from autonomous_betting_agent.sidebar_nav import render_app_sidebar
+
 from autonomous_betting_agent.commercial_platform_tools import (
     filter_locked_proof_rows,
     load_persistent_ledger,
@@ -31,7 +33,7 @@ from autonomous_betting_agent.odds_lock_tools import (
 from autonomous_betting_agent.row_normalizer import normalize_frame, safe_text
 
 st.set_page_config(page_title='Odds Lock Pro', layout='wide')
-LANG = 'es' if st.sidebar.selectbox('Language / Idioma', ['English', 'Español'], key='odds_lock_pro_language') == 'Español' else 'en'
+LANG = render_app_sidebar('odds_lock_pro', language_key='odds_lock_pro_language', selector='radio')
 
 TEXT = {
     'en': {

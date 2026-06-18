@@ -10,6 +10,8 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from autonomous_betting_agent.sidebar_nav import render_app_sidebar
+
 from autonomous_betting_agent.agent_decision_engine import agent_decision_summary, build_agent_decisions, lock_ready_candidates
 from autonomous_betting_agent.four_tool_orchestrator import page_health, page_health_frame
 from autonomous_betting_agent.live_api_context import LiveAPIContextBuilder
@@ -23,23 +25,7 @@ LEARNED_STATE_PATH = REPO_ROOT / 'learned_state.json'
 DEFAULT_SPORT_KEYS = ['basketball_nba', 'baseball_mlb', 'soccer_epl']
 
 st.set_page_config(page_title='Pro Predictor', layout='wide')
-LANG = 'es' if st.sidebar.radio('Language', ['English', 'Español'], key='pro_predictor_language', horizontal=True) == 'Español' else 'en'
-with st.sidebar:
-    st.markdown('---')
-    st.markdown('### Tools')
-    for _label, _path in [
-        ('Signal Board', 'pages/signal_board.py'),
-        ('Pro Predictor', 'pages/pro_predictor.py'),
-        ('Threshold Optimizer', 'pages/threshold_optimizer.py'),
-        ('What Are the Odds', 'pages/what_are_the_odds.py'),
-        ('Odds Lock Pro', 'pages/odds_lock_pro.py'),
-        ('Public Proof Dashboard', 'pages/public_proof_dashboard.py'),
-        ('Learning Memory', 'pages/learn_memory.py'),
-    ]:
-        try:
-            st.page_link(_path, label=_label)
-        except Exception:
-            st.caption(_label)
+LANG = render_app_sidebar('pro_predictor', language_key='pro_predictor_language', selector='radio')
 
 TEXT = {
     'en': {
