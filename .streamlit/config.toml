@@ -1,4 +1,4 @@
-# deploy trigger: single-sidebar-no-duplicates-v11
+# deploy trigger: legacy-sidebar-visible-v14
 [server]
 headless = true
 
@@ -6,6 +6,6 @@ headless = true
 gatherUsageStats = false
 
 [client]
-# Hide Streamlit's automatic file-list sidebar. Each page renders the shared ABA sidebar.
+# Hide Streamlit's automatic file-list sidebar. Each page renders the shared ABA sidebar or legacy fallback tools.
 showSidebarNavigation = false
 toolbarMode = "minimal"
