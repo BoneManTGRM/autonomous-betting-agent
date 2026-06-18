@@ -75,6 +75,17 @@ def _empty_like(value: Any) -> bool:
     return text in {'', 'missing', 'none', 'null', 'nan', 'n/a', 'na', 'unknown'}
 
 
+def _fmt_compact_probability(value: Any) -> Any:
+    if _empty_like(value):
+        return ''
+    parsed = parse_float(value)
+    if parsed is None:
+        return value
+    if parsed <= 1:
+        return f'{parsed:.1%}'
+    return f'{parsed:.1f}%'
+
+
 def _row_value(row: Mapping[str, Any], *names: str, default: str = '') -> Any:
     lowered = {str(key).lower().replace(' ', '_').replace('-', '_'): value for key, value in row.items()}
     for name in names:
@@ -95,7 +106,7 @@ def compact_report_frame(frame: pd.DataFrame) -> pd.DataFrame:
         compact['decision_reason'] = compact['decision_reason'].replace({'Not strong enough for the shortlist.': 'No Bet: quality/odds did not clear the shortlist.'})
     for col in ('implied_probability',):
         if col in compact.columns:
-            compact[col] = compact[col].map(lambda value: '' if _empty_like(value) else f'{float(value):.1%}' if parse_float(value) is not None and parse_float(value) <= 1 else value)
+            compact[col] = compact[col].map(_fmt_compact_probability)
     return compact.rename(columns={col: MOBILE_LABELS.get(col, col.replace('_', ' ').title()) for col in compact.columns})
 
 
@@ -176,41 +187,3 @@ def render_pick_cards(frame: pd.DataFrame, *, max_cards: int = 8) -> None:
         st.write(f'Model probability: {probability or "Missing"} | Odds: {odds} | EV: {ev}')
         st.caption(f'Why: {reason}')
         st.divider()
-
-
-def render_mobile_predictor_report(frame: pd.DataFrame, *, table_renderer: Callable[..., Any] | None = None) -> Any:
-    import streamlit as st
-
-    prepared = prepare_mobile_report(frame)
-    enriched = prepared['enriched']
-    compact = prepared['compact']
-    metrics = prepared['metrics']
-    rejection = prepared['rejection']
-    actionable = prepared['actionable']
-
-    st.subheader('Mobile pick view')
-    cols = st.columns(5)
-    cols[0].metric('Rows', metrics['total_rows'])
-    cols[1].metric('Actionable', len(actionable))
-    cols[2].metric('Official graded', metrics['official_graded'])
-    cols[3].metric('A+ picks', metrics['a_plus_count'])
-    cols[4].metric('Missing odds', prepared['missing_odds_count'])
-
-    if prepared['missing_odds_count']:
-        st.warning('Odds are missing for part or all of this report. Profit, ROI, EV, and break-even rate cannot be trusted until best_price or decimal_price is filled.')
-
-    st.caption('Best picks are shown as cards first. Watch-only and rejected rows stay in the compact/technical tables below.')
-    render_pick_cards(actionable)
-
-    with st.expander('Why rows were rejected or marked Watch Only', expanded=True):
-        renderer = table_renderer or st.dataframe
-        renderer(rejection, use_container_width=True, hide_index=True)
-
-    with st.expander('Compact mobile table', expanded=True):
-        renderer = table_renderer or st.dataframe
-        renderer(compact, use_container_width=True, hide_index=True)
-
-    with st.expander('Full technical table', expanded=False):
-        renderer = table_renderer or st.dataframe
-        return renderer(enriched, use_container_width=True, hide_index=True)
-    return None
