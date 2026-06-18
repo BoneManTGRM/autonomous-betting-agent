@@ -93,9 +93,6 @@ def _sync_language(st: Any, value: Any) -> None:
 
 
 def _render_page_links(st: Any) -> None:
-    if st.session_state.get('_aba_sidebar_page_links_rendered_v5'):
-        return
-    st.session_state['_aba_sidebar_page_links_rendered_v5'] = True
     pages = [
         ('Signal Board', 'pages/signal_board.py'),
         ('Pro Predictor', 'pages/pro_predictor.py'),
@@ -129,7 +126,7 @@ def _install_sidebar_page_links() -> None:
         from streamlit.delta_generator import DeltaGenerator
     except Exception:
         return
-    if getattr(st, '_aba_sidebar_page_links_patch_v5', False):
+    if getattr(st, '_aba_sidebar_page_links_patch_v6', False):
         return
 
     original_sidebar_radio = st.sidebar.radio
@@ -181,7 +178,7 @@ def _install_sidebar_page_links() -> None:
     st.sidebar.selectbox = sidebar_selectbox
     DeltaGenerator.radio = dg_radio
     DeltaGenerator.selectbox = dg_selectbox
-    st._aba_sidebar_page_links_patch_v5 = True
+    st._aba_sidebar_page_links_patch_v6 = True
 
 
 def _install_streamlit_content_guards() -> None:
