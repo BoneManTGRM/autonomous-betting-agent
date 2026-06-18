@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import streamlit as st
 
 APP_NAME = "ARA Signal Pro"
@@ -10,6 +12,98 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+
+def _is_numeric_value(value: Any) -> bool:
+    return value is None or (isinstance(value, (int, float)) and not isinstance(value, bool))
+
+
+def _slider_as_number_input(target: Any, original_slider: Any, *args: Any, **kwargs: Any) -> Any:
+    """Render simple numeric sliders as plus/minus number inputs.
+
+    Range/date/time sliders fall back to the native Streamlit slider so unusual
+    controls do not break. The app's setting sliders are all simple numeric
+    controls, so they render as mobile-friendly +/- fields.
+    """
+    original_kwargs = dict(kwargs)
+    try:
+        if args:
+            label = args[0]
+            rest = list(args[1:])
+        else:
+            label = kwargs.pop("label")
+            rest = []
+
+        ordered = [
+            "min_value",
+            "max_value",
+            "value",
+            "step",
+            "format",
+            "key",
+            "help",
+            "on_change",
+            "args",
+            "kwargs",
+            "disabled",
+            "label_visibility",
+        ]
+        params: dict[str, Any] = {}
+        for name in ordered:
+            if rest:
+                params[name] = rest.pop(0)
+            elif name in kwargs:
+                params[name] = kwargs.pop(name)
+
+        if rest:
+            return original_slider(*args, **original_kwargs)
+
+        min_value = params.get("min_value")
+        max_value = params.get("max_value")
+        value = params.get("value")
+        step = params.get("step")
+        if isinstance(value, (list, tuple)) or not all(_is_numeric_value(item) for item in (min_value, max_value, value, step)):
+            return original_slider(*args, **original_kwargs)
+
+        if value is None:
+            value = min_value if min_value is not None else 0.0
+
+        number_kwargs: dict[str, Any] = dict(kwargs)
+        for name in ("min_value", "max_value", "step", "format", "key", "help", "on_change", "args", "kwargs"):
+            if name in params and params[name] is not None:
+                number_kwargs[name] = params[name]
+        if "disabled" in params:
+            number_kwargs["disabled"] = params["disabled"]
+        if "label_visibility" in params:
+            number_kwargs["label_visibility"] = params["label_visibility"]
+        number_kwargs["value"] = value
+        return target.number_input(label, **number_kwargs)
+    except Exception:
+        return original_slider(*args, **original_kwargs)
+
+
+if not getattr(st, "_aba_numeric_slider_patch", False):
+    st._aba_original_slider = st.slider
+
+    def _st_slider_as_number_input(*args: Any, **kwargs: Any) -> Any:
+        return _slider_as_number_input(st, st._aba_original_slider, *args, **kwargs)
+
+    st.slider = _st_slider_as_number_input
+    st._aba_numeric_slider_patch = True
+
+try:
+    from streamlit.delta_generator import DeltaGenerator
+
+    if not getattr(DeltaGenerator, "_aba_numeric_slider_patch", False):
+        DeltaGenerator._aba_original_slider = DeltaGenerator.slider
+
+        def _delta_slider_as_number_input(self: Any, *args: Any, **kwargs: Any) -> Any:
+            return _slider_as_number_input(self, DeltaGenerator._aba_original_slider.__get__(self, DeltaGenerator), *args, **kwargs)
+
+        DeltaGenerator.slider = _delta_slider_as_number_input
+        DeltaGenerator._aba_numeric_slider_patch = True
+except Exception:
+    pass
 
 # Use the shared language selector state from the pages. The navigation is built
 # before each page renders, so it must read session state directly to translate
