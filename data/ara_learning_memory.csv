@@ -1,7 +1,7 @@
 area,area_type,group_value,records,avg_predicted,actual_hit_rate,actual_minus_predicted,smoothed_hit_rate,smoothed_edge,reliability,brier,memory_type,importance,action
-Probability bucket: 60-70%,probability_bucket,60-70%,60,0.67,0.716667,0.046667,0.711176,0.041176,0.820421,0.205233,probability_bucket,0.082353,raise_trust
-Probability source: fallback_high_confidence,probability_source,fallback_high_confidence,60,0.67,0.716667,0.046667,0.711176,0.041176,0.820421,0.205233,probability_source,0.082353,raise_trust
-Market: estimated_score,market_type,estimated_score,60,0.67,0.716667,0.046667,0.711176,0.041176,0.820421,0.205233,market_type,0.082353,raise_trust
+Probability bucket: 60-70%,probability_bucket,60-70%,61,0.67,0.721311,0.051311,0.715362,0.045362,0.821803,0.203654,probability_bucket,0.090725,raise_trust
+Probability source: fallback_high_confidence,probability_source,fallback_high_confidence,61,0.67,0.721311,0.051311,0.715362,0.045362,0.821803,0.203654,probability_source,0.090725,raise_trust
+Market: estimated_score,market_type,estimated_score,61,0.67,0.721311,0.051311,0.715362,0.045362,0.821803,0.203654,market_type,0.090725,raise_trust
 Sport: ATP Halle Open,sport,ATP Halle Open,10,0.67,0.5,-0.17,0.575556,-0.094444,0.502377,0.2789,sport,0.076798,lower_trust
 ATP Halle Open / 60-70%,sport_probability_bucket,ATP Halle Open|60-70%,10,0.67,0.5,-0.17,0.575556,-0.094444,0.502377,0.2789,sport_probability_bucket,0.076798,lower_trust
 ATP Halle Open / estimated_score,sport_market,ATP Halle Open|estimated_score,10,0.67,0.5,-0.17,0.575556,-0.094444,0.502377,0.2789,sport_market,0.076798,lower_trust
