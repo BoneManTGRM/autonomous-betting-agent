@@ -65,6 +65,19 @@ def _sync_language(st: Any, value: str, *, current_key: str | None = None) -> No
             pass
 
 
+def _install_runtime_patches() -> None:
+    try:
+        from .mobile_button_fallback import install_mobile_button_fallback
+        install_mobile_button_fallback()
+    except Exception:
+        pass
+    try:
+        from .direct_pick_lock_patch import install_direct_pick_lock_patch
+        install_direct_pick_lock_patch()
+    except Exception:
+        pass
+
+
 def _tool_label(english: str, spanish: str, lang: str) -> str:
     return spanish if lang == 'es' else english
 
@@ -82,6 +95,7 @@ def render_tools_only(st: Any, lang: str) -> None:
 def render_app_sidebar(page_key: str, *, language_key: str | None = None, selector: str = 'radio') -> str:
     import streamlit as st
 
+    _install_runtime_patches()
     key = language_key or f'{page_key}_language'
     current = _current_language(st)
     index = 1 if current == 'Español' else 0
@@ -101,6 +115,7 @@ def render_app_sidebar(page_key: str, *, language_key: str | None = None, select
 def render_sidebar_nav(language: Any = 'en', *, show_workflow: bool = False) -> None:
     import streamlit as st
 
+    _install_runtime_patches()
     lang = normalize_language(language)
     st.sidebar.markdown(SIDEBAR_CSS, unsafe_allow_html=True)
     render_tools_only(st.sidebar, lang)
