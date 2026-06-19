@@ -88,12 +88,12 @@ def save_held_rows(key: str, rows: Any, workspace_id: Any = 'test_01') -> int:
         store[_store_key(key, 'test_01')] = cleaned
     store[_store_key(f'latest_{key}', 'test_01')] = cleaned
     try:
-        payload = {'version': 'held-picks-v4-local-memory', 'workspace_id': workspace, 'key': key, 'rows': cleaned}
+        payload = {'version': 'held-picks-v5-verified-local', 'workspace_id': workspace, 'key': key, 'rows': cleaned}
         _write_payload(_path_for(key, workspace), payload)
         _write_payload(_backup_path_for(key, workspace), payload)
         if workspace != 'test_01':
-            _write_payload(_path_for(key, 'test_01'), {'version': 'held-picks-v4-local-memory', 'workspace_id': 'test_01', 'key': key, 'rows': cleaned})
-        _write_payload(_path_for(f'latest_{key}', 'test_01'), {'version': 'held-picks-v4-local-memory', 'workspace_id': 'test_01', 'key': f'latest_{key}', 'rows': cleaned})
+            _write_payload(_path_for(key, 'test_01'), {'version': 'held-picks-v5-verified-local', 'workspace_id': 'test_01', 'key': key, 'rows': cleaned})
+        _write_payload(_path_for(f'latest_{key}', 'test_01'), {'version': 'held-picks-v5-verified-local', 'workspace_id': 'test_01', 'key': f'latest_{key}', 'rows': cleaned})
     except Exception:
         pass
     return len(cleaned)
@@ -146,3 +146,38 @@ def load_first_available(keys: list[str] | tuple[str, ...], workspace_id: Any = 
         if rows:
             return key, rows
     return '', []
+
+
+def verify_held_rows(key: str, rows: Any, workspace_id: Any = 'test_01') -> dict[str, Any]:
+    expected = len(rows_from_any(rows))
+    saved = save_held_rows(key, rows, workspace_id)
+    reloaded = len(load_held_rows(key, workspace_id))
+    ok = expected == saved == reloaded
+    return {
+        'key': key,
+        'workspace_id': normalize_workspace_id(workspace_id),
+        'expected_rows': expected,
+        'saved_rows': saved,
+        'reloaded_rows': reloaded,
+        'ok': ok,
+        'message': 'save_reload_ok' if ok else 'save_reload_mismatch',
+    }
+
+
+def store_snapshot(workspace_id: Any = 'test_01') -> pd.DataFrame:
+    workspace = normalize_workspace_id(workspace_id)
+    rows: list[dict[str, Any]] = []
+    for key in sorted(HELD_KEYS):
+        exact_path = _path_for(key, workspace)
+        backup_path = _backup_path_for(key, workspace)
+        rows.append({
+            'workspace_id': workspace,
+            'key': key,
+            'loaded_rows': len(load_held_rows(key, workspace)),
+            'disk_rows': len(_load_payload(exact_path)),
+            'backup_rows': len(_load_payload(backup_path)),
+            'disk_file_exists': exact_path.exists(),
+            'backup_file_exists': backup_path.exists(),
+            'disk_file': str(exact_path),
+        })
+    return pd.DataFrame(rows)
