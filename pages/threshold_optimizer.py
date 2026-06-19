@@ -15,7 +15,7 @@ LANG = render_app_sidebar('threshold_optimizer', language_key='threshold_optimiz
 TEXT = {
     'en': {
         'title': 'Threshold Optimizer + Score Accuracy Lab',
-        'caption': 'Paste a graded CSV. The optimizer runs automatically. No run or upload button is needed.',
+        'caption': 'Paste a graded CSV. The optimizer runs automatically. No run, upload, or download button is needed.',
         'paste_title': 'Mobile-safe CSV paste',
         'paste': 'Paste graded CSV text here',
         'paste_help': 'Paste the whole CSV including the header row. This avoids the mobile upload button completely.',
@@ -26,13 +26,12 @@ TEXT = {
         'score_optimizer': 'Score / winner optimizer',
         'patterns': 'Loss-pattern report',
         'groups': 'Group performance',
-        'download': 'Download optimizer report',
         'notice': 'Use only rows created before the event when making performance claims. Backfilled results can help tuning, but they are not proof.',
         'running': 'CSV loaded. Results are below.',
     },
     'es': {
         'title': 'Optimizador de Umbrales + Laboratorio de Acierto por Marcador',
-        'caption': 'Pega un CSV calificado. El optimizador corre automáticamente. No se necesita botón de correr o subir.',
+        'caption': 'Pega un CSV calificado. El optimizador corre automáticamente. No se necesita botón de correr, subir o descargar.',
         'paste_title': 'Pegar CSV seguro para móvil',
         'paste': 'Pega texto CSV calificado aquí',
         'paste_help': 'Pega todo el CSV incluyendo encabezados. Esto evita completamente el botón móvil de subir archivo.',
@@ -43,7 +42,6 @@ TEXT = {
         'score_optimizer': 'Optimizador marcador / ganador',
         'patterns': 'Reporte de patrones de pérdida',
         'groups': 'Rendimiento por grupo',
-        'download': 'Descargar reporte del optimizador',
         'notice': 'Usa solo filas creadas antes del evento para declarar rendimiento. Los resultados agregados después sirven para ajustar, pero no son prueba.',
         'running': 'CSV cargado. Los resultados están abajo.',
     },
@@ -233,12 +231,3 @@ with tabs[2]:
     st.dataframe(patterns, use_container_width=True, hide_index=True)
 with tabs[3]:
     st.dataframe(groups, use_container_width=True, hide_index=True)
-merged = []
-for name, frame in {'summary': summary, 'score_optimizer': score_opt, 'patterns': patterns, 'groups': groups}.items():
-    if frame.empty:
-        continue
-    temp = frame.copy()
-    temp.insert(0, 'report_section', name)
-    merged.append(temp)
-download = pd.concat(merged, ignore_index=True, sort=False) if merged else pd.DataFrame()
-st.download_button(t('download'), download.to_csv(index=False), file_name='threshold_optimizer_report.csv', mime='text/csv')
