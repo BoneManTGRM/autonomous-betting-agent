@@ -15,13 +15,12 @@ LANG = render_app_sidebar('threshold_optimizer', language_key='threshold_optimiz
 TEXT = {
     'en': {
         'title': 'Threshold Optimizer + Score Accuracy Lab',
-        'caption': 'Paste a graded CSV or upload one. The optimizer runs automatically. No run button is needed.',
+        'caption': 'Paste a graded CSV. The optimizer runs automatically. No run or upload button is needed.',
         'paste_title': 'Mobile-safe CSV paste',
         'paste': 'Paste graded CSV text here',
         'paste_help': 'Paste the whole CSV including the header row. This avoids the mobile upload button completely.',
-        'upload_optional': 'Optional desktop upload fallback',
-        'upload': 'Upload graded CSV / proof ledger',
-        'no_file': 'Paste or upload a CSV with finished results first.',
+        'upload_disabled': 'File upload is disabled on this mobile-safe page because the upload picker is unreliable on your phone. Use paste CSV instead.',
+        'no_file': 'Paste a CSV with finished results first.',
         'not_enough': 'Need at least 25 resolved rows for useful optimization.',
         'summary': 'Resolved data summary',
         'score_optimizer': 'Score / winner optimizer',
@@ -33,13 +32,12 @@ TEXT = {
     },
     'es': {
         'title': 'Optimizador de Umbrales + Laboratorio de Acierto por Marcador',
-        'caption': 'Pega un CSV calificado o sube uno. El optimizador corre automáticamente. No se necesita botón.',
+        'caption': 'Pega un CSV calificado. El optimizador corre automáticamente. No se necesita botón de correr o subir.',
         'paste_title': 'Pegar CSV seguro para móvil',
         'paste': 'Pega texto CSV calificado aquí',
         'paste_help': 'Pega todo el CSV incluyendo encabezados. Esto evita completamente el botón móvil de subir archivo.',
-        'upload_optional': 'Subida opcional para escritorio',
-        'upload': 'Subir CSV calificado / ledger de prueba',
-        'no_file': 'Pega o sube un CSV con resultados terminados primero.',
+        'upload_disabled': 'La subida de archivo está desactivada en esta página segura para móvil porque el selector de subida falla en tu teléfono. Usa pegar CSV.',
+        'no_file': 'Pega un CSV con resultados terminados primero.',
         'not_enough': 'Se necesitan al menos 25 filas resueltas para una optimización útil.',
         'summary': 'Resumen de datos resueltos',
         'score_optimizer': 'Optimizador marcador / ganador',
@@ -206,25 +204,13 @@ def load_pasted_csv() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def load_optional_upload() -> pd.DataFrame:
-    with st.expander(t('upload_optional'), expanded=False):
-        upload = st.file_uploader(t('upload'), type=['csv'])
-        if upload is not None:
-            try:
-                return pd.read_csv(upload)
-            except Exception as exc:
-                st.warning(f'CSV could not be read: {exc}')
-    return pd.DataFrame()
-
-
 st.title(t('title'))
 st.caption(t('caption'))
 st.warning(t('notice'))
 st.subheader(t('paste_title'))
+st.caption(t('upload_disabled'))
 st.text_area(t('paste'), key='threshold_pasted_csv', height=180, help=t('paste_help'), placeholder='event,prediction,result_status,model_probability\nTeam A at Team B,Team A,win,0.61')
 raw = load_pasted_csv()
-if raw.empty:
-    raw = load_optional_upload()
 if raw.empty:
     st.info(t('no_file'))
     st.stop()
