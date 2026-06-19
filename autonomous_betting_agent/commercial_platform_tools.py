@@ -14,15 +14,17 @@ from .odds_lock_tools import (
     summarize_locked_picks,
     update_profit_columns,
 )
+from .pick_hold_store import load_held_rows, save_held_rows
 from .row_normalizer import normalize_frame, result_status, safe_text
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LEDGER_PATH = REPO_ROOT / 'data' / 'odds_lock_pro_ledger.csv'
 PROOF_REQUIRED_COLUMNS = {'proof_id', 'locked_at_utc'}
+LOCKED_STORE_KEY = 'odds_lock_pro_locked_rows'
+REFRESH_STORE_KEY = 'public_proof_dashboard_refresh_rows'
 
 
 def normalize_workspace_id(value: Any) -> str:
-    """Return a safe no-login workspace/test-window id for separated proof ledgers."""
     text = safe_text(value).strip().lower()
     if not text:
         return 'default'
@@ -87,7 +89,7 @@ def has_locked_proof_rows(frame: pd.DataFrame | list[dict[str, Any]]) -> bool:
     return not filter_locked_proof_rows(frame).empty
 
 
-def load_persistent_ledger(path: Path = DEFAULT_LEDGER_PATH, workspace_id: Any = '') -> pd.DataFrame:
+def _load_from_disk(workspace_id: Any = '', path: Path = DEFAULT_LEDGER_PATH) -> pd.DataFrame:
     ledger_path = persistent_ledger_path(workspace_id, path)
     try:
         if ledger_path.exists():
@@ -97,13 +99,31 @@ def load_persistent_ledger(path: Path = DEFAULT_LEDGER_PATH, workspace_id: Any =
     return pd.DataFrame()
 
 
+def _load_from_hold_store(workspace_id: Any = '') -> pd.DataFrame:
+    rows = load_held_rows(LOCKED_STORE_KEY, workspace_id)
+    if not rows:
+        rows = load_held_rows(REFRESH_STORE_KEY, workspace_id)
+    return filter_locked_proof_rows(rows)
+
+
+def load_persistent_ledger(path: Path = DEFAULT_LEDGER_PATH, workspace_id: Any = '') -> pd.DataFrame:
+    disk = _load_from_disk(workspace_id, path)
+    held = _load_from_hold_store(workspace_id)
+    return merge_ledgers(disk, held)
+
+
 def save_persistent_ledger(frame: pd.DataFrame | list[dict[str, Any]], path: Path = DEFAULT_LEDGER_PATH, workspace_id: Any = '') -> pd.DataFrame:
     ledger_path = persistent_ledger_path(workspace_id, path)
-    ensure_data_dir(ledger_path)
     cleaned = filter_locked_proof_rows(frame)
     if cleaned.empty:
         return pd.DataFrame()
-    cleaned.to_csv(ledger_path, index=False)
+    save_held_rows(LOCKED_STORE_KEY, cleaned, workspace_id)
+    save_held_rows(REFRESH_STORE_KEY, cleaned, workspace_id)
+    try:
+        ensure_data_dir(ledger_path)
+        cleaned.to_csv(ledger_path, index=False)
+    except Exception:
+        pass
     return cleaned
 
 
@@ -216,7 +236,7 @@ def proof_audit_frame(frame: pd.DataFrame | list[dict[str, Any]]) -> pd.DataFram
         hash_status = 'hash_match' if stored_hash and stored_hash == recomputed_hash else 'hash_mismatch'
         current_lock_status = lock_status(row)
         audit_status = 'pass' if hash_status == 'hash_match' and current_lock_status == 'locked_before_start' else 'review'
-        item = {
+        rows.append({
             'proof_id': safe_text(row.get('proof_id')),
             'event': safe_text(row.get('event')),
             'prediction': safe_text(row.get('prediction')),
@@ -227,8 +247,7 @@ def proof_audit_frame(frame: pd.DataFrame | list[dict[str, Any]]) -> pd.DataFram
             'audit_status': audit_status,
             'stored_hash_prefix': stored_hash[:12],
             'recomputed_hash_prefix': recomputed_hash[:12],
-        }
-        rows.append(item)
+        })
     return pd.DataFrame(rows)
 
 
@@ -246,14 +265,7 @@ def proof_audit_summary(frame: pd.DataFrame | list[dict[str, Any]]) -> dict[str,
         score += 50.0 * (hash_match / proof_rows)
         score += 35.0 * (locked_before / proof_rows)
         score += 15.0 * max(0.0, 1.0 - (needs_review / proof_rows))
-    return {
-        'proof_rows': proof_rows,
-        'hash_match': hash_match,
-        'hash_mismatch': hash_mismatch,
-        'locked_before_start': locked_before,
-        'needs_review': needs_review,
-        'proof_quality_score': round(score, 2),
-    }
+    return {'proof_rows': proof_rows, 'hash_match': hash_match, 'hash_mismatch': hash_mismatch, 'locked_before_start': locked_before, 'needs_review': needs_review, 'proof_quality_score': round(score, 2)}
 
 
 def dashboard_metrics(frame: pd.DataFrame | list[dict[str, Any]]) -> dict[str, Any]:
@@ -302,9 +314,7 @@ def report_card_markdown(frame: pd.DataFrame | list[dict[str, Any]], *, title: s
     clv = metrics.get('avg_clv_percent')
     quality = metrics.get('proof_quality_score')
     lines = [
-        f'# {title}',
-        f'**{brand}**',
-        '',
+        f'# {title}', f'**{brand}**', '',
         f"Locked picks: **{metrics['locked_picks']}**",
         f"Resolved: **{metrics['resolved_picks']}**",
         f"Record: **{metrics['wins']}-{metrics['losses']}**",
@@ -312,9 +322,7 @@ def report_card_markdown(frame: pd.DataFrame | list[dict[str, Any]], *, title: s
         f"Units: **{metrics['profit_units']}**",
         f"ROI: **{'N/A' if roi is None else f'{roi * 100:.1f}%'}**",
         f"Avg CLV: **{'N/A' if clv is None else f'{clv * 100:.2f}%'}**",
-        f"Proof quality: **{quality}/100**",
-        '',
-        '_Research only. No guaranteed outcomes._',
+        f'Proof quality: **{quality}/100**', '', '_Research only. No guaranteed outcomes._',
     ]
     return '\n'.join(lines)
 
@@ -329,7 +337,7 @@ def report_card_html(frame: pd.DataFrame | list[dict[str, Any]], *, title: str =
     roi_text = 'N/A' if roi is None else f'{roi * 100:.1f}%'
     clv_text = 'N/A' if clv is None else f'{clv * 100:.2f}%'
     quality_text = 'N/A' if quality is None else f'{quality:.0f}/100'
-    return f"""
+    return f'''
 <div style="font-family:Arial,sans-serif;border:1px solid #333;border-radius:18px;padding:22px;max-width:760px;background:#10141f;color:#f6f7fb;">
   <div style="font-size:14px;letter-spacing:1px;text-transform:uppercase;color:#9fb3c8;">{brand}</div>
   <div style="font-size:34px;font-weight:800;margin:6px 0 18px;">{title}</div>
@@ -343,7 +351,7 @@ def report_card_html(frame: pd.DataFrame | list[dict[str, Any]], *, title: str =
   </div>
   <div style="margin-top:16px;color:#9fb3c8;font-size:12px;">Research only. No guaranteed outcomes.</div>
 </div>
-""".strip()
+'''.strip()
 
 
 def daily_locked_report(frame: pd.DataFrame | list[dict[str, Any]], *, language: str = 'English', public_only: bool = True) -> str:
