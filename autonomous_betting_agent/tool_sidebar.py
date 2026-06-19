@@ -81,34 +81,6 @@ def is_language_widget(label: Any, options: Any) -> bool:
     return 'English' in opts and 'Español' in opts and ('language' in text or 'idioma' in text)
 
 
-def _install_language_selectbox_suppressor() -> None:
-    """Hide legacy sidebar language selectboxes used by old pages.
-
-    Simulation Lab still calls ``st.sidebar.selectbox('Language / Idioma', ...)``
-    before drawing the shared sidebar. That produced the one-off broken layout
-    shown on mobile. This suppresses only that legacy language selectbox and
-    leaves file uploaders, buttons, forms, and normal selectboxes untouched.
-    """
-    if getattr(st.sidebar, '_aba_language_selectbox_suppressed_v1', False):
-        return
-    original_selectbox = st.sidebar.selectbox
-
-    def patched_selectbox(label: Any, options: Any, *args: Any, **kwargs: Any) -> Any:
-        if is_language_widget(label, options):
-            key = kwargs.get('key')
-            value = current_language(kwargs.get('value', 'English'))
-            if key:
-                try:
-                    st.session_state[key] = value
-                except Exception:
-                    pass
-            return value
-        return original_selectbox(label, options, *args, **kwargs)
-
-    st.sidebar.selectbox = patched_selectbox
-    st.sidebar._aba_language_selectbox_suppressed_v1 = True
-
-
 def inject_sidebar_css(st_module: Any) -> None:
     try:
         st_module.sidebar.markdown(SIDEBAR_CSS, unsafe_allow_html=True)
@@ -137,7 +109,10 @@ def render_curated_sidebar(st_module: Any, language: object = 'English', *, page
     st_module.sidebar.markdown('---')
     current = normal_language(language or current_language())
     index = 1 if current == 'Español' else 0
-    selected = st_module.sidebar.radio('Language', ['English', 'Español'], index=index, key=f'{page_key}_language', horizontal=True)
+    # Use a distinct key from legacy page-level widgets such as simulation_lab_language.
+    # This prevents StreamlitDuplicateElementKey when an older page creates its own
+    # language widget before calling this shared sidebar.
+    selected = st_module.sidebar.radio('Language', ['English', 'Español'], index=index, key=f'{page_key}_sidebar_language_radio', horizontal=True)
     sync_language(st_module, selected)
     render_tools_only(st_module)
 
@@ -164,6 +139,3 @@ def session_state_summary() -> pd.DataFrame:
 
 def proof_sidebar_snapshot() -> dict[str, int]:
     return {'pro_predictor_rows': 0, 'high_confidence_rows': 0, 'locked_rows': 0}
-
-
-_install_language_selectbox_suppressor()
