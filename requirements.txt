@@ -1,7 +1,8 @@
-# deploy trigger: force-streamlit-rebuild-sidebar-v10
+# deploy trigger: force-streamlit-rebuild-sidebar-v11
 numpy
 pandas
 python-dateutil
 requests
 pyyaml
 streamlit>=1.37
+pytest
