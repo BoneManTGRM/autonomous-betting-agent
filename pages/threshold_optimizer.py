@@ -15,12 +15,12 @@ LANG = render_app_sidebar('threshold_optimizer', language_key='threshold_optimiz
 TEXT = {
     'en': {
         'title': 'Threshold Optimizer + Score Accuracy Lab',
-        'caption': 'Paste a graded CSV. The optimizer runs automatically. No run, upload, or download button is needed.',
-        'paste_title': 'Mobile-safe CSV paste',
-        'paste': 'Paste graded CSV text here',
-        'paste_help': 'Paste the whole CSV including the header row. This avoids the mobile upload button completely.',
-        'upload_disabled': 'File upload is disabled on this mobile-safe page because the upload picker is unreliable on your phone. Use paste CSV instead.',
-        'no_file': 'Paste a CSV with finished results first.',
+        'caption': 'Upload or paste a graded CSV. The optimizer runs automatically. No run button is needed.',
+        'csv_title': 'CSV input',
+        'upload': 'Upload graded CSV / proof ledger',
+        'paste': 'Or paste graded CSV text here',
+        'paste_help': 'Paste the whole CSV including the header row. This is a fallback if mobile upload fails.',
+        'no_file': 'Upload or paste a CSV with finished results first.',
         'not_enough': 'Need at least 25 resolved rows for useful optimization.',
         'summary': 'Resolved data summary',
         'score_optimizer': 'Score / winner optimizer',
@@ -31,12 +31,12 @@ TEXT = {
     },
     'es': {
         'title': 'Optimizador de Umbrales + Laboratorio de Acierto por Marcador',
-        'caption': 'Pega un CSV calificado. El optimizador corre automáticamente. No se necesita botón de correr, subir o descargar.',
-        'paste_title': 'Pegar CSV seguro para móvil',
-        'paste': 'Pega texto CSV calificado aquí',
-        'paste_help': 'Pega todo el CSV incluyendo encabezados. Esto evita completamente el botón móvil de subir archivo.',
-        'upload_disabled': 'La subida de archivo está desactivada en esta página segura para móvil porque el selector de subida falla en tu teléfono. Usa pegar CSV.',
-        'no_file': 'Pega un CSV con resultados terminados primero.',
+        'caption': 'Sube o pega un CSV calificado. El optimizador corre automáticamente. No se necesita botón de correr.',
+        'csv_title': 'Entrada CSV',
+        'upload': 'Subir CSV calificado / ledger de prueba',
+        'paste': 'O pega texto CSV calificado aquí',
+        'paste_help': 'Pega todo el CSV incluyendo encabezados. Esto queda como respaldo si falla la subida móvil.',
+        'no_file': 'Sube o pega un CSV con resultados terminados primero.',
         'not_enough': 'Se necesitan al menos 25 filas resueltas para una optimización útil.',
         'summary': 'Resumen de datos resueltos',
         'score_optimizer': 'Optimizador marcador / ganador',
@@ -191,6 +191,17 @@ def false_positive_report(frame: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values('loss_rows', ascending=False).reset_index(drop=True) if rows else pd.DataFrame()
 
 
+def load_uploaded_csv() -> pd.DataFrame:
+    upload = st.file_uploader(t('upload'), type=['csv'], key='threshold_csv_upload')
+    if upload is None:
+        return pd.DataFrame()
+    try:
+        return pd.read_csv(upload)
+    except Exception as exc:
+        st.warning(f'CSV could not be read: {exc}')
+        return pd.DataFrame()
+
+
 def load_pasted_csv() -> pd.DataFrame:
     pasted = str(st.session_state.get('threshold_pasted_csv') or '').strip()
     if not pasted:
@@ -205,10 +216,11 @@ def load_pasted_csv() -> pd.DataFrame:
 st.title(t('title'))
 st.caption(t('caption'))
 st.warning(t('notice'))
-st.subheader(t('paste_title'))
-st.caption(t('upload_disabled'))
+st.subheader(t('csv_title'))
+raw = load_uploaded_csv()
 st.text_area(t('paste'), key='threshold_pasted_csv', height=180, help=t('paste_help'), placeholder='event,prediction,result_status,model_probability\nTeam A at Team B,Team A,win,0.61')
-raw = load_pasted_csv()
+if raw.empty:
+    raw = load_pasted_csv()
 if raw.empty:
     st.info(t('no_file'))
     st.stop()
