@@ -6,19 +6,6 @@ import pandas as pd
 import streamlit as st
 
 APP_TAGLINE = 'Powered by Reparodynamics'
-LANGUAGE_KEYS = (
-    'global_language',
-    'app_language',
-    'simulation_lab_language',
-    'signal_board_language',
-    'pro_predictor_language',
-    'threshold_optimizer_language',
-    'what_are_the_odds_language',
-    'what_are_the_odds_pro_language',
-    'odds_lock_pro_language',
-    'public_proof_dashboard_language',
-    'learning_memory_language',
-)
 TOOLS: tuple[tuple[str, str], ...] = (
     ('Signal Board', 'pages/signal_board.py'),
     ('Pro Predictor', 'pages/pro_predictor.py'),
@@ -31,13 +18,11 @@ TOOLS: tuple[tuple[str, str], ...] = (
 )
 SIDEBAR_CSS = '''
 <style>
-section[data-testid="stSidebar"] [data-testid="stSidebarContent"] { padding-top: 1.4rem; }
 section[data-testid="stSidebar"] a[href*="pages/"] {
   display:block; padding:.62rem .82rem; border-radius:.75rem; margin:.18rem 0;
   text-decoration:none!important; font-weight:650;
 }
 section[data-testid="stSidebar"] a[href*="pages/"]:hover { background:rgba(255,255,255,.10); }
-section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 { margin-top:.65rem; }
 </style>
 '''
 
@@ -47,24 +32,9 @@ def normal_language(value: object) -> str:
     return 'Español' if text.startswith('es') or 'español' in text or 'espanol' in text else 'English'
 
 
-def language_code(value: object) -> str:
-    return 'es' if normal_language(value) == 'Español' else 'en'
-
-
-def current_language(default: str = 'English') -> str:
-    for key in LANGUAGE_KEYS:
-        try:
-            value = st.session_state.get(key)
-        except Exception:
-            value = None
-        if value in ('English', 'Español'):
-            return str(value)
-    return normal_language(default)
-
-
 def sync_language(st_module: Any, value: object) -> str:
     lang = normal_language(value)
-    for key in LANGUAGE_KEYS:
+    for key in ('global_language', 'app_language'):
         try:
             st_module.session_state[key] = lang
         except Exception:
@@ -93,7 +63,10 @@ def render_sidebar_brand(st_module: Any) -> None:
     st_module.sidebar.caption(APP_TAGLINE)
 
 
-def render_tools_only(st_module: Any) -> None:
+def render_curated_sidebar(st_module: Any, language: object = 'English') -> None:
+    inject_sidebar_css(st_module)
+    st_module.sidebar.markdown('---')
+    render_sidebar_brand(st_module)
     st_module.sidebar.markdown('---')
     st_module.sidebar.markdown('### Tools')
     for label, path in TOOLS:
@@ -103,30 +76,16 @@ def render_tools_only(st_module: Any) -> None:
             st_module.sidebar.caption(label)
 
 
-def render_curated_sidebar(st_module: Any, language: object = 'English', *, page_key: str = 'app') -> None:
-    inject_sidebar_css(st_module)
-    render_sidebar_brand(st_module)
-    st_module.sidebar.markdown('---')
-    current = normal_language(language or current_language())
-    index = 1 if current == 'Español' else 0
-    # Use a distinct key from legacy page-level widgets such as simulation_lab_language.
-    # This prevents StreamlitDuplicateElementKey when an older page creates its own
-    # language widget before calling this shared sidebar.
-    selected = st_module.sidebar.radio('Language', ['English', 'Español'], index=index, key=f'{page_key}_sidebar_language_radio', horizontal=True)
-    sync_language(st_module, selected)
-    render_tools_only(st_module)
-
-
 def sidebar_language_selector(st_module: Any, *, key: str, default: str = 'English') -> str:
     try:
         value = st_module.session_state.get(key, st_module.session_state.get('global_language', default))
     except Exception:
         value = default
-    return language_code(value)
+    return 'es' if normal_language(value) == 'Español' else 'en'
 
 
 def render_tool_sidebar(page_key: str, language: str = 'English') -> None:
-    render_curated_sidebar(st, language, page_key=page_key)
+    render_curated_sidebar(st, language)
 
 
 def install_sidebar_tools() -> None:
