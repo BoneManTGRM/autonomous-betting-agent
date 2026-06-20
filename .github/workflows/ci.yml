@@ -10,14 +10,20 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    name: Python 3.11 compile and pytest
+    name: Python checks
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     env:
       CI: 'true'
       PYTHONUNBUFFERED: '1'
+      STREAMLIT_SERVER_HEADLESS: 'true'
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,12 +38,33 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -m pip install pytest
 
-      - name: Compile source
+      - name: Compile Python files
         run: |
-          python -m compileall -q streamlit_app.py app_streamlit.py autonomous_betting_agent pages tests scripts
+          python - <<'PY'
+          import py_compile
+          from pathlib import Path
 
-      - name: Run pytest
+          roots = [Path('autonomous_betting_agent'), Path('pages'), Path('tests'), Path('scripts')]
+          roots += [Path('app_streamlit.py'), Path('streamlit_app.py')]
+          failures = []
+          for root in roots:
+              if not root.exists():
+                  continue
+              files = [root] if root.is_file() else sorted(root.rglob('*.py'))
+              for path in files:
+                  if any(part.startswith('.') for part in path.parts):
+                      continue
+                  try:
+                      py_compile.compile(str(path), doraise=True)
+                  except Exception as exc:
+                      failures.append(f'{path}: {exc}')
+          if failures:
+              print('\n'.join(failures))
+              raise SystemExit(1)
+          print('compile ok')
+          PY
+
+      - name: Run unit tests
         run: |
           python -m pytest -q tests --disable-warnings --import-mode=importlib
