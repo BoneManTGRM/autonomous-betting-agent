@@ -37,6 +37,7 @@ TEXT = {
         'paste_help': 'Paste the whole CSV including the header row. This is a fallback if mobile upload fails.',
         'waiting': 'Fill event, pick, probability, and decimal or American price. Or upload/paste CSV text / use latest session rows.',
         'saved': 'Rows are saved automatically for Odds Lock Pro and the public dashboard.',
+        'deduped': 'Merged rows deduplicated before handoff.',
     },
     'es': {
         'title': 'What Are the Odds',
@@ -63,6 +64,7 @@ TEXT = {
         'paste_help': 'Pega todo el CSV incluyendo encabezados. Esto queda como respaldo si falla la subida móvil.',
         'waiting': 'Llena evento, pick, probabilidad y precio decimal o americano. O sube/pega CSV / usa filas recientes.',
         'saved': 'Las filas se guardan automáticamente para Odds Lock Pro y el dashboard público.',
+        'deduped': 'Filas combinadas deduplicadas antes de enviarlas.',
     },
 }
 
@@ -103,6 +105,95 @@ def implied_probability(decimal_price: float | None) -> float | None:
     if decimal_price is None or decimal_price <= 1.0:
         return None
     return round(1.0 / decimal_price, 6)
+
+
+def _clean_text(value: Any) -> str:
+    if pd.isna(value):
+        return ''
+    return ' '.join(str(value).strip().lower().split())
+
+
+def _has_rich_odds(row: pd.Series) -> bool:
+    rich_cols = [
+        'model_probability_clean',
+        'model_probability',
+        'market_implied_probability',
+        'model_market_edge',
+        'decimal_price',
+        'odds_at_pick',
+        'best_price',
+        'agent_score',
+    ]
+    return any(col in row.index and pd.notna(row.get(col)) and str(row.get(col)).strip() not in ('', 'nan', 'None') for col in rich_cols)
+
+
+def _dedupe_sort_value(row: pd.Series) -> tuple[int, int, float, str]:
+    rich = 1 if _has_rich_odds(row) else 0
+    lock_ready = 1 if str(row.get('lock_ready', '')).strip().lower() in ('true', '1', 'yes') else 0
+    score = safe_float(row.get('agent_score'), 0.0) or 0.0
+    source = _clean_text(row.get('source_file'))
+    return (rich, lock_ready, score, source)
+
+
+def dedupe_merged_rows(frame: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """Remove accidental duplicate imports while keeping distinct markets.
+
+    Priority order:
+    1. Exact full-row duplicates.
+    2. Exact prediction-market duplicates by event_id/event, market, line and prediction.
+    3. Fallback result-only rows when a richer odds row for the same event+prediction exists.
+
+    This intentionally keeps different markets for the same game, e.g. h2h and totals.
+    """
+    if frame.empty:
+        return frame, 0
+
+    work = frame.copy()
+    before = len(work)
+    work = work.drop_duplicates().copy()
+
+    event_key = work['event_id'].map(_clean_text) if 'event_id' in work.columns else pd.Series('', index=work.index)
+    event_fallback = work['event'].map(_clean_text) if 'event' in work.columns else pd.Series('', index=work.index)
+    event_key = event_key.mask(event_key.eq('') | event_key.eq('nan'), event_fallback)
+
+    market_key = work['market_type'].map(_clean_text) if 'market_type' in work.columns else pd.Series('', index=work.index)
+    line_key = work['line_point'].map(_clean_text) if 'line_point' in work.columns else pd.Series('', index=work.index)
+    prediction_key = work['prediction'].map(_clean_text) if 'prediction' in work.columns else pd.Series('', index=work.index)
+    sport_key = work['sport'].map(_clean_text) if 'sport' in work.columns else pd.Series('', index=work.index)
+
+    work['_aba_event_key'] = event_key
+    work['_aba_market_key'] = market_key
+    work['_aba_line_key'] = line_key
+    work['_aba_prediction_key'] = prediction_key
+    work['_aba_sport_key'] = sport_key
+    work['_aba_rich'] = work.apply(lambda row: 1 if _has_rich_odds(row) else 0, axis=1)
+    work['_aba_lock'] = work.get('lock_ready', pd.Series('', index=work.index)).map(lambda value: 1 if str(value).strip().lower() in ('true', '1', 'yes') else 0)
+    work['_aba_agent_score_sort'] = work.get('agent_score', pd.Series(0, index=work.index)).map(lambda value: safe_float(value, 0.0) or 0.0)
+
+    # Drop duplicate rows for the same exact market/pick; richer rows win.
+    sort_cols = ['_aba_rich', '_aba_lock', '_aba_agent_score_sort']
+    work = work.sort_values(sort_cols, ascending=[False, False, False], kind='mergesort')
+    exact_key_cols = ['_aba_event_key', '_aba_market_key', '_aba_line_key', '_aba_prediction_key']
+    exact_mask = work[exact_key_cols].astype(str).agg('|'.join, axis=1).ne('|||')
+    keyed = work[exact_mask].drop_duplicates(subset=exact_key_cols, keep='first')
+    unkeyed = work[~exact_mask]
+    work = pd.concat([keyed, unkeyed], ignore_index=True, sort=False)
+
+    # If the same event+prediction exists in both rich and fallback result-only rows, keep rich.
+    rich_pairs = set(
+        work.loc[work['_aba_rich'].eq(1), ['_aba_event_key', '_aba_prediction_key']]
+        .astype(str)
+        .agg('|'.join, axis=1)
+        .tolist()
+    )
+    pair_key = work[['_aba_event_key', '_aba_prediction_key']].astype(str).agg('|'.join, axis=1)
+    keep_mask = work['_aba_rich'].eq(1) | ~pair_key.isin(rich_pairs)
+    work = work[keep_mask].copy()
+
+    helper_cols = [col for col in work.columns if col.startswith('_aba_')]
+    work = work.drop(columns=helper_cols, errors='ignore').reset_index(drop=True)
+    removed = before - len(work)
+    return work, max(0, int(removed))
 
 
 def build_manual_row() -> dict[str, Any] | None:
@@ -243,7 +334,10 @@ if not frames:
     st.warning(t('waiting'))
     st.stop()
 
-output = pd.concat(frames, ignore_index=True, sort=False)
+raw_output = pd.concat(frames, ignore_index=True, sort=False)
+output, removed_count = dedupe_merged_rows(raw_output)
 save_rows(output)
 st.success(t('saved'))
+if removed_count:
+    st.info(f"{t('deduped')} Removed: {removed_count}. Final rows: {len(output)}.")
 st.dataframe(output, use_container_width=True, hide_index=True)
