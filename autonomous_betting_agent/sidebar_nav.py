@@ -19,16 +19,21 @@ LANGUAGE_KEYS = [
     'learning_memory_language',
     'learning_impact_report_language',
     'simulation_lab_language',
+    'proof_control_center_language',
+    'reset_storage_language',
 ]
 TOOLS: tuple[tuple[str, str, str], ...] = (
     ('Signal Board', 'Panel de Señales', 'pages/signal_board.py'),
     ('Pro Predictor', 'Predictor Pro', 'pages/pro_predictor.py'),
+    ('Pro Predictor Volume', 'Predictor Pro Volumen', 'pages/pro_predictor_volume.py'),
     ('Simulation Lab', 'Laboratorio de Simulación', 'pages/simulation_lab.py'),
     ('Threshold Optimizer', 'Optimizador de Umbral', 'pages/threshold_optimizer.py'),
     ('What Are the Odds', 'Cuáles Son las Cuotas', 'pages/what_are_the_odds.py'),
     ('Odds Lock Pro', 'Bloqueo de Cuotas Pro', 'pages/odds_lock_pro.py'),
+    ('Proof Control Center', 'Centro de Control de Prueba', 'pages/proof_control_center.py'),
     ('Public Proof Dashboard', 'Panel Público de Prueba', 'pages/public_proof_dashboard.py'),
     ('Storage Diagnostics', 'Diagnóstico de Almacenamiento', 'pages/storage_diagnostics.py'),
+    ('Reset Storage', 'Reiniciar almacenamiento', 'pages/reset_storage.py'),
     ('Learning Memory', 'Memoria de Aprendizaje', 'pages/learn_memory_safe.py'),
 )
 PRO_PREDICTOR_LARGE_LIST_70_DEFAULTS = {
@@ -38,7 +43,7 @@ PRO_PREDICTOR_LARGE_LIST_70_DEFAULTS = {
     'baseline_accuracy_strong_edge': 0.04,
     'baseline_accuracy_min_strength': 38.0,
     'baseline_accuracy_use_high_conf': True,
-    'baseline_accuracy_max_high_conf': 300,
+    'baseline_accuracy_max_high_conf': 700,
     'baseline_accuracy_min_high_prob': 0.58,
     'baseline_accuracy_min_high_edge': -0.03,
     'baseline_accuracy_min_high_strength': 38.0,
