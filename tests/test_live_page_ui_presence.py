@@ -18,30 +18,31 @@ class LivePageUiPresenceTests(unittest.TestCase):
         self.assertIn('LiveAPIContextBuilder', self.text)
         self.assertIn('fuse_row', self.text)
 
-    def test_live_pro_predictor_page_has_current_high_confidence_workflow(self) -> None:
-        self.assertIn('Highest-confidence output', self.text)
-        self.assertIn('Send only highest-confidence rows to Odds Lock Pro', self.text)
-        self.assertIn('High-confidence min probability', self.text)
-        self.assertIn('High-confidence min edge', self.text)
-        self.assertIn('High-confidence min signal strength', self.text)
-        self.assertIn('High-confidence min agent score', self.text)
-        self.assertIn('Download highest-confidence CSV', self.text)
+    def test_live_pro_predictor_page_has_current_large_list_workflow(self) -> None:
+        self.assertIn('Large-list volume output', self.text)
+        self.assertIn('Send large-list volume rows to Odds Lock Pro', self.text)
+        self.assertIn('Large-list min agent score', self.text)
+        self.assertIn('Download large-list CSV', self.text)
+        self.assertIn('pro_predictor_high_confidence_rows', self.text)
+        self.assertIn('pro_predictor_latest_rows', self.text)
+        self.assertIn('ara_latest_predictions', self.text)
+        self.assertIn('persist_handoff', self.text)
 
     def test_live_pro_predictor_page_has_value_controls(self) -> None:
         self.assertIn('Minimum model probability', self.text)
         self.assertIn('Minimum edge', self.text)
         self.assertIn('Strong edge threshold', self.text)
         self.assertIn('Minimum signal strength', self.text)
-        self.assertIn('lock_ready_candidates', self.text)
-        self.assertIn('agent_decision_summary', self.text)
+        self.assertIn('lock_ready', self.text)
+        self.assertIn('agent_decision', self.text)
         self.assertIn('scanner_strength_summary', self.text)
 
     def test_live_pro_predictor_page_uses_real_api_context_builder(self) -> None:
         self.assertIn('LiveAPIContextBuilder', self.text)
         self.assertIn('context_builder.context_for_event', self.text)
         self.assertIn('api_context', self.text)
-        self.assertIn('row.update(api_context)', self.text)
-        self.assertIn('fusion_input', self.text)
+        self.assertIn('api_context.update', self.text)
+        self.assertIn('fuse_row', self.text)
 
     def test_live_pro_predictor_page_has_api_coverage_and_date_cutoff(self) -> None:
         self.assertIn('latest_event_date', self.text)
@@ -49,6 +50,8 @@ class LivePageUiPresenceTests(unittest.TestCase):
         self.assertIn('api_coverage_score', self.text)
         self.assertIn('WeatherAPI', self.text)
         self.assertIn('SportsDataIO', self.text)
+        self.assertIn('market_type', self.text)
+        self.assertIn('line_point', self.text)
 
 
 if __name__ == '__main__':
