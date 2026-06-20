@@ -5,22 +5,24 @@ from pathlib import Path
 
 
 class UiPresenceTests(unittest.TestCase):
-    def test_streamlit_app_imports_pro_predictor_page(self) -> None:
+    def test_streamlit_app_uses_current_app_shell(self) -> None:
         text = Path('streamlit_app.py').read_text(encoding='utf-8')
-        self.assertIn('import pages.pro_predictor', text)
-        self.assertIn('mobile_safe_file_uploader', text)
-        self.assertIn('st.file_uploader = mobile_safe_file_uploader', text)
+        self.assertIn('from app_streamlit import *', text)
+        self.assertIn('Streamlit Cloud entrypoint', text)
         self.assertNotIn('runpy.run_path', text)
         self.assertNotIn('PRO_PREDICTOR_PAGE', text)
 
     def test_pro_predictor_has_current_handoff_flow(self) -> None:
         text = Path('pages/pro_predictor.py').read_text(encoding='utf-8')
-        self.assertIn('Highest-confidence output', text)
-        self.assertIn('Send only highest-confidence rows to Odds Lock Pro', text)
-        self.assertIn('Download highest-confidence CSV', text)
+        self.assertIn('Large-list volume output', text)
+        self.assertIn('Send large-list volume rows to Odds Lock Pro', text)
+        self.assertIn('Download large-list CSV', text)
+        self.assertIn('persist_handoff', text)
         self.assertIn('pro_predictor_high_confidence_rows', text)
         self.assertIn('pro_predictor_latest_rows', text)
         self.assertIn('ara_latest_predictions', text)
+        self.assertIn('market_type = getattr(outcome', text)
+        self.assertIn('line_point', text)
 
     def test_standalone_pages_contain_fields(self) -> None:
         market = Path('market_capture_page.py').read_text(encoding='utf-8')
