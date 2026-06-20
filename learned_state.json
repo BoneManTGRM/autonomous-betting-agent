@@ -1,22 +1,25 @@
 {
-  "accuracy_after": null,
-  "accuracy_before": null,
-  "brier_after": null,
-  "brier_before": null,
+  "accuracy_after": 0.726027397260274,
+  "accuracy_before": 0.726027397260274,
+  "brier_after": 0.19958904109589035,
+  "brier_before": 0.19958904109589035,
   "calibration_strength": 0.0,
-  "events_trained": 0,
+  "events_trained": 73,
   "intercept": 0.0,
-  "log_loss_after": null,
-  "log_loss_before": null,
+  "log_loss_after": 0.5888113440448157,
+  "log_loss_before": 0.5888113440448157,
   "notes": [
-    "Reset for clean reimport. Upload the two intended lists again using Learning Memory."
+    "Learns probability calibration from graded historical predictions.",
+    "Uses sample-size shrinkage to reduce overfitting on small datasets.",
+    "Uses held-out validation when enough rows exist and falls back toward identity if calibration hurts validation.",
+    "This does not prove betting profitability; use untouched forward tests before making performance claims."
   ],
   "slope": 1.0,
-  "source": "reset_for_clean_reimport",
-  "trained_at_utc": null,
-  "training_strategy": "identity_until_retrained",
-  "validation_brier_after": null,
-  "validation_brier_before": null,
-  "validation_log_loss_after": null,
-  "validation_log_loss_before": null
+  "source": "High_confidence_2_checked_new_games_2026-06-20_updated_results.csv",
+  "trained_at_utc": "2026-06-20T21:21:41+00:00",
+  "training_strategy": "cross_validated_logistic_calibration_l2=0.03_identity_fallback",
+  "validation_brier_after": 0.21019819663992897,
+  "validation_brier_before": 0.19958904109589037,
+  "validation_log_loss_after": 0.6171669517218814,
+  "validation_log_loss_before": 0.5888113440448157
 }
