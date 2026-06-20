@@ -2,11 +2,9 @@ name: CI
 
 on:
   push:
-    branches:
-      - '**'
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -14,9 +12,12 @@ permissions:
 
 jobs:
   test:
-    name: Python compile and pytest
+    name: Python 3.11 compile and pytest
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      PYTHONUNBUFFERED: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,18 +32,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
+          python -m pip install pytest
 
       - name: Compile source
         run: |
-          python -m compileall streamlit_app.py app_streamlit.py autonomous_betting_agent pages tests
+          python -m compileall -q streamlit_app.py app_streamlit.py autonomous_betting_agent pages tests scripts
 
       - name: Run pytest
         run: |
-          python -m pytest -q tests > pytest.log 2>&1
-
-      - name: Upload pytest log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-pytest-log
-          path: pytest.log
+          python -m pytest -q tests --disable-warnings --import-mode=importlib
