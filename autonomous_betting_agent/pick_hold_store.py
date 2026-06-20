@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import base64
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import requests
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / 'data'
@@ -17,6 +20,8 @@ HELD_KEYS = {
     'public_proof_dashboard_refresh_rows',
 }
 _FALLBACK_MEMORY: dict[str, list[dict[str, Any]]] = {}
+GITHUB_API = 'https://api.github.com'
+GITHUB_STATE_DIR = '.aba_state'
 
 
 def _memory_store() -> dict[str, list[dict[str, Any]]]:
@@ -31,6 +36,38 @@ def _memory_store() -> dict[str, list[dict[str, Any]]]:
         return _cached_store()
     except Exception:
         return _FALLBACK_MEMORY
+
+
+def _secret_value(*names: str) -> str:
+    try:
+        import streamlit as st
+        for name in names:
+            value = str(st.secrets.get(name, '')).strip()
+            if value:
+                return value
+    except Exception:
+        pass
+    for name in names:
+        value = os.getenv(name, '').strip()
+        if value:
+            return value
+    return ''
+
+
+def _github_token() -> str:
+    return _secret_value('GITHUB_PROOF_TOKEN', 'PROOF_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN')
+
+
+def _github_repo() -> str:
+    return _secret_value('GITHUB_PROOF_REPO', 'PROOF_GITHUB_REPO', 'GITHUB_REPOSITORY') or 'BoneManTGRM/autonomous-betting-agent'
+
+
+def _github_branch() -> str:
+    return _secret_value('GITHUB_PROOF_BRANCH', 'PROOF_GITHUB_BRANCH') or 'main'
+
+
+def github_store_enabled() -> bool:
+    return bool(_github_token() and _github_repo())
 
 
 def normalize_workspace_id(value: Any = 'test_01') -> str:
@@ -58,6 +95,19 @@ def _backup_path_for(key: str, workspace_id: Any = 'test_01') -> Path:
     return DATA_DIR / f'held_picks_{workspace}_{_safe_key(key)}.backup.json'
 
 
+def _github_path(key: str, workspace_id: Any = 'test_01') -> str:
+    workspace = normalize_workspace_id(workspace_id)
+    return f'{GITHUB_STATE_DIR}/held_picks_{workspace}_{_safe_key(key)}.json'
+
+
+def _github_headers(token: str) -> dict[str, str]:
+    return {
+        'Authorization': f'Bearer {token}',
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+    }
+
+
 def rows_from_any(value: Any) -> list[dict[str, Any]]:
     if value is None:
         return []
@@ -77,6 +127,60 @@ def _write_payload(path: Path, payload: dict[str, Any]) -> None:
     tmp.replace(path)
 
 
+def _github_get_payload(key: str, workspace_id: Any = 'test_01') -> tuple[list[dict[str, Any]], str]:
+    token = _github_token()
+    repo = _github_repo()
+    branch = _github_branch()
+    if not token or not repo:
+        return [], ''
+    url = f'{GITHUB_API}/repos/{repo}/contents/{_github_path(key, workspace_id)}'
+    try:
+        response = requests.get(url, headers=_github_headers(token), params={'ref': branch}, timeout=15)
+        if response.status_code == 404:
+            return [], ''
+        response.raise_for_status()
+        payload = response.json()
+        encoded = str(payload.get('content', '')).replace('\n', '')
+        decoded = base64.b64decode(encoded).decode('utf-8')
+        data = json.loads(decoded)
+        rows = data.get('rows', [])
+        return [dict(row) for row in rows if isinstance(row, dict)], str(payload.get('sha', ''))
+    except Exception:
+        return [], ''
+
+
+def _github_save_payload(key: str, rows: list[dict[str, Any]], workspace_id: Any = 'test_01') -> bool:
+    token = _github_token()
+    repo = _github_repo()
+    branch = _github_branch()
+    if not token or not repo:
+        return False
+    existing_rows, sha = _github_get_payload(key, workspace_id)
+    payload = {
+        'version': 'held-picks-v6-github-durable',
+        'workspace_id': normalize_workspace_id(workspace_id),
+        'key': key,
+        'rows': rows,
+    }
+    content = base64.b64encode((json.dumps(payload, ensure_ascii=False, indent=2, default=str) + '\n').encode('utf-8')).decode('ascii')
+    body: dict[str, Any] = {
+        'message': f'Persist {key} for {normalize_workspace_id(workspace_id)}',
+        'content': content,
+        'branch': branch,
+    }
+    if sha or existing_rows:
+        _, sha = _github_get_payload(key, workspace_id)
+    if sha:
+        body['sha'] = sha
+    url = f'{GITHUB_API}/repos/{repo}/contents/{_github_path(key, workspace_id)}'
+    try:
+        response = requests.put(url, headers=_github_headers(token), json=body, timeout=20)
+        response.raise_for_status()
+        return True
+    except Exception:
+        return False
+
+
 def save_held_rows(key: str, rows: Any, workspace_id: Any = 'test_01') -> int:
     if key not in HELD_KEYS:
         return 0
@@ -88,12 +192,19 @@ def save_held_rows(key: str, rows: Any, workspace_id: Any = 'test_01') -> int:
         store[_store_key(key, 'test_01')] = cleaned
     store[_store_key(f'latest_{key}', 'test_01')] = cleaned
     try:
-        payload = {'version': 'held-picks-v5-verified-local', 'workspace_id': workspace, 'key': key, 'rows': cleaned}
+        payload = {'version': 'held-picks-v6-github-durable', 'workspace_id': workspace, 'key': key, 'rows': cleaned}
         _write_payload(_path_for(key, workspace), payload)
         _write_payload(_backup_path_for(key, workspace), payload)
         if workspace != 'test_01':
-            _write_payload(_path_for(key, 'test_01'), {'version': 'held-picks-v5-verified-local', 'workspace_id': 'test_01', 'key': key, 'rows': cleaned})
-        _write_payload(_path_for(f'latest_{key}', 'test_01'), {'version': 'held-picks-v5-verified-local', 'workspace_id': 'test_01', 'key': f'latest_{key}', 'rows': cleaned})
+            _write_payload(_path_for(key, 'test_01'), {'version': 'held-picks-v6-github-durable', 'workspace_id': 'test_01', 'key': key, 'rows': cleaned})
+        _write_payload(_path_for(f'latest_{key}', 'test_01'), {'version': 'held-picks-v6-github-durable', 'workspace_id': 'test_01', 'key': f'latest_{key}', 'rows': cleaned})
+    except Exception:
+        pass
+    try:
+        _github_save_payload(key, cleaned, workspace)
+        if workspace != 'test_01':
+            _github_save_payload(key, cleaned, 'test_01')
+        _github_save_payload(f'latest_{key}', cleaned, 'test_01')
     except Exception:
         pass
     return len(cleaned)
@@ -128,6 +239,10 @@ def load_held_rows(key: str, workspace_id: Any = 'test_01') -> list[dict[str, An
             if rows:
                 store[_store_key(lookup_key, lookup_workspace)] = rows
                 return rows
+        rows, _sha = _github_get_payload(lookup_key, lookup_workspace)
+        if rows:
+            store[_store_key(lookup_key, lookup_workspace)] = rows
+            return rows
     try:
         safe = _safe_key(key)
         for path in sorted(DATA_DIR.glob(f'held_picks_*_{safe}.json'), key=lambda p: p.stat().st_mtime, reverse=True):
@@ -160,6 +275,7 @@ def verify_held_rows(key: str, rows: Any, workspace_id: Any = 'test_01') -> dict
         'saved_rows': saved,
         'reloaded_rows': reloaded,
         'ok': ok,
+        'github_store_enabled': github_store_enabled(),
         'message': 'save_reload_ok' if ok else 'save_reload_mismatch',
     }
 
@@ -170,14 +286,18 @@ def store_snapshot(workspace_id: Any = 'test_01') -> pd.DataFrame:
     for key in sorted(HELD_KEYS):
         exact_path = _path_for(key, workspace)
         backup_path = _backup_path_for(key, workspace)
+        github_rows, _sha = _github_get_payload(key, workspace)
         rows.append({
             'workspace_id': workspace,
             'key': key,
             'loaded_rows': len(load_held_rows(key, workspace)),
             'disk_rows': len(_load_payload(exact_path)),
             'backup_rows': len(_load_payload(backup_path)),
+            'github_rows': len(github_rows),
+            'github_enabled': github_store_enabled(),
             'disk_file_exists': exact_path.exists(),
             'backup_file_exists': backup_path.exists(),
             'disk_file': str(exact_path),
+            'github_path': _github_path(key, workspace),
         })
     return pd.DataFrame(rows)
