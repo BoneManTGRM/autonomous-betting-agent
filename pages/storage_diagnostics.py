@@ -9,7 +9,14 @@ from typing import Any
 import requests
 import streamlit as st
 
-from autonomous_betting_agent.pick_hold_store import github_store_enabled, normalize_workspace_id, store_snapshot
+from autonomous_betting_agent.pick_hold_store import (
+    HELD_KEYS,
+    github_store_enabled,
+    load_held_rows,
+    normalize_workspace_id,
+    save_held_rows,
+    store_snapshot,
+)
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 
 st.set_page_config(page_title='Storage Diagnostics', layout='wide')
@@ -60,7 +67,7 @@ def github_write_probe(workspace_id: str) -> dict[str, Any]:
     payload = {
         'workspace_id': normalize_workspace_id(workspace_id),
         'checked_at_utc': datetime.now(timezone.utc).isoformat(),
-        'purpose': 'ABA Signal Pro durable storage probe',
+        'purpose': 'ABA Signal Pro durable storage probe only; not a proof ledger',
     }
     body: dict[str, Any] = {
         'message': f'Durable storage probe for {normalize_workspace_id(workspace_id)}',
@@ -72,11 +79,35 @@ def github_write_probe(workspace_id: str) -> dict[str, Any]:
     try:
         response = requests.put(url, headers=headers, json=body, timeout=20)
         if response.status_code in {200, 201}:
-            return {'ok': True, 'status_code': response.status_code, 'message': f'GitHub durable write succeeded: {path}'}
-        text = response.text[:500]
-        return {'ok': False, 'status_code': response.status_code, 'message': text}
+            return {'ok': True, 'status_code': response.status_code, 'message': f'GitHub durable write test succeeded: {path}'}
+        return {'ok': False, 'status_code': response.status_code, 'message': response.text[:500]}
     except Exception as exc:
         return {'ok': False, 'status_code': None, 'message': str(exc)}
+
+
+def sync_loaded_rows_to_github(workspace_id: str) -> dict[str, Any]:
+    if not github_store_enabled():
+        return {'ok': False, 'synced_keys': 0, 'synced_rows': 0, 'message': 'GitHub durable store is not configured.', 'details': ''}
+    synced_keys = 0
+    synced_rows = 0
+    details: list[str] = []
+    for key in sorted(HELD_KEYS):
+        rows = load_held_rows(key, workspace_id)
+        if not rows:
+            details.append(f'{key}: 0')
+            continue
+        saved = save_held_rows(key, rows, workspace_id)
+        synced_keys += 1
+        synced_rows += saved
+        details.append(f'{key}: {saved}')
+    ok = synced_rows > 0
+    return {
+        'ok': ok,
+        'synced_keys': synced_keys,
+        'synced_rows': synced_rows,
+        'message': 'Synced loaded rows to GitHub durable storage.' if ok else 'No loaded/local rows were available to sync. Recreate locks first.',
+        'details': '; '.join(details),
+    }
 
 
 st.title('Storage Diagnostics')
@@ -97,19 +128,31 @@ st.metric('Total disk rows', int(snapshot['disk_rows'].sum()) if not snapshot.em
 st.metric('Total backup rows', int(snapshot['backup_rows'].sum()) if not snapshot.empty else 0)
 st.metric('Total GitHub rows', int(snapshot['github_rows'].sum()) if not snapshot.empty and 'github_rows' in snapshot.columns else 0)
 
-if st.button('Run GitHub durable write test', type='primary', use_container_width=True):
+st.info('The red write-test button only proves GitHub writes work. It does not save proof rows by itself.')
+button_cols = st.columns(2)
+if button_cols[0].button('Run GitHub durable write test', type='primary', use_container_width=True):
     result = github_write_probe(workspace_id)
     if result.get('ok'):
         st.success(result.get('message'))
     else:
         st.error(f"GitHub write failed: {result.get('status_code')} / {result.get('message')}")
 
+if button_cols[1].button('Sync loaded rows to GitHub', use_container_width=True):
+    result = sync_loaded_rows_to_github(workspace_id)
+    if result.get('ok'):
+        st.success(f"{result.get('message')} Keys: {result.get('synced_keys')} / rows: {result.get('synced_rows')}")
+        st.caption(str(result.get('details', '')))
+    else:
+        st.warning(str(result.get('message')))
+        st.caption(str(result.get('details', '')))
+
+snapshot = store_snapshot(workspace_id)
 st.dataframe(snapshot, use_container_width=True, hide_index=True)
 
 if not github_store_enabled():
     st.warning('GitHub durable storage is not configured. Add GITHUB_PROOF_TOKEN to Streamlit secrets to survive reboot/redeploy.')
 elif not snapshot.empty and snapshot.get('github_rows', 0).sum() == 0:
-    st.warning('GitHub durable storage is enabled, but no durable proof rows were found yet. Create a new lock in Odds Lock Pro, then return here.')
+    st.warning('GitHub durable storage is enabled, but no durable proof rows were found yet. Create a new lock in Odds Lock Pro, then return here or press Sync loaded rows to GitHub while rows are still visible.')
 elif not snapshot.empty and snapshot.get('github_rows', 0).sum() > 0:
     st.success('GitHub durable storage has rows for this workspace.')
 
