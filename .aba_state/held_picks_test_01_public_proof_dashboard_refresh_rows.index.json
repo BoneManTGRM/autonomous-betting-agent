@@ -1,0 +1,9 @@
+{
+  "version": "held-picks-v7-github-chunked",
+  "format": "chunked",
+  "workspace_id": "test_01",
+  "key": "public_proof_dashboard_refresh_rows",
+  "parts": 6,
+  "rows_count": 252,
+  "chunk_size": 50
+}
