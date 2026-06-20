@@ -8,40 +8,24 @@ from .row_normalizer import dedupe_frame, normalize_frame, safe_text
 
 UNSUPPORTED_TENNIS_TERMS = {
     'tennis',
-    'atp',
-    'wta',
-    'halle',
-    'queen',
-    "queen's",
-    'german open',
-    'nottingham',
-    'berlin',
+    'atp ',
+    ' atp',
+    'wta ',
+    ' wta',
+    'atp halle',
+    'wta german open',
+    'halle open',
+    "queen's club",
+    'queens club tennis',
+    'german open tennis',
+    'nottingham open',
     'bad homburg',
-    'eastbourne',
-    'mallorca',
+    'eastbourne tennis',
+    'mallorca tennis',
     'wimbledon',
     'roland garros',
     'us open tennis',
-    'australian open',
-}
-
-SUPPORTED_PROOF_SPORT_HINTS = {
-    'afl',
-    'aussie rules',
-    'baseball',
-    'basketball',
-    'cricket',
-    'fifa',
-    'football',
-    'kbo',
-    'mlb',
-    'nfl',
-    'nhl',
-    'npb',
-    'nrl',
-    'rugby',
-    'soccer',
-    'wnba',
+    'australian open tennis',
 }
 
 PROOF_STORE_KEYS = [
@@ -69,8 +53,9 @@ def unsupported_market_reason(row: Mapping[str, Any]) -> str:
     text = row_text(row)
     if not text:
         return 'missing_market_context'
+    padded = f' {text} '
     for term in sorted(UNSUPPORTED_TENNIS_TERMS, key=len, reverse=True):
-        if term in text:
+        if term in padded:
             return 'unsupported_tennis_market_no_odds_api'
     return ''
 
