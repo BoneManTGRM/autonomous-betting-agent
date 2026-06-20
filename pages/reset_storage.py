@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import streamlit as st
 
-from autonomous_betting_agent.pick_hold_store import HELD_KEYS, normalize_workspace_id, save_held_rows, store_snapshot
+from autonomous_betting_agent.pick_hold_store import clear_all_held_rows, normalize_workspace_id, store_snapshot
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 
 st.set_page_config(page_title='Reset Storage', layout='wide')
-LANG = render_app_sidebar('reset_storage', language_key='storage_diagnostics_language')
+LANG = render_app_sidebar('reset_storage', language_key='reset_storage_language')
 
 TEXT = {
     'en': {
         'title': 'Reset Storage',
         'caption': 'Start the active test workspace from zero before rebuilding a clean ledger.',
         'workspace_id': 'Workspace ID',
-        'warning': 'Use this only when you want to start this test workspace over.',
+        'warning': 'Use this only when you want to start this test workspace over. It clears current, fallback, and latest durable stores.',
         'confirm': 'I understand. Reset this workspace.',
         'button': 'Reset current workspace now',
         'done': 'Workspace reset. Refresh the app, upload one clean file, and create the ledger once.',
@@ -23,7 +23,7 @@ TEXT = {
         'title': 'Reiniciar almacenamiento',
         'caption': 'Empieza el espacio de trabajo activo desde cero antes de reconstruir un ledger limpio.',
         'workspace_id': 'ID del espacio de trabajo',
-        'warning': 'Usa esto solo cuando quieras empezar este espacio de trabajo desde cero.',
+        'warning': 'Usa esto solo cuando quieras empezar este espacio de trabajo desde cero. Borra stores actuales, fallback y latest.',
         'confirm': 'Entiendo. Reiniciar este espacio de trabajo.',
         'button': 'Reiniciar este espacio de trabajo ahora',
         'done': 'Espacio de trabajo reiniciado. Actualiza la app, sube un archivo limpio y crea el ledger una sola vez.',
@@ -38,13 +38,7 @@ def t(key: str) -> str:
 
 def reset_workspace(workspace_id: str) -> dict[str, int | str]:
     workspace = normalize_workspace_id(workspace_id)
-    changed = 0
-    for key in sorted(HELD_KEYS):
-        save_held_rows(key, [], workspace)
-        save_held_rows(key, [], 'test_01')
-        st.session_state[key] = []
-        st.session_state[f'latest_{key}'] = []
-        changed += 1
+    keys_reset = clear_all_held_rows(workspace)
     try:
         st.cache_data.clear()
     except Exception:
@@ -53,7 +47,7 @@ def reset_workspace(workspace_id: str) -> dict[str, int | str]:
         st.cache_resource.clear()
     except Exception:
         pass
-    return {'workspace_id': workspace, 'keys_reset': changed}
+    return {'workspace_id': workspace, 'keys_reset': keys_reset}
 
 
 st.title(t('title'))
