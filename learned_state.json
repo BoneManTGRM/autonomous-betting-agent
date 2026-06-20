@@ -1,26 +1,26 @@
 {
-  "accuracy_after": 0.7258064516129032,
-  "accuracy_before": 0.7258064516129032,
-  "brier_after": 0.202125806451613,
-  "brier_before": 0.202125806451613,
+  "accuracy_after": 0.7246376811594203,
+  "accuracy_before": 0.7246376811594203,
+  "brier_after": 0.2025231884057972,
+  "brier_before": 0.2025231884057972,
   "calibration_strength": 0.0,
-  "events_trained": 62,
+  "events_trained": 69,
   "intercept": 0.0,
-  "log_loss_after": 0.5946573405441617,
-  "log_loss_before": 0.5946573405441617,
+  "log_loss_after": 0.5954850463154621,
+  "log_loss_before": 0.5954850463154621,
   "notes": [
     "Learns probability calibration from graded historical predictions.",
     "Uses sample-size shrinkage to reduce overfitting on small datasets.",
     "Uses held-out validation when enough rows exist and falls back toward identity if calibration hurts validation.",
     "This does not prove betting profitability; use untouched forward tests before making performance claims.",
-    "Mode=replace. Existing rows used=0. Uploaded usable rows=62. Duplicates removed=0. Trained on 62 rows."
+    "Mode=replace. Existing rows used=0. Uploaded usable rows=69. Duplicates removed=0. Trained on 69 rows."
   ],
   "slope": 1.0,
-  "source": "High_confidence_2_checked_new_games_2026-06-19_rechecked_1510_usa_win.csv",
-  "trained_at_utc": "2026-06-19T23:07:26+00:00",
+  "source": "High_confidence_2_checked_new_games_2026-06-20_double_checked_verified.csv",
+  "trained_at_utc": "2026-06-20T11:40:42+00:00",
   "training_strategy": "cross_validated_logistic_calibration_l2=0.03_identity_fallback",
-  "validation_brier_after": 0.2067810191861169,
-  "validation_brier_before": 0.202125806451613,
-  "validation_log_loss_after": 0.607392803593771,
-  "validation_log_loss_before": 0.5946573405441617
+  "validation_brier_after": 0.2109549301703268,
+  "validation_brier_before": 0.20252318840579722,
+  "validation_log_loss_after": 0.6167729789120338,
+  "validation_log_loss_before": 0.5954850463154621
 }
