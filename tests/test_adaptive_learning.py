@@ -130,7 +130,7 @@ def test_threshold_suggestions_returns_preferred_and_avoid_patterns(tmp_path):
 
 
 def test_adaptive_learning_without_memory_keeps_base_score(tmp_path):
-    frame = pd.DataFrame([{"agent_score": 55, "model_probability_clean": 0.61}])
+    frame = pd.DataFrame([{"agent_score": 55, "model_probability_clean": 0.61, "recommended_stake_units": 0.10}])
 
     out = apply_adaptive_learning(frame, memory_path=tmp_path / "missing.json")
 
