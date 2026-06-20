@@ -5,6 +5,7 @@ import html
 from typing import Any
 
 APP_TAGLINE = 'Powered by Reparodynamics'
+APP_TAGLINE_ES = 'Impulsado por Reparodynamics'
 LANGUAGE_KEYS = [
     'global_language',
     'signal_board_language',
@@ -15,15 +16,16 @@ LANGUAGE_KEYS = [
     'odds_lock_pro_language',
     'public_proof_dashboard_language',
     'learning_memory_language',
+    'learning_impact_report_language',
     'simulation_lab_language',
 ]
 TOOLS: tuple[tuple[str, str, str], ...] = (
-    ('Signal Board', 'Signal Board', 'pages/signal_board.py'),
+    ('Signal Board', 'Panel de Señales', 'pages/signal_board.py'),
     ('Pro Predictor', 'Predictor Pro', 'pages/pro_predictor.py'),
     ('Simulation Lab', 'Laboratorio de Simulación', 'pages/simulation_lab.py'),
     ('Threshold Optimizer', 'Optimizador de Umbral', 'pages/threshold_optimizer.py'),
-    ('What Are the Odds', 'What Are the Odds', 'pages/what_are_the_odds.py'),
-    ('Odds Lock Pro', 'Odds Lock Pro', 'pages/odds_lock_pro.py'),
+    ('What Are the Odds', 'Cuáles Son las Cuotas', 'pages/what_are_the_odds.py'),
+    ('Odds Lock Pro', 'Bloqueo de Cuotas Pro', 'pages/odds_lock_pro.py'),
     ('Public Proof Dashboard', 'Dashboard Público de Prueba', 'pages/public_proof_dashboard.py'),
     ('Storage Diagnostics', 'Diagnóstico de Almacenamiento', 'pages/storage_diagnostics.py'),
     ('Learning Memory', 'Memoria de Aprendizaje', 'pages/learn_memory.py'),
@@ -160,9 +162,10 @@ def render_app_sidebar(page_key: str, *, language_key: str | None = None, select
         st.session_state['_aba_sidebar_rendered_clean_v1'] = True
         st.markdown(SIDEBAR_CSS, unsafe_allow_html=True)
         st.markdown('### :green[ABA] Signal :red[Pro]')
-        st.caption(APP_TAGLINE)
+        lang_preview = normalize_language(current)
+        st.caption(APP_TAGLINE_ES if lang_preview == 'es' else APP_TAGLINE)
         st.markdown('---')
-        value = st.radio('Language', ['English', 'Español'], index=index, key=key, horizontal=True)
+        value = st.radio('Idioma' if lang_preview == 'es' else 'Language', ['English', 'Español'], index=index, key=key, horizontal=True)
         _sync_language(st, value, current_key=key)
         lang = normalize_language(value)
         render_tools_only(st, lang)
