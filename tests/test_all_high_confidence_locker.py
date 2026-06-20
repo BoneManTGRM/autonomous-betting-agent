@@ -34,9 +34,9 @@ def test_all_high_confidence_locker_rejects_tennis_and_marks_internal() -> None:
     assert len(locked) == 1
     assert len(rejected) == 1
     assert locked.iloc[0]['ledger_type'] == 'all_high_confidence_internal_test'
-    assert locked.iloc[0]['official_ev_pick'] is False
-    assert locked.iloc[0]['official_lock_ready'] is False
-    assert locked.iloc[0]['research_lock_ready'] is True
+    assert bool(locked.iloc[0]['official_ev_pick']) is False
+    assert bool(locked.iloc[0]['official_lock_ready']) is False
+    assert bool(locked.iloc[0]['research_lock_ready']) is True
     assert str(locked.iloc[0]['proof_id']).startswith('OLP-')
     assert rejected.iloc[0]['reject_reason'] == 'REJECT_UNSUPPORTED_MARKET'
 
