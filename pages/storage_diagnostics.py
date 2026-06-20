@@ -6,9 +6,11 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
+import pandas as pd
 import requests
 import streamlit as st
 
+from autonomous_betting_agent.commercial_platform_tools import filter_locked_proof_rows, save_persistent_ledger
 from autonomous_betting_agent.pick_hold_store import (
     HELD_KEYS,
     github_store_enabled,
@@ -23,6 +25,7 @@ st.set_page_config(page_title='Storage Diagnostics', layout='wide')
 render_app_sidebar('storage_diagnostics')
 
 GITHUB_API = 'https://api.github.com'
+PROOF_KEYS = ['odds_lock_pro_locked_rows', 'public_proof_dashboard_refresh_rows', 'ara_latest_predictions']
 
 
 def _secret_value(*names: str) -> str:
@@ -110,6 +113,26 @@ def sync_loaded_rows_to_github(workspace_id: str) -> dict[str, Any]:
     }
 
 
+def import_locked_csv(uploaded_file: Any, workspace_id: str) -> tuple[bool, str, int]:
+    try:
+        frame = pd.read_csv(uploaded_file)
+    except Exception as exc:
+        return False, f'Could not read CSV: {exc}', 0
+    locked = filter_locked_proof_rows(frame)
+    if locked.empty:
+        return False, 'Uploaded CSV does not contain locked proof rows with proof_id and locked_at_utc.', 0
+    locked = locked.copy()
+    locked['test_window_id'] = workspace_id
+    saved = save_persistent_ledger(locked, workspace_id=workspace_id)
+    if saved.empty:
+        return False, 'Proof rows were detected, but save_persistent_ledger returned no rows.', 0
+    records = saved.to_dict('records')
+    for key in PROOF_KEYS:
+        save_held_rows(key, records, workspace_id)
+        st.session_state[key] = records
+    return True, 'Imported locked proof CSV and saved it to durable storage.', len(saved)
+
+
 st.title('Storage Diagnostics')
 st.caption('Session, local disk, and optional GitHub durable recovery status for the active workspace.')
 
@@ -145,6 +168,16 @@ if button_cols[1].button('Sync loaded rows to GitHub', use_container_width=True)
     else:
         st.warning(str(result.get('message')))
         st.caption(str(result.get('details', '')))
+
+with st.expander('Recover from locked proof CSV', expanded=False):
+    st.caption('Use this if a reboot wiped the app but you downloaded a locked proof CSV earlier.')
+    recovery_upload = st.file_uploader('Upload locked proof CSV and save to GitHub durable storage', type=['csv'], key='storage_recovery_upload')
+    if recovery_upload is not None:
+        ok, message, count = import_locked_csv(recovery_upload, workspace_id)
+        if ok:
+            st.success(f'{message} Rows: {count}')
+        else:
+            st.error(message)
 
 snapshot = store_snapshot(workspace_id)
 st.dataframe(snapshot, use_container_width=True, hide_index=True)
