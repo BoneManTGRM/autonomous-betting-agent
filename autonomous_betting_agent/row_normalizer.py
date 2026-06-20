@@ -43,45 +43,26 @@ ALIASES = {
 }
 
 RESULT_MAP = {
-    'won': 'win',
-    'win': 'win',
-    'w': 'win',
-    'correct': 'win',
-    'hit': 'win',
-    'true': 'win',
-    'yes': 'win',
-    '1': 'win',
-    '1.0': 'win',
-    'ganada': 'win',
-    'gano': 'win',
-    'ganó': 'win',
-    'victoria': 'win',
-    'acierto': 'win',
-    'lost': 'loss',
-    'loss': 'loss',
-    'l': 'loss',
-    'incorrect': 'loss',
-    'miss': 'loss',
-    'false': 'loss',
-    'no': 'loss',
-    '0': 'loss',
-    '0.0': 'loss',
-    'perdida': 'loss',
-    'perdio': 'loss',
-    'perdió': 'loss',
-    'derrota': 'loss',
-    'fallo': 'loss',
-    'void': 'void',
-    'push': 'void',
-    'cancelled': 'void',
-    'canceled': 'void',
-    'postponed': 'void',
-    'abandoned': 'void',
-    'pending': 'pending',
-    'unknown': 'pending',
-    'scheduled': 'pending',
-    'live': 'pending',
+    'won': 'win', 'win': 'win', 'w': 'win', 'correct': 'win', 'hit': 'win', 'true': 'win', 'yes': 'win', '1': 'win', '1.0': 'win',
+    'ganada': 'win', 'gano': 'win', 'ganó': 'win', 'victoria': 'win', 'acierto': 'win',
+    'lost': 'loss', 'loss': 'loss', 'l': 'loss', 'incorrect': 'loss', 'miss': 'loss', 'false': 'loss', 'no': 'loss', '0': 'loss', '0.0': 'loss',
+    'perdida': 'loss', 'perdio': 'loss', 'perdió': 'loss', 'derrota': 'loss', 'fallo': 'loss',
+    'void': 'void', 'push': 'void', 'cancelled': 'void', 'canceled': 'void', 'postponed': 'void', 'abandoned': 'void',
+    'pending': 'pending', 'unknown': 'pending', 'scheduled': 'pending', 'live': 'pending',
 }
+
+DEDUPLICATION_COLUMNS = [
+    'proof_id',
+    'event_id',
+    'event',
+    'event_start_utc',
+    'sport',
+    'market_type',
+    'line_point',
+    'prediction',
+    'bookmaker',
+    'decimal_price',
+]
 
 
 def clean_key(value: Any) -> str:
@@ -165,6 +146,36 @@ def normalize_row(row: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _dedupe_key(row: Mapping[str, Any]) -> tuple[str, ...]:
+    proof_id = safe_text(row.get('proof_id'))
+    if proof_id:
+        return ('proof_id', proof_id)
+    event_id = safe_text(row.get('event_id'))
+    if event_id:
+        return (
+            'event_id',
+            event_id,
+            safe_text(row.get('market_type')).lower(),
+            safe_text(row.get('line_point')).lower(),
+            safe_text(row.get('prediction')).lower(),
+        )
+    return tuple(safe_text(row.get(column)).lower() for column in DEDUPLICATION_COLUMNS if column != 'proof_id')
+
+
+def dedupe_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame is None or frame.empty:
+        return pd.DataFrame()
+    seen: set[tuple[str, ...]] = set()
+    rows: list[dict[str, Any]] = []
+    for row in frame.to_dict(orient='records'):
+        key = _dedupe_key(row)
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(dict(row))
+    return pd.DataFrame(rows)
+
+
 def normalize_frame(frame: pd.DataFrame) -> pd.DataFrame:
     if frame is None or frame.empty:
         return pd.DataFrame()
@@ -176,4 +187,4 @@ def normalize_frame(frame: pd.DataFrame) -> pd.DataFrame:
             if key not in item or not safe_text(item.get(key)):
                 item[key] = value
         rows.append(item)
-    return pd.DataFrame(rows)
+    return dedupe_frame(pd.DataFrame(rows))
