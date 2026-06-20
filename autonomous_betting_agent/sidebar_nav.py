@@ -15,6 +15,7 @@ LANGUAGE_KEYS = [
     'what_are_the_odds_pro_language',
     'odds_lock_pro_language',
     'public_proof_dashboard_language',
+    'storage_diagnostics_language',
     'learning_memory_language',
     'learning_impact_report_language',
     'simulation_lab_language',
