@@ -11,20 +11,20 @@ TEXT = {
     'en': {
         'title': 'ABA Signal Pro',
         'caption': 'Powered by Reparodynamics',
-        'body': 'Use the Tools menu to run Pro Predictor, review odds, lock proof rows, and grade results.',
-        'steps': 'Workflow: Pro Predictor → What Are the Odds → Odds Lock Pro → Proof Control Center → Public Proof Dashboard → Learning Memory.',
+        'body': 'Use the Tools menu to run Pro Predictor, lock proof rows, grade results, and review learning memory.',
+        'steps': 'Workflow: Pro Predictor → Odds Lock Pro → Proof Control Center → Public Proof Dashboard → Learning Memory.',
         'proof_control': 'Open Proof Control Center',
         'reset_storage': 'Open Reset Storage',
-        'volume_predictor': 'Open Pro Predictor Volume',
+        'predictor': 'Open Pro Predictor',
     },
     'es': {
         'title': 'ABA Signal Pro',
         'caption': 'Powered by Reparodynamics',
-        'body': 'Usa el menú Tools para ejecutar Predictor Pro, revisar cuotas, bloquear pruebas y calificar resultados.',
-        'steps': 'Flujo: Predictor Pro → What Are the Odds → Odds Lock Pro → Centro de Control de Prueba → Dashboard Público → Learning Memory.',
+        'body': 'Usa el menú Tools para ejecutar Predictor Pro, bloquear pruebas, calificar resultados y revisar la memoria.',
+        'steps': 'Flujo: Predictor Pro → Odds Lock Pro → Centro de Control de Prueba → Dashboard Público → Learning Memory.',
         'proof_control': 'Abrir Centro de Control de Prueba',
         'reset_storage': 'Abrir Reiniciar almacenamiento',
-        'volume_predictor': 'Abrir Predictor Pro Volumen',
+        'predictor': 'Abrir Predictor Pro',
     },
 }
 
@@ -32,6 +32,6 @@ st.title(TEXT[LANG]['title'])
 st.caption(TEXT[LANG]['caption'])
 st.info(TEXT[LANG]['body'])
 st.success(TEXT[LANG]['steps'])
+st.page_link('pages/pro_predictor_volume.py', label=TEXT[LANG]['predictor'])
 st.page_link('pages/proof_control_center.py', label=TEXT[LANG]['proof_control'])
 st.page_link('pages/reset_storage.py', label=TEXT[LANG]['reset_storage'])
-st.page_link('pages/pro_predictor_volume.py', label=TEXT[LANG]['volume_predictor'])
