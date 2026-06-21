@@ -40,6 +40,27 @@ def add_profit_guard(frame: pd.DataFrame) -> pd.DataFrame:
     out['profit_balanced_ok'] = status.isin({'value_ok', 'volume_ok', 'safe_accuracy_only'}) | (score.ge(62) & edge.ge(-0.025) & odds.between(1.18, 3.50, inclusive='both'))
     out['profit_official_ok'] = status.isin({'value_ok', 'volume_ok'}) & odds.between(1.18, 3.25, inclusive='both') & (ev.ge(-0.015) | edge.ge(-0.015))
     out['profit_elite_ok'] = status.eq('value_ok') & odds.between(1.25, 2.75, inclusive='both') & (ev.ge(0.005) | edge.ge(0.005))
+    lane = pd.Series('research_volume', index=out.index, dtype='object')
+    lane.loc[out['profit_balanced_ok'].astype(bool)] = 'balanced_roi'
+    lane.loc[out['profit_official_ok'].astype(bool)] = 'official_candidate'
+    lane.loc[out['profit_elite_ok'].astype(bool)] = 'elite_candidate'
+    lane.loc[~out['profit_volume_safe'].astype(bool)] = 'blocked_price'
+    out['profit_lane'] = lane
+    stake = pd.Series(0.05, index=out.index, dtype='float64')
+    stake.loc[lane.eq('balanced_roi')] = 0.10
+    stake.loc[lane.eq('official_candidate')] = 0.15
+    stake.loc[lane.eq('elite_candidate')] = 0.20
+    stake.loc[lane.eq('blocked_price')] = 0.0
+    out['suggested_stake_units'] = stake
+    event_key = out.get('event_id', out.get('event', pd.Series('', index=out.index))).astype(str)
+    market_key = out.get('market_type', pd.Series('', index=out.index)).astype(str)
+    portfolio_key = event_key + '|' + market_key
+    tmp = pd.DataFrame({'key': portfolio_key, 'score': score, 'idx': range(len(out))}).sort_values(['key', 'score'], ascending=[True, False])
+    tmp['rank'] = tmp.groupby('key').cumcount() + 1
+    group_rank = tmp.sort_values('idx')['rank'].reset_index(drop=True).astype(int)
+    out['portfolio_group_rank'] = group_rank.values
+    penalty = (out['portfolio_group_rank'].clip(lower=1) - 1) * 6.0
+    out['portfolio_priority_score'] = (score - penalty).clip(0, 100).round(3)
     return out
 
 
