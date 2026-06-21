@@ -26,5 +26,7 @@ def test_pro_predictor_volume_has_automation_panel_and_guarded_injection():
     assert 'pattern_mode' in wrapper
     assert 'profit_mode' in wrapper
     assert 'filter_profit_guard(decisions, profit_mode)' in wrapper
-    assert 'profit_guard_v1' in wrapper
-    assert 'profit_protection_score' in wrapper
+    assert 'profit_guard_v2' in wrapper
+    assert 'portfolio_priority_score' in wrapper
+    assert 'profit_lane' in wrapper
+    assert 'suggested_stake_units' in wrapper
