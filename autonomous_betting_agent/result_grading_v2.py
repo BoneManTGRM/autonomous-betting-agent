@@ -12,9 +12,51 @@ from .row_normalizer import result_status, safe_text
 RESOLVED = {'win', 'loss', 'void'}
 PENDING = {'', 'pending', 'unknown', 'scheduled', 'live', 'needs_review'}
 
+TEAM_ALIASES = {
+    'new york yankees': {'yankees', 'ny yankees', 'nyy'},
+    'cincinnati reds': {'reds', 'cin reds', 'cin'},
+    'detroit tigers': {'tigers', 'det'},
+    'chicago white sox': {'white sox', 'chisox', 'cws', 'chi white sox'},
+    'miami marlins': {'marlins', 'mia'},
+    'san francisco giants': {'giants', 'sf giants', 'sfg'},
+    'houston astros': {'astros', 'hou'},
+    'cleveland guardians': {'guardians', 'cle'},
+    'tampa bay rays': {'rays', 'tb rays', 'tbr'},
+    'washington nationals': {'nationals', 'nats', 'was'},
+    'st. louis cardinals': {'cardinals', 'st louis cardinals', 'stl'},
+    'kansas city royals': {'royals', 'kc royals', 'kcr'},
+    'texas rangers': {'rangers', 'tex'},
+    'san diego padres': {'padres', 'sd padres', 'sd'},
+    'pittsburgh pirates': {'pirates', 'pit'},
+    'colorado rockies': {'rockies', 'col'},
+    'boston red sox': {'red sox', 'bos'},
+    'toronto blue jays': {'blue jays', 'jays', 'tor'},
+    'baltimore orioles': {'orioles', 'bal'},
+    'philadelphia phillies': {'phillies', 'phi'},
+    'atlanta braves': {'braves', 'atl'},
+    'new york mets': {'mets', 'nym'},
+    'los angeles dodgers': {'dodgers', 'la dodgers', 'lad'},
+    'los angeles angels': {'angels', 'la angels', 'laa'},
+    'arizona diamondbacks': {'diamondbacks', 'dbacks', 'ari'},
+    'milwaukee brewers': {'brewers', 'mil'},
+    'chicago cubs': {'cubs', 'chc'},
+    'minnesota twins': {'twins', 'min'},
+    'seattle mariners': {'mariners', 'sea'},
+    'oakland athletics': {'athletics', 'a s', 'athletics', 'oak'},
+    'sacramento athletics': {'athletics', 'a s', 'athletics', 'ath'},
+}
+
+ALIAS_TO_CANONICAL: dict[str, str] = {}
+for canonical, aliases in TEAM_ALIASES.items():
+    ALIAS_TO_CANONICAL[canonical] = canonical
+    for alias in aliases:
+        ALIAS_TO_CANONICAL[alias] = canonical
+
 
 def clean(value: Any) -> str:
-    return ' '.join(safe_text(value).lower().replace('-', ' ').replace('_', ' ').replace('@', ' at ').split())
+    text = safe_text(value).lower().replace('&', ' and ').replace('@', ' at ')
+    text = re.sub(r'[^a-z0-9.+\- ]+', ' ', text.replace('_', ' ').replace('-', ' '))
+    return ' '.join(text.split())
 
 
 def sim(a: Any, b: Any) -> float:
@@ -26,9 +68,68 @@ def sim(a: Any, b: Any) -> float:
     return SequenceMatcher(None, left, right).ratio()
 
 
+def canonical_team(value: Any) -> str:
+    text = clean(value)
+    if not text:
+        return ''
+    if text in ALIAS_TO_CANONICAL:
+        return ALIAS_TO_CANONICAL[text]
+    # Prefer nickname/city aliases embedded in longer strings.
+    best = ''
+    best_len = 0
+    for alias, canonical in ALIAS_TO_CANONICAL.items():
+        if alias and (alias == text or alias in text or text in alias) and len(alias) > best_len:
+            best = canonical
+            best_len = len(alias)
+    return best or text
+
+
+def team_sim(a: Any, b: Any) -> float:
+    ca, cb = canonical_team(a), canonical_team(b)
+    if ca and cb and ca == cb:
+        return 1.0
+    return sim(ca or a, cb or b)
+
+
+def split_event_teams(value: Any) -> tuple[str, str]:
+    text = safe_text(value)
+    cleaned = clean(text)
+    for sep in [' at ', ' vs ', ' v ']:
+        if sep in f' {cleaned} ':
+            parts = cleaned.split(sep.strip(), 1)
+            if len(parts) == 2:
+                return parts[0].strip(), parts[1].strip()
+    return '', ''
+
+
+def event_team_score(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any]) -> float:
+    ledger_away, ledger_home = split_event_teams(ledger_row.get('event'))
+    result_away = safe_text(result_row.get('away_team')) or split_event_teams(result_row.get('event'))[0]
+    result_home = safe_text(result_row.get('home_team')) or split_event_teams(result_row.get('event'))[1]
+    if ledger_away and ledger_home and result_away and result_home:
+        direct = (team_sim(ledger_away, result_away) + team_sim(ledger_home, result_home)) / 2.0
+        swapped = (team_sim(ledger_away, result_home) + team_sim(ledger_home, result_away)) / 2.0
+        return max(direct, swapped)
+    return sim(ledger_row.get('event'), result_row.get('event'))
+
+
 def day(value: Any) -> str:
     text = safe_text(value)
     return text[:10] if len(text) >= 10 else ''
+
+
+def date_score(left: Any, right: Any) -> float:
+    lday, rday = day(left), day(right)
+    if not lday or not rday:
+        return 0.0
+    if lday == rday:
+        return 1.0
+    try:
+        ldt = pd.to_datetime(lday, utc=True).date()
+        rdt = pd.to_datetime(rday, utc=True).date()
+        return 0.65 if abs((ldt - rdt).days) <= 1 else 0.0
+    except Exception:
+        return 0.0
 
 
 def score_value(value: Any) -> int | None:
@@ -145,11 +246,15 @@ def odds_scores_to_result_frame_v2(payload: list[dict[str, Any]]) -> pd.DataFram
 
 
 def match_score(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any]) -> float:
-    event_score = sim(ledger_row.get('event'), result_row.get('event'))
+    event_score = max(sim(ledger_row.get('event'), result_row.get('event')), event_team_score(ledger_row, result_row))
     sport_score = max(sim(ledger_row.get('sport'), result_row.get('sport')), sim(ledger_row.get('sport_key'), result_row.get('sport_key')))
-    date_score = 1.0 if day(ledger_row.get('event_start_utc')) and day(ledger_row.get('event_start_utc')) == day(result_row.get('event_start_utc')) else 0.0
-    pick_score = max(sim(ledger_row.get('prediction'), result_row.get('winner')), sim(ledger_row.get('prediction'), result_row.get('home_team')), sim(ledger_row.get('prediction'), result_row.get('away_team')))
-    return event_score * 0.55 + sport_score * 0.15 + date_score * 0.15 + pick_score * 0.15
+    dscore = date_score(ledger_row.get('event_start_utc'), result_row.get('event_start_utc'))
+    pick_score = max(
+        team_sim(ledger_row.get('prediction'), result_row.get('winner')),
+        team_sim(ledger_row.get('prediction'), result_row.get('home_team')),
+        team_sim(ledger_row.get('prediction'), result_row.get('away_team')),
+    )
+    return event_score * 0.50 + sport_score * 0.12 + dscore * 0.13 + pick_score * 0.25
 
 
 def side_scores(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any]) -> tuple[float, float] | None:
@@ -159,10 +264,10 @@ def side_scores(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any]) ->
     aw = score_value(result_row.get('away_score'))
     if not home or not away or hs is None or aw is None:
         return None
-    pick = clean(ledger_row.get('prediction'))
-    if clean(home) in pick:
+    pick = ledger_row.get('prediction')
+    if team_sim(pick, home) >= 0.70 or canonical_team(home) in canonical_team(pick):
         return float(hs), float(aw)
-    if clean(away) in pick:
+    if team_sim(pick, away) >= 0.70 or canonical_team(away) in canonical_team(pick):
         return float(aw), float(hs)
     return None
 
@@ -199,10 +304,26 @@ def grade_pick(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any]) -> 
         return 'win' if adjusted > 0 else 'loss'
     winner = safe_text(result_row.get('winner') or result_row.get('actual_winner') or result_row.get('final_winner'))
     if winner:
-        return 'win' if clean(winner) in clean(ledger_row.get('prediction')) or clean(ledger_row.get('prediction')) in clean(winner) else 'loss'
+        return 'win' if team_sim(ledger_row.get('prediction'), winner) >= 0.70 else 'loss'
     if hs is not None and aw is not None and hs == aw:
         return 'void'
     return 'pending'
+
+
+def _best_match(item: Mapping[str, Any], result_rows: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, float]:
+    best = None
+    best_score = 0.0
+    proof_id = safe_text(item.get('proof_id'))
+    if proof_id:
+        for rrow in result_rows:
+            if safe_text(rrow.get('proof_id')) == proof_id:
+                return rrow, 1.0
+    for rrow in result_rows:
+        score = match_score(item, rrow)
+        if score > best_score:
+            best_score = score
+            best = rrow
+    return best, best_score
 
 
 def apply_fuzzy_updates(ledger: pd.DataFrame | list[dict[str, Any]], results: pd.DataFrame | list[dict[str, Any]], *, threshold: float = 0.82, regrade_resolved: bool = False) -> tuple[pd.DataFrame, dict[str, Any]]:
@@ -214,7 +335,9 @@ def apply_fuzzy_updates(ledger: pd.DataFrame | list[dict[str, Any]], results: pd
         return locked, {'updated_rows': 0, 'matched_rows': 0, 'unmatched_pending_rows': 0, 'reason': 'empty_results'}
     result_rows = result_frame.to_dict(orient='records')
     rows = []
-    updated = matched = unmatched = skipped_resolved = 0
+    updated = matched = unmatched = skipped_resolved = pending_match = 0
+    best_scores: list[float] = []
+    preview: list[dict[str, Any]] = []
     for lrow in locked.to_dict(orient='records'):
         item = dict(lrow)
         current = safe_text(item.get('result_status')).lower()
@@ -223,24 +346,20 @@ def apply_fuzzy_updates(ledger: pd.DataFrame | list[dict[str, Any]], results: pd
             skipped_resolved += 1
             rows.append(item)
             continue
-        best = None
-        best_score = 0.0
-        proof_id = safe_text(item.get('proof_id'))
-        if proof_id:
-            for rrow in result_rows:
-                if safe_text(rrow.get('proof_id')) == proof_id:
-                    best = rrow
-                    best_score = 1.0
-                    break
-        if best is None:
-            for rrow in result_rows:
-                score = match_score(item, rrow)
-                if score > best_score:
-                    best_score = score
-                    best = rrow
+        best, best_score = _best_match(item, result_rows)
+        best_scores.append(best_score)
+        if len(preview) < 20:
+            preview.append({
+                'ledger_event': safe_text(item.get('event')),
+                'ledger_prediction': safe_text(item.get('prediction')),
+                'best_result_event': safe_text((best or {}).get('event')),
+                'best_winner': safe_text((best or {}).get('winner')),
+                'best_score': round(best_score, 4),
+            })
         if best is None or best_score < threshold:
             item['grading_match_status'] = 'no_match'
             item['grading_match_confidence'] = round(best_score, 4)
+            item['best_result_event'] = safe_text((best or {}).get('event'))
             unmatched += 1
             rows.append(item)
             continue
@@ -249,15 +368,31 @@ def apply_fuzzy_updates(ledger: pd.DataFrame | list[dict[str, Any]], results: pd
         item['grading_match_status'] = 'matched'
         item['grading_match_confidence'] = round(best_score, 4)
         item['matched_result_event'] = safe_text(best.get('event'))
+        item['matched_result_source'] = safe_text(best.get('result_source'))
         if grade in RESOLVED:
             item['result_status'] = grade
             item['winner'] = safe_text(best.get('winner') or item.get('winner'))
             item['final_score'] = safe_text(best.get('final_score') or item.get('final_score'))
             item['graded_at_utc'] = pd.Timestamp.utcnow().isoformat()
             updated += 1
+        else:
+            pending_match += 1
         rows.append(item)
     out = filter_locked_proof_rows(pd.DataFrame(rows))
-    return out, {'updated_rows': updated, 'matched_rows': matched, 'skipped_resolved': skipped_resolved, 'unmatched_pending_rows': unmatched, 'result_rows': int(len(result_frame)), 'threshold': threshold}
+    avg_best = round(float(sum(best_scores) / len(best_scores)), 4) if best_scores else None
+    max_best = round(float(max(best_scores)), 4) if best_scores else None
+    return out, {
+        'updated_rows': updated,
+        'matched_rows': matched,
+        'skipped_resolved': skipped_resolved,
+        'unmatched_pending_rows': unmatched,
+        'pending_matched_needs_review': pending_match,
+        'result_rows': int(len(result_frame)),
+        'threshold': threshold,
+        'avg_best_match_score': avg_best,
+        'max_best_match_score': max_best,
+        'match_preview': preview,
+    }
 
 
 def grade_persistent_with_fuzzy(results: pd.DataFrame | list[dict[str, Any]]) -> tuple[pd.DataFrame, dict[str, Any]]:
