@@ -6,7 +6,9 @@ import streamlit as st
 import autonomous_betting_agent.adaptive_learning as adaptive_learning
 
 _original_number_input = st.number_input
-_original_apply_adaptive_learning = adaptive_learning.apply_adaptive_learning
+if not hasattr(adaptive_learning, '_aba_original_apply_adaptive_learning'):
+    adaptive_learning._aba_original_apply_adaptive_learning = adaptive_learning.apply_adaptive_learning
+_original_apply_adaptive_learning = adaptive_learning._aba_original_apply_adaptive_learning
 
 
 def volume_number_input(label, *args, **kwargs):
