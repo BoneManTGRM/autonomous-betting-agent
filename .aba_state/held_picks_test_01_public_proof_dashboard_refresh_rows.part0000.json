@@ -169,7 +169,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.6062
     },
     {
       "event": "France at Norway",
@@ -335,7 +337,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.4557
     },
     {
       "event": "Iraq at France",
@@ -501,7 +505,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.4889
     },
     {
       "event": "Liam Paro at Lewis Crocker",
@@ -667,7 +673,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.3579
     },
     {
       "event": "Iran at Belgium",
@@ -833,7 +841,9 @@
       "matched_event": "Iran at Belgium",
       "home_score": 0.0,
       "away_score": 0.0,
-      "graded_at_utc": "2026-06-21T21:12:55+00:00"
+      "graded_at_utc": "2026-06-21T21:12:55+00:00",
+      "grading_match_status": "skipped_resolved",
+      "grading_match_confidence": NaN
     },
     {
       "event": "Germany at Ecuador",
@@ -999,7 +1009,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5832
     },
     {
       "event": "Austria at Algeria",
@@ -1165,7 +1177,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5982
     },
     {
       "event": "Cape Verde at Uruguay",
@@ -1331,7 +1345,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5618
     },
     {
       "event": "Egypt at New Zealand",
@@ -1497,7 +1513,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.508
     },
     {
       "event": "Sweden at Japan",
@@ -1663,7 +1681,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5621
     },
     {
       "event": "South Korea at South Africa",
@@ -1829,7 +1849,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5896
     },
     {
       "event": "Iran at Egypt",
@@ -1995,7 +2017,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5659
     },
     {
       "event": "Iran at Egypt",
@@ -2161,7 +2185,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5651
     },
     {
       "event": "Netherlands at Tunisia",
@@ -2327,7 +2353,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5503
     },
     {
       "event": "Mexico at Czech Republic",
@@ -2493,7 +2521,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.4467
     },
     {
       "event": "Egypt at New Zealand",
@@ -2659,7 +2689,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5232
     },
     {
       "event": "Austria at Argentina",
@@ -2825,7 +2857,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5595
     },
     {
       "event": "Senegal at Norway",
@@ -2991,7 +3025,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.4755
     },
     {
       "event": "Algeria at Jordan",
@@ -3157,7 +3193,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.4929
     },
     {
       "event": "Germany at Ecuador",
@@ -3323,7 +3361,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5859
     },
     {
       "event": "Australia at Paraguay",
@@ -3489,7 +3529,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.7162
     },
     {
       "event": "Argentina at Jordan",
@@ -3655,7 +3697,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.4729
     },
     {
       "event": "Croatia at Panama",
@@ -3821,7 +3865,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5071
     },
     {
       "event": "Canada at Switzerland",
@@ -3987,7 +4033,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5143
     },
     {
       "event": "Baltimore Orioles at Los Angeles Dodgers",
@@ -4153,7 +4201,9 @@
       "matched_event": "Baltimore Orioles at Los Angeles Dodgers",
       "home_score": 2.0,
       "away_score": 3.0,
-      "graded_at_utc": "2026-06-21T18:26:47+00:00"
+      "graded_at_utc": "2026-06-21T18:26:47+00:00",
+      "grading_match_status": "skipped_resolved",
+      "grading_match_confidence": NaN
     },
     {
       "event": "Algeria at Jordan",
@@ -4319,7 +4369,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.48
     },
     {
       "event": "DR Congo at Colombia",
@@ -4485,7 +4537,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.4956
     },
     {
       "event": "San Diego Padres at Texas Rangers",
@@ -4651,7 +4705,9 @@
       "matched_event": "San Diego Padres at Texas Rangers",
       "home_score": 4.0,
       "away_score": 3.0,
-      "graded_at_utc": "2026-06-21T21:12:55+00:00"
+      "graded_at_utc": "2026-06-21T21:12:55+00:00",
+      "grading_match_status": "skipped_resolved",
+      "grading_match_confidence": NaN
     },
     {
       "event": "Ivory Coast at Curaçao",
@@ -4817,7 +4873,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.6083
     },
     {
       "event": "Haiti at Morocco",
@@ -4983,7 +5041,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5288
     },
     {
       "event": "Boston Red Sox at Seattle Mariners",
@@ -5149,7 +5209,9 @@
       "matched_event": "Boston Red Sox at Seattle Mariners",
       "home_score": 1.0,
       "away_score": 5.0,
-      "graded_at_utc": "2026-06-21T18:26:47+00:00"
+      "graded_at_utc": "2026-06-21T18:26:47+00:00",
+      "grading_match_status": "skipped_resolved",
+      "grading_match_confidence": NaN
     },
     {
       "event": "Houston Astros at Toronto Blue Jays",
@@ -5315,7 +5377,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.575
     },
     {
       "event": "Croatia at Panama",
@@ -5481,7 +5545,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.509
     },
     {
       "event": "USA at Turkey",
@@ -5647,7 +5713,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.6294
     },
     {
       "event": "Spain at Uruguay",
@@ -5813,7 +5881,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5029
     },
     {
       "event": "Charles Johnson at Asu Almabaev",
@@ -5979,7 +6049,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.3459
     },
     {
       "event": "Austria at Argentina",
@@ -6145,7 +6217,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5767
     },
     {
       "event": "Michel Pereira at Shara Magomedov",
@@ -6311,7 +6385,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.3467
     },
     {
       "event": "Canada at Switzerland",
@@ -6477,7 +6553,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5057
     },
     {
       "event": "Brazil at Scotland",
@@ -6643,7 +6721,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.592
     },
     {
       "event": "Uzbekistan at Portugal",
@@ -6809,7 +6889,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.4809
     },
     {
       "event": "Los Angeles Angels at Athletics",
@@ -6975,7 +7057,9 @@
       "matched_event": "Los Angeles Angels at Athletics",
       "home_score": 0.0,
       "away_score": 7.0,
-      "graded_at_utc": "2026-06-21T18:26:47+00:00"
+      "graded_at_utc": "2026-06-21T18:26:47+00:00",
+      "grading_match_status": "skipped_resolved",
+      "grading_match_confidence": NaN
     },
     {
       "event": "Mexico at Czech Republic",
@@ -7141,7 +7225,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.4217
     },
     {
       "event": "England at Panama",
@@ -7307,7 +7393,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.448
     },
     {
       "event": "Ghana at Croatia",
@@ -7473,7 +7561,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.4994
     },
     {
       "event": "Belgium at New Zealand",
@@ -7639,7 +7729,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.4957
     },
     {
       "event": "Sweden at Japan",
@@ -7805,7 +7897,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5527
     },
     {
       "event": "Ghana at England",
@@ -7971,7 +8065,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.486
     },
     {
       "event": "USA at Turkey",
@@ -8137,7 +8233,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.598
     },
     {
       "event": "Cape Verde at Uruguay",
@@ -8303,7 +8401,9 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN
+      "graded_at_utc": NaN,
+      "grading_match_status": "no_match",
+      "grading_match_confidence": 0.5628
     }
   ]
 }
