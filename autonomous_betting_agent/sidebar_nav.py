@@ -56,33 +56,21 @@ def _current_language(st: Any) -> str:
     return 'English'
 
 
-def _sync_language(st: Any, language: str) -> None:
-    chosen = _language_label(language)
-    for key in LANGUAGE_KEYS:
-        try:
-            st.session_state[key] = chosen
-        except Exception:
-            pass
-
-
 def _label(item: tuple[str, str, str], language: str) -> str:
     return item[1] if normalize_language(language) == 'es' else item[0]
 
 
 def render_app_sidebar(current_page: str, *, language_key: str = 'global_language', selector: str = 'radio') -> str:
     import streamlit as st
-    starting_language = _language_label(_current_language(st))
-    try:
-        st.session_state[language_key] = starting_language
-    except Exception:
-        pass
+    if 'global_language' not in st.session_state:
+        st.session_state['global_language'] = _language_label(_current_language(st))
+    language = _language_label(st.session_state.get('global_language', 'English'))
     with st.sidebar:
         st.markdown(SIDEBAR_CSS, unsafe_allow_html=True)
         st.markdown('<div class="aba-sidebar-title">ABA Signal Pro</div>', unsafe_allow_html=True)
-        tagline = APP_TAGLINE if starting_language == 'English' else APP_TAGLINE_ES
+        tagline = APP_TAGLINE if language == 'English' else APP_TAGLINE_ES
         st.markdown(f'<div class="aba-sidebar-tagline">{html.escape(tagline)}</div>', unsafe_allow_html=True)
-        language = st.radio('Language / Idioma', ['English', 'Español'], key=language_key, horizontal=True)
-        _sync_language(st, language)
+        language = st.radio('Language / Idioma', ['English', 'Español'], key='global_language', horizontal=True)
         st.markdown('---')
         for item in TOOLS:
             label = _label(item, language)
