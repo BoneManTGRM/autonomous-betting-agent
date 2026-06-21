@@ -5,16 +5,11 @@ import os
 import pandas as pd
 import streamlit as st
 
-from autonomous_betting_agent.auto_result_grading_tools import (
-    grade_persistent_ledger_with_results,
-    grading_summary,
-    normalize_result_feed,
-    odds_scores_to_result_frame,
-    result_upload_template,
-)
+from autonomous_betting_agent.auto_result_grading_tools import grading_summary, result_upload_template
 from autonomous_betting_agent.closing_line_tools import collect_closing_lines, collect_closing_lines_for_all_sports
 from autonomous_betting_agent.commercial_platform_tools import load_persistent_ledger, save_persistent_ledger
 from autonomous_betting_agent.live_odds import _get_json, validate_api_key
+from autonomous_betting_agent.result_grading_v2 import grade_persistent_with_fuzzy, normalize_results, odds_scores_to_result_frame_v2
 from autonomous_betting_agent.tool_sidebar import render_tool_sidebar
 
 st.set_page_config(page_title='Auto Result Grading', layout='wide')
@@ -24,12 +19,13 @@ render_tool_sidebar('auto_result_grading', 'Español' if LANG == 'es' else 'Engl
 TEXT = {
     'en': {
         'title': 'Auto Result Grading',
-        'caption': 'Grade the persistent proof ledger from finished-result uploads or explicit one-click score/closing-line fetches.',
+        'caption': 'V2 grading is now built into this page: it re-checks pending rows, checks every sport key in the ledger, and grades h2h, spread, total, push, and cancellation outcomes.',
         'warning': 'No background calls run here. API score and closing-line fetches happen only after pressing a button.',
         'upload': 'Upload finished results CSV',
         'template': 'Download result upload template',
-        'apply': 'Apply uploaded results to persistent ledger',
-        'fetch': 'Fetch completed scores for one sport key',
+        'apply': 'Apply uploaded results with V2 fuzzy grader',
+        'fetch': 'Fetch completed scores and grade',
+        'fetch_all_sports': 'Fetch all sport keys found in ledger',
         'closing': 'Collect closing/current odds for CLV',
         'closing_help': 'Run this close to event start for pending locked picks. It saves the current market average as closing_decimal_price so the Public Proof Dashboard can calculate CLV.',
         'collect_closing': 'Collect closing odds for CLV',
@@ -48,12 +44,13 @@ TEXT = {
     },
     'es': {
         'title': 'Autocalificación de Resultados',
-        'caption': 'Califica el ledger persistente usando cargas de resultados, búsqueda de marcadores o captura de cierre.',
+        'caption': 'V2 ya está integrado aquí: revisa pendientes, todas las sport keys y califica h2h, spreads, totals, pushes y cancelaciones.',
         'warning': 'Aquí no corren llamadas en segundo plano. La búsqueda API solo corre al presionar un botón.',
         'upload': 'Subir CSV de resultados finalizados',
         'template': 'Descargar plantilla de resultados',
-        'apply': 'Aplicar resultados subidos al ledger persistente',
-        'fetch': 'Buscar marcadores finalizados para una sport key',
+        'apply': 'Aplicar resultados con V2 fuzzy grader',
+        'fetch': 'Buscar marcadores finalizados y calificar',
+        'fetch_all_sports': 'Buscar todas las sport keys del ledger',
         'closing': 'Recolectar cuotas de cierre/actuales para CLV',
         'closing_help': 'Ejecuta esto cerca del inicio del evento para picks bloqueados pendientes. Guarda el promedio actual del mercado como closing_decimal_price para calcular CLV.',
         'collect_closing': 'Recolectar cuotas de cierre para CLV',
@@ -90,6 +87,17 @@ def get_key(override: str = '') -> str:
     return validate_api_key(key)
 
 
+def sport_keys_from_ledger(frame: pd.DataFrame) -> list[str]:
+    keys: set[str] = set()
+    for col in ('sport_key', 'sport'):
+        if col in frame.columns:
+            for value in frame[col].dropna().astype(str):
+                text = value.strip()
+                if text and '_' in text:
+                    keys.add(text)
+    return sorted(keys)
+
+
 st.title(t('title'))
 st.caption(t('caption'))
 st.warning(t('warning'))
@@ -100,28 +108,41 @@ st.json(grading_summary(ledger))
 st.download_button(t('template'), result_upload_template().to_csv(index=False), file_name='result_upload_template.csv', mime='text/csv')
 upload = st.file_uploader(t('upload'), type=['csv'], accept_multiple_files=False)
 if upload is not None:
-    result_frame = normalize_result_feed(pd.read_csv(upload))
+    result_frame = normalize_results(pd.read_csv(upload))
     st.subheader(t('results'))
     st.dataframe(result_frame, use_container_width=True, hide_index=True)
     if st.button(t('apply'), type='primary', use_container_width=True):
-        updated, stats = grade_persistent_ledger_with_results(result_frame)
+        updated, stats = grade_persistent_with_fuzzy(result_frame)
         st.json(stats)
         if not updated.empty:
+            ledger = load_persistent_ledger()
             st.success(t('saved'))
 
-with st.expander(t('fetch'), expanded=False):
-    sport_key = st.text_input(t('sport_key'), value='', key='score_sport_key')
-    days_from = st.number_input(t('days_from'), min_value=1, max_value=7, value=3, step=1)
+with st.expander(t('fetch'), expanded=True):
+    fetch_all = st.checkbox(t('fetch_all_sports'), value=True)
+    sport_key = st.text_input(t('sport_key'), value='', key='score_sport_key', disabled=fetch_all)
+    days_from = st.number_input(t('days_from'), min_value=1, max_value=7, value=7, step=1)
     override = st.text_input(t('api_key'), value='', type='password', key='score_api_key')
-    if st.button(t('fetch'), use_container_width=True) and sport_key.strip():
+    if st.button(t('fetch'), use_container_width=True):
         try:
-            payload = _get_json(f'/v4/sports/{sport_key.strip()}/scores/', {'apiKey': get_key(override), 'daysFrom': int(days_from), 'dateFormat': 'iso'})
-            result_frame = odds_scores_to_result_frame(payload)
-            st.dataframe(result_frame, use_container_width=True, hide_index=True)
-            updated, stats = grade_persistent_ledger_with_results(result_frame)
+            api_key = get_key(override)
+            keys = sport_keys_from_ledger(ledger) if fetch_all else ([sport_key.strip()] if sport_key.strip() else [])
+            frames = []
+            sport_stats = []
+            for skey in keys:
+                payload = _get_json(f'/v4/sports/{skey}/scores/', {'apiKey': api_key, 'daysFrom': int(days_from), 'dateFormat': 'iso'})
+                frame = odds_scores_to_result_frame_v2(payload)
+                sport_stats.append({'sport_key': skey, 'result_rows': int(len(frame))})
+                if not frame.empty:
+                    frames.append(frame)
+            result_frame = pd.concat(frames, ignore_index=True, sort=False) if frames else pd.DataFrame()
+            st.json({'sports_checked': sport_stats, 'total_result_rows': int(len(result_frame))})
+            if not result_frame.empty:
+                st.dataframe(result_frame, use_container_width=True, hide_index=True)
+            updated, stats = grade_persistent_with_fuzzy(result_frame)
             st.json(stats)
             if not updated.empty:
-                save_persistent_ledger(updated)
+                ledger = load_persistent_ledger()
                 st.success(t('saved'))
         except Exception as exc:
             st.error(str(exc))
@@ -138,24 +159,9 @@ with st.expander(t('closing'), expanded=False):
     if st.button(t('collect_closing'), type='primary', use_container_width=True):
         try:
             if all_sports:
-                updated, stats = collect_closing_lines_for_all_sports(
-                    ledger,
-                    api_key=get_key(closing_override),
-                    regions=regions.strip() or 'us,eu,uk',
-                    markets=markets.strip() or 'h2h,spreads,totals',
-                    overwrite_existing=overwrite,
-                    pending_only=pending_only,
-                )
+                updated, stats = collect_closing_lines_for_all_sports(ledger, api_key=get_key(closing_override), regions=regions.strip() or 'us,eu,uk', markets=markets.strip() or 'h2h,spreads,totals', overwrite_existing=overwrite, pending_only=pending_only)
             elif closing_sport_key.strip():
-                updated, stats = collect_closing_lines(
-                    ledger,
-                    api_key=get_key(closing_override),
-                    sport_key=closing_sport_key.strip(),
-                    regions=regions.strip() or 'us,eu,uk',
-                    markets=markets.strip() or 'h2h,spreads,totals',
-                    overwrite_existing=overwrite,
-                    pending_only=pending_only,
-                )
+                updated, stats = collect_closing_lines(ledger, api_key=get_key(closing_override), sport_key=closing_sport_key.strip(), regions=regions.strip() or 'us,eu,uk', markets=markets.strip() or 'h2h,spreads,totals', overwrite_existing=overwrite, pending_only=pending_only)
             else:
                 updated, stats = pd.DataFrame(), {'updated_rows': 0, 'reason': 'missing_sport_key'}
             st.json(stats)
