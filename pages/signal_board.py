@@ -1,20 +1,37 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 import streamlit as st
 
+from autonomous_betting_agent.pick_hold_store import (
+    load_first_available,
+    normalize_workspace_id,
+    rows_from_any,
+    save_held_rows,
+)
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 
 st.set_page_config(page_title='ABA Signal Board', layout='wide')
 LANG = render_app_sidebar('signal_board', language_key='signal_board_language', selector='radio')
 
+HANDOFF_SOURCES = [
+    ('pro_predictor_high_confidence_rows', 'Pro Predictor high-confidence'),
+    ('pro_predictor_latest_rows', 'Pro Predictor latest'),
+    ('what_are_the_odds_latest_rows', 'What Are the Odds'),
+    ('ara_latest_predictions', 'Latest predictions'),
+]
+
 TEXT = {
     'en': {
         'title': 'ABA Signal Board',
         'caption': 'Review Pro Predictor rows, bucket them, send them to odds/value review or proof locking, then track results.',
-        'no_rows': 'No prediction rows found yet. Run Pro Predictor first, then come back here.',
+        'no_rows': 'No prediction rows found in session or durable storage. Run Pro Predictor first, then come back here.',
         'source': 'Source',
         'rows': 'Rows',
+        'workspace': 'Workspace ID',
+        'durable_loaded': 'Loaded saved rows from durable storage.',
         'tier_a': 'Tier A — strongest candidates',
         'tier_b': 'Tier B — high-confidence test',
         'tier_c': 'Tier C — research volume',
@@ -23,7 +40,7 @@ TEXT = {
         'send_all_lock': 'Send A/B/C to Odds Lock Pro',
         'send_a_lock': 'Send Tier A only to Odds Lock Pro',
         'send_odds': 'Send current board to What Are the Odds',
-        'sent': 'Rows saved in session. Open the target page from the Tools menu.',
+        'sent': 'Rows saved to session and durable handoff storage. Open the target page from the Tools menu.',
         'open_predictor': 'Open Pro Predictor',
         'open_odds': 'Open What Are the Odds',
         'open_lock': 'Open Odds Lock Pro',
@@ -34,9 +51,11 @@ TEXT = {
     'es': {
         'title': 'ABA Signal Board',
         'caption': 'Revisa filas de Predictor Pro, clasifícalas, envíalas a cuotas/prueba y mide resultados.',
-        'no_rows': 'Aún no hay predicciones. Ejecuta Predictor Pro primero y vuelve aquí.',
+        'no_rows': 'No hay predicciones en sesión ni en almacenamiento durable. Ejecuta Predictor Pro primero y vuelve aquí.',
         'source': 'Fuente',
         'rows': 'Filas',
+        'workspace': 'ID de workspace',
+        'durable_loaded': 'Filas guardadas cargadas desde almacenamiento durable.',
         'tier_a': 'Tier A — candidatos más fuertes',
         'tier_b': 'Tier B — prueba de alta confianza',
         'tier_c': 'Tier C — volumen de investigación',
@@ -45,7 +64,7 @@ TEXT = {
         'send_all_lock': 'Enviar A/B/C a Odds Lock Pro',
         'send_a_lock': 'Enviar solo Tier A a Odds Lock Pro',
         'send_odds': 'Enviar tablero a What Are the Odds',
-        'sent': 'Filas guardadas en la sesión. Abre la página destino desde el menú Tools.',
+        'sent': 'Filas guardadas en sesión y almacenamiento durable. Abre la página destino desde el menú Tools.',
         'open_predictor': 'Abrir Predictor Pro',
         'open_odds': 'Abrir What Are the Odds',
         'open_lock': 'Abrir Odds Lock Pro',
@@ -67,18 +86,38 @@ def go_to(path: str) -> None:
         st.page_link(path, label=path)
 
 
-def session_source() -> tuple[str, pd.DataFrame]:
-    sources = [
-        ('pro_predictor_high_confidence_rows', 'Pro Predictor high-confidence'),
-        ('pro_predictor_latest_rows', 'Pro Predictor latest'),
-        ('what_are_the_odds_latest_rows', 'What Are the Odds'),
-        ('ara_latest_predictions', 'Latest session'),
-    ]
-    for key, label in sources:
-        rows = st.session_state.get(key) or []
+def records_from(value: Any) -> list[dict[str, Any]]:
+    return rows_from_any(value)
+
+
+def frame_from_records(rows: list[dict[str, Any]]) -> pd.DataFrame:
+    return pd.DataFrame(rows) if rows else pd.DataFrame()
+
+
+def session_source(workspace_id: str) -> tuple[str, pd.DataFrame]:
+    for key, label in HANDOFF_SOURCES:
+        rows = records_from(st.session_state.get(key))
         if rows:
-            return label, pd.DataFrame(rows)
+            return label, frame_from_records(rows)
+
+    key, rows = load_first_available([key for key, _label in HANDOFF_SOURCES], workspace_id)
+    if rows:
+        st.session_state[key] = rows
+        label = next((source_label for source_key, source_label in HANDOFF_SOURCES if source_key == key), key)
+        return f'{label} · durable', frame_from_records(rows)
+
     return '', pd.DataFrame()
+
+
+def persist_handoff(frame: pd.DataFrame, keys: list[str], workspace_id: str) -> int:
+    records = frame.to_dict('records')
+    saved = 0
+    for key in keys:
+        st.session_state[key] = records
+        saved = max(saved, save_held_rows(key, records, workspace_id))
+        if workspace_id != 'test_01':
+            save_held_rows(key, records, 'test_01')
+    return saved
 
 
 def num(frame: pd.DataFrame, names: list[str]) -> pd.Series:
@@ -137,13 +176,21 @@ def show_table(frame: pd.DataFrame) -> None:
 st.title(t('title'))
 st.caption(t('caption'))
 st.info(t('guide_text'))
-source, raw = session_source()
+
+workspace_default = normalize_workspace_id(st.session_state.get('aba_test_window_id', 'test_01'))
+workspace_id = normalize_workspace_id(st.text_input(t('workspace'), value=workspace_default))
+st.session_state['aba_test_window_id'] = workspace_id
+
+source, raw = session_source(workspace_id)
 
 if raw.empty:
     st.warning(t('no_rows'))
     if st.button(t('open_predictor'), type='primary', use_container_width=True):
         go_to('pages/pro_predictor.py')
     st.stop()
+
+if 'durable' in source.lower():
+    st.success(t('durable_loaded'))
 
 board = enrich(raw)
 counts = board['confidence_bucket'].value_counts().to_dict() if 'confidence_bucket' in board.columns else {}
@@ -168,18 +215,25 @@ with tabs[4]:
     st.subheader(t('actions'))
     a_rows = board[board['confidence_bucket'].eq('A_top_candidate')]
     if st.button(t('send_all_lock'), use_container_width=True):
-        st.session_state['pro_predictor_latest_rows'] = board.to_dict('records')
-        st.session_state['pro_predictor_high_confidence_rows'] = board.to_dict('records')
-        st.session_state['ara_latest_predictions'] = board.to_dict('records')
+        persist_handoff(
+            board,
+            ['pro_predictor_latest_rows', 'pro_predictor_high_confidence_rows', 'ara_latest_predictions'],
+            workspace_id,
+        )
         st.success(t('sent'))
     if st.button(t('send_a_lock'), use_container_width=True):
-        st.session_state['pro_predictor_latest_rows'] = a_rows.to_dict('records')
-        st.session_state['pro_predictor_high_confidence_rows'] = a_rows.to_dict('records')
-        st.session_state['ara_latest_predictions'] = a_rows.to_dict('records')
+        persist_handoff(
+            a_rows,
+            ['pro_predictor_latest_rows', 'pro_predictor_high_confidence_rows', 'ara_latest_predictions'],
+            workspace_id,
+        )
         st.success(t('sent'))
     if st.button(t('send_odds'), use_container_width=True):
-        st.session_state['what_are_the_odds_latest_rows'] = board.to_dict('records')
-        st.session_state['ara_latest_predictions'] = board.to_dict('records')
+        persist_handoff(
+            board,
+            ['what_are_the_odds_latest_rows', 'ara_latest_predictions'],
+            workspace_id,
+        )
         st.success(t('sent'))
     col1, col2 = st.columns(2)
     if col1.button(t('open_predictor'), type='primary', use_container_width=True):
