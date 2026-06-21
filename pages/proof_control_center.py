@@ -8,6 +8,7 @@ import streamlit as st
 from autonomous_betting_agent.commercial_platform_tools import (
     filter_locked_proof_rows,
     load_persistent_ledger,
+    merge_ledgers,
     save_persistent_ledger,
 )
 from autonomous_betting_agent.market_rules import (
@@ -37,8 +38,9 @@ TEXT = {
         'caption': 'Clean unsupported markets, consolidate proof storage, and run save/reload tests before selling the record.',
         'workspace': 'Workspace ID',
         'storage': 'Storage status',
-        'loaded': 'Loaded rows',
-        'github': 'GitHub rows',
+        'loaded': 'Unique loaded proof rows',
+        'github': 'Unique GitHub proof rows',
+        'physical': 'Physical store-row copies',
         'proof': 'Valid proof rows',
         'unsupported': 'Unsupported rows',
         'supported': 'Supported proof rows',
@@ -48,15 +50,16 @@ TEXT = {
         'no_rows': 'No proof rows found. Create locks in Odds Lock Pro first.',
         'cleaned': 'Cleaned and saved supported proof rows to durable proof stores.',
         'tests': 'Storage test results',
-        'warning': 'Tennis is excluded from official proof because your odds API does not support it for this workflow.',
+        'warning': 'Storage now shows unique proof rows separately from physical copies. Multiple stores can hold the same rows for durability without increasing the real proof count.',
     },
     'es': {
         'title': 'Centro de Control de Prueba',
         'caption': 'Limpia mercados no compatibles, consolida almacenamiento y prueba guardado/recarga antes de vender el récord.',
         'workspace': 'ID del espacio de trabajo',
         'storage': 'Estado de almacenamiento',
-        'loaded': 'Filas cargadas',
-        'github': 'Filas GitHub',
+        'loaded': 'Filas prueba únicas cargadas',
+        'github': 'Filas prueba únicas GitHub',
+        'physical': 'Copias físicas en stores',
         'proof': 'Filas válidas de prueba',
         'unsupported': 'Filas no compatibles',
         'supported': 'Filas compatibles',
@@ -66,7 +69,7 @@ TEXT = {
         'no_rows': 'No hay filas de prueba. Primero crea bloqueos en Odds Lock Pro.',
         'cleaned': 'Filas compatibles guardadas en almacenamiento duradero.',
         'tests': 'Resultados de prueba de almacenamiento',
-        'warning': 'Tenis queda excluido de la prueba oficial porque tu API de cuotas no lo soporta para este flujo.',
+        'warning': 'El almacenamiento ahora muestra filas únicas separadas de copias físicas. Varios stores pueden guardar las mismas filas por durabilidad sin aumentar el conteo real.',
     },
 }
 
@@ -77,6 +80,25 @@ def t(key: str) -> str:
 
 def _frame_from_rows(rows: list[dict[str, Any]]) -> pd.DataFrame:
     return pd.DataFrame([dict(row) for row in rows if isinstance(row, dict)])
+
+
+def _unique_proof_count(frame: pd.DataFrame | list[dict[str, Any]]) -> int:
+    proof = filter_locked_proof_rows(frame)
+    if proof.empty:
+        return 0
+    merged = merge_ledgers(proof)
+    return int(len(merged))
+
+
+def _unique_github_count(snapshot: pd.DataFrame, workspace_id: str) -> int:
+    frames: list[pd.DataFrame] = []
+    for key in sorted(HELD_KEYS):
+        rows = load_held_rows(key, workspace_id)
+        if rows:
+            frames.append(_frame_from_rows(rows))
+    if not frames:
+        return 0
+    return _unique_proof_count(pd.concat(frames, ignore_index=True, sort=False))
 
 
 def load_all_rows(workspace_id: str) -> pd.DataFrame:
@@ -97,7 +119,7 @@ def load_all_rows(workspace_id: str) -> pd.DataFrame:
     locked = filter_locked_proof_rows(merged)
     if locked.empty:
         return mark_market_support(merged)
-    return mark_market_support(locked)
+    return mark_market_support(merge_ledgers(locked))
 
 
 def save_cleaned(cleaned: pd.DataFrame, workspace_id: str) -> dict[str, Any]:
@@ -138,21 +160,25 @@ proof = filter_locked_proof_rows(raw)
 cleaned = supported_only(proof)
 rejected = unsupported_only(proof)
 summary = market_support_summary(proof)
+unique_loaded = len(proof)
+unique_github = _unique_github_count(snapshot, workspace_id)
+physical_loaded = int(snapshot['loaded_rows'].sum()) if not snapshot.empty else 0
+physical_github = int(snapshot['github_rows'].sum()) if not snapshot.empty and 'github_rows' in snapshot.columns else 0
 
 st.subheader(t('storage'))
 cols = st.columns(6)
 cols[0].metric('Workspace', workspace_id)
 cols[1].metric('GitHub durable', 'enabled' if github_store_enabled() else 'off')
-cols[2].metric(t('loaded'), int(snapshot['loaded_rows'].sum()) if not snapshot.empty else 0)
-cols[3].metric(t('github'), int(snapshot['github_rows'].sum()) if not snapshot.empty and 'github_rows' in snapshot.columns else 0)
+cols[2].metric(t('loaded'), unique_loaded)
+cols[3].metric(t('github'), unique_github)
 cols[4].metric(t('proof'), len(proof))
 cols[5].metric(t('unsupported'), summary['unsupported'])
 
 cols2 = st.columns(4)
 cols2[0].metric(t('supported'), len(cleaned))
 cols2[1].metric('Unsupported tennis', summary['unsupported_tennis'])
-cols2[2].metric('Raw/proof source rows', len(raw))
-cols2[3].metric('Proof quality target', '100/100' if not cleaned.empty else 'N/A')
+cols2[2].metric(t('physical'), physical_loaded)
+cols2[3].metric('Physical GitHub copies', physical_github)
 
 button_cols = st.columns(2)
 if button_cols[0].button(t('consolidate'), type='primary', use_container_width=True, disabled=cleaned.empty):
