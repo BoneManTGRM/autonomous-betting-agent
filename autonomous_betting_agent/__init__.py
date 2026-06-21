@@ -69,3 +69,36 @@ class AutonomousBettingAgent:
             + min(max(float(team.data_completeness), 0.0), 1.0) * 0.02
             + min(max(int(team.source_count), 0), 10) * 0.003
         )
+
+
+def _install_price_normalizer() -> None:
+    try:
+        from dataclasses import replace
+        from . import live_odds
+    except Exception:
+        return
+    if getattr(live_odds, '_aba_price_normalizer_v1', False):
+        return
+    original = live_odds.summarize_event
+
+    def normalized_summary(event):
+        summary = original(event)
+        if summary is None:
+            return None
+        rows = []
+        for outcome in summary.outcomes:
+            try:
+                avg = float(outcome.average_price)
+            except (TypeError, ValueError):
+                avg = None
+            if avg is not None and avg > 1.0:
+                rows.append(replace(outcome, best_price=avg, best_bookmaker='consensus_average'))
+            else:
+                rows.append(outcome)
+        return replace(summary, outcomes=rows)
+
+    live_odds.summarize_event = normalized_summary
+    live_odds._aba_price_normalizer_v1 = True
+
+
+_install_price_normalizer()
