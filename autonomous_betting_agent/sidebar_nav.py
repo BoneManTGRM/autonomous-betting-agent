@@ -33,6 +33,7 @@ TOOLS: tuple[tuple[str, str, str], ...] = (
     ('Public Proof Dashboard', 'Panel Público de Prueba', 'pages/public_proof_dashboard.py'),
     ('Storage Diagnostics', 'Diagnóstico de Almacenamiento', 'pages/storage_diagnostics.py'),
     ('Reset Storage', 'Reiniciar almacenamiento', 'pages/reset_storage.py'),
+    ('Auto Learning Cycle', 'Ciclo Automático de Aprendizaje', 'pages/auto_learning_cycle.py'),
     ('Learning Memory', 'Memoria de Aprendizaje', 'pages/learn_memory_safe.py'),
 )
 PRO_PREDICTOR_LARGE_LIST_70_DEFAULTS = {
@@ -100,7 +101,6 @@ def render_app_sidebar(current_page: str, *, language_key: str = 'global_languag
             label = _label(item, language)
             path = item[2]
             safe_label = html.escape(label)
-            href = '/' + path.replace('.py', '').replace('pages/', '')
             if current_page and current_page in path:
                 st.markdown(f'**● {safe_label}**')
             else:
