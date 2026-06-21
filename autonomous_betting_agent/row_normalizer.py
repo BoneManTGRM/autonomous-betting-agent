@@ -47,7 +47,7 @@ RESULT_MAP = {
     'ganada': 'win', 'gano': 'win', 'ganó': 'win', 'victoria': 'win', 'acierto': 'win',
     'lost': 'loss', 'loss': 'loss', 'l': 'loss', 'incorrect': 'loss', 'miss': 'loss', 'false': 'loss', 'no': 'loss', '0': 'loss', '0.0': 'loss',
     'perdida': 'loss', 'perdio': 'loss', 'perdió': 'loss', 'derrota': 'loss', 'fallo': 'loss',
-    'void': 'void', 'push': 'void', 'cancelled': 'void', 'canceled': 'void', 'postponed': 'void', 'abandoned': 'void',
+    'void': 'void', 'push': 'void', 'pushed': 'void', 'draw_no_bet_push': 'void', 'cancelled': 'void', 'canceled': 'void', 'cancelation': 'void', 'cancellation': 'void', 'postponed': 'void', 'abandoned': 'void', 'no_action': 'void',
     'pending': 'pending', 'unknown': 'pending', 'scheduled': 'pending', 'live': 'pending',
 }
 
