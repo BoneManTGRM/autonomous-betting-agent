@@ -38,4 +38,12 @@ jobs:
 
       - name: Run pytest
         run: |
-          python -m pytest -q tests --disable-warnings --import-mode=importlib
+          set -o pipefail
+          python -m pytest -q tests --disable-warnings --import-mode=importlib --tb=short 2>&1 | tee pytest.log
+
+      - name: Upload pytest log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-log
+          path: pytest.log
