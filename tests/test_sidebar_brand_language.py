@@ -10,3 +10,12 @@ def test_sidebar_uses_colored_brand_and_radio_language_selector() -> None:
     assert "selector: str = 'radio'" in text
     assert "st.radio('Language / Idioma'" in text
     assert "st.selectbox('Language / Idioma'" not in text
+
+
+def test_sidebar_language_persists_across_page_keys() -> None:
+    text = (Path(__file__).resolve().parents[1] / 'autonomous_betting_agent' / 'sidebar_nav.py').read_text(encoding='utf-8')
+    assert "st.session_state.get('global_language')" in text
+    assert 'def _sync_language' in text
+    assert 'for key in LANGUAGE_KEYS' in text
+    assert 'st.session_state[key] = chosen' in text
+    assert 'st.session_state[language_key] = starting_language' in text
