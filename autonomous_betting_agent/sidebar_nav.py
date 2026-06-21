@@ -29,6 +29,7 @@ TOOLS: tuple[tuple[str, str, str], ...] = (
     ('Threshold Optimizer', 'Optimizador de Umbral', 'pages/threshold_optimizer.py'),
     ('What Are the Odds', 'Cuáles Son las Cuotas', 'pages/what_are_the_odds.py'),
     ('Odds Lock Pro', 'Bloqueo de Cuotas Pro', 'pages/odds_lock_pro.py'),
+    ('Auto Result Sync', 'Sincronización Automática de Resultados', 'pages/auto_result_sync.py'),
     ('Proof Control Center', 'Centro de Control de Prueba', 'pages/proof_control_center.py'),
     ('Public Proof Dashboard', 'Panel Público de Prueba', 'pages/public_proof_dashboard.py'),
     ('Storage Diagnostics', 'Diagnóstico de Almacenamiento', 'pages/storage_diagnostics.py'),
