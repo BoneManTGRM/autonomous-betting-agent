@@ -12,6 +12,7 @@ from autonomous_betting_agent.auto_result_grading_tools import (
     odds_scores_to_result_frame,
     result_upload_template,
 )
+from autonomous_betting_agent.closing_line_tools import collect_closing_lines
 from autonomous_betting_agent.commercial_platform_tools import load_persistent_ledger, save_persistent_ledger
 from autonomous_betting_agent.live_odds import _get_json, validate_api_key
 from autonomous_betting_agent.tool_sidebar import render_tool_sidebar
@@ -23,13 +24,19 @@ render_tool_sidebar('auto_result_grading', 'Español' if LANG == 'es' else 'Engl
 TEXT = {
     'en': {
         'title': 'Auto Result Grading',
-        'caption': 'Grade the persistent proof ledger from finished-result uploads or an explicit one-click score fetch.',
-        'warning': 'No background calls run here. API score fetches happen only after pressing the fetch button.',
+        'caption': 'Grade the persistent proof ledger from finished-result uploads or explicit one-click score/closing-line fetches.',
+        'warning': 'No background calls run here. API score and closing-line fetches happen only after pressing a button.',
         'upload': 'Upload finished results CSV',
         'template': 'Download result upload template',
         'apply': 'Apply uploaded results to persistent ledger',
         'fetch': 'Fetch completed scores for one sport key',
+        'closing': 'Collect closing/current odds for CLV',
+        'closing_help': 'Run this close to event start for pending locked picks. It saves the current market average as closing_decimal_price so the Public Proof Dashboard can calculate CLV.',
+        'collect_closing': 'Collect closing odds for CLV',
         'sport_key': 'Sport key',
+        'regions': 'Regions',
+        'markets': 'Markets',
+        'overwrite_closing': 'Overwrite existing closing prices',
         'days_from': 'Days back',
         'api_key': 'Optional odds-data key override',
         'ledger': 'Current persistent ledger',
@@ -39,13 +46,19 @@ TEXT = {
     },
     'es': {
         'title': 'Autocalificación de Resultados',
-        'caption': 'Califica el ledger persistente usando cargas de resultados finalizados o una búsqueda explícita de marcadores.',
-        'warning': 'Aquí no corren llamadas en segundo plano. La búsqueda API solo corre al presionar el botón.',
+        'caption': 'Califica el ledger persistente usando cargas de resultados, búsqueda de marcadores o captura de cierre.',
+        'warning': 'Aquí no corren llamadas en segundo plano. La búsqueda API solo corre al presionar un botón.',
         'upload': 'Subir CSV de resultados finalizados',
         'template': 'Descargar plantilla de resultados',
         'apply': 'Aplicar resultados subidos al ledger persistente',
         'fetch': 'Buscar marcadores finalizados para una sport key',
+        'closing': 'Recolectar cuotas de cierre/actuales para CLV',
+        'closing_help': 'Ejecuta esto cerca del inicio del evento para picks bloqueados pendientes. Guarda el promedio actual del mercado como closing_decimal_price para calcular CLV.',
+        'collect_closing': 'Recolectar cuotas de cierre para CLV',
         'sport_key': 'Sport key',
+        'regions': 'Regiones',
+        'markets': 'Mercados',
+        'overwrite_closing': 'Sobrescribir cuotas de cierre existentes',
         'days_from': 'Días atrás',
         'api_key': 'Llave opcional de datos de cuotas',
         'ledger': 'Ledger persistente actual',
@@ -93,9 +106,9 @@ if upload is not None:
             st.success(t('saved'))
 
 with st.expander(t('fetch'), expanded=False):
-    sport_key = st.text_input(t('sport_key'), value='')
+    sport_key = st.text_input(t('sport_key'), value='', key='score_sport_key')
     days_from = st.number_input(t('days_from'), min_value=1, max_value=7, value=3, step=1)
-    override = st.text_input(t('api_key'), value='', type='password')
+    override = st.text_input(t('api_key'), value='', type='password', key='score_api_key')
     if st.button(t('fetch'), use_container_width=True) and sport_key.strip():
         try:
             payload = _get_json(f'/v4/sports/{sport_key.strip()}/scores/', {'apiKey': get_key(override), 'daysFrom': int(days_from), 'dateFormat': 'iso'})
@@ -105,6 +118,31 @@ with st.expander(t('fetch'), expanded=False):
             st.json(stats)
             if not updated.empty:
                 save_persistent_ledger(updated)
+                st.success(t('saved'))
+        except Exception as exc:
+            st.error(str(exc))
+
+with st.expander(t('closing'), expanded=False):
+    st.caption(t('closing_help'))
+    closing_sport_key = st.text_input(t('sport_key'), value='', key='closing_sport_key')
+    regions = st.text_input(t('regions'), value='us,eu,uk', key='closing_regions')
+    markets = st.text_input(t('markets'), value='h2h,spreads,totals', key='closing_markets')
+    closing_override = st.text_input(t('api_key'), value='', type='password', key='closing_api_key')
+    overwrite = st.checkbox(t('overwrite_closing'), value=False)
+    if st.button(t('collect_closing'), type='primary', use_container_width=True) and closing_sport_key.strip():
+        try:
+            updated, stats = collect_closing_lines(
+                ledger,
+                api_key=get_key(closing_override),
+                sport_key=closing_sport_key.strip(),
+                regions=regions.strip() or 'us,eu,uk',
+                markets=markets.strip() or 'h2h,spreads,totals',
+                overwrite_existing=overwrite,
+            )
+            st.json(stats)
+            if not updated.empty:
+                save_persistent_ledger(updated)
+                ledger = load_persistent_ledger()
                 st.success(t('saved'))
         except Exception as exc:
             st.error(str(exc))
