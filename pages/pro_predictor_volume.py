@@ -6,7 +6,7 @@ import streamlit as st
 
 import autonomous_betting_agent.adaptive_learning as adaptive_learning
 from autonomous_betting_agent.auto_learning_cycle import run_auto_learning_cycle
-from autonomous_betting_agent.auto_result_sync import run_auto_result_sync
+from autonomous_betting_agent.full_auto_update import full_update_and_sync
 from autonomous_betting_agent.pick_hold_store import normalize_workspace_id
 from autonomous_betting_agent.profit_guard import add_profit_guard, filter_profit_guard
 
@@ -95,6 +95,25 @@ def apply_volume_pattern_points(frame, *args, **kwargs):
     return out
 
 
+def run_predictor_full_update(workspace_id: str, *, api_key_override: str, days_from: int, run_learning_after: bool) -> dict:
+    updated, stats = full_update_and_sync(workspace_id=workspace_id, api_key_override=api_key_override, days_from=int(days_from))
+    report = {
+        'version': 'predictor-full-auto-update-v2',
+        'workspace_id': workspace_id,
+        'locked_rows': int(stats.get('locked_rows') or len(updated) or 0),
+        'status': 'updated' if int(stats.get('updated_rows') or 0) > 0 else 'no_updates',
+        'reason': stats.get('reason', 'no_matching_completed_scores'),
+        'grading': stats,
+        'updated_rows': int(stats.get('updated_rows') or 0),
+        'matched_rows': int(stats.get('matched_rows') or 0),
+        'total_result_rows': int(stats.get('total_result_rows') or 0),
+        'sports_checked': stats.get('sports_checked', []),
+    }
+    if run_learning_after and int(stats.get('updated_rows') or 0) > 0:
+        report['learning'] = run_auto_learning_cycle(workspace_id, save_to_github=True)
+    return report
+
+
 def render_predictor_automation_panel() -> None:
     with st.expander('Automation / Maintenance: results → learning', expanded=False):
         st.caption('Use this after picks have been locked. It can update finished wins/losses, save the ledger, and feed new results into learning memory.')
@@ -102,17 +121,18 @@ def render_predictor_automation_panel() -> None:
         workspace_id = normalize_workspace_id(workspace_input)
         st.session_state['aba_test_window_id'] = workspace_id
         cols = st.columns(4)
-        days_from = cols[0].number_input('Days back for result sync', min_value=1, max_value=7, value=3, step=1, key='predictor_auto_days')
-        threshold = cols[1].number_input('Match threshold', min_value=0.70, max_value=0.98, value=0.86, step=0.01, key='predictor_auto_threshold')
+        days_from = cols[0].number_input('Days back for result sync', min_value=1, max_value=7, value=7, step=1, key='predictor_auto_days')
+        threshold = cols[1].number_input('Match threshold', min_value=0.70, max_value=0.98, value=0.82, step=0.01, key='predictor_auto_threshold')
         run_learning = cols[2].toggle('Run learning after result sync', value=True, key='predictor_auto_run_learning')
         api_key = cols[3].text_input('Optional Odds API key override', value='', type='password', key='predictor_auto_api_key')
+        st.caption(f'Active full-auto matcher: V2 workspace-aware sync. Threshold display: {float(threshold):.2f}.')
         actions = st.columns(3)
         if actions[0].button('Find & update wins/losses', use_container_width=True, key='predictor_auto_result_sync'):
             try:
-                report = run_auto_result_sync(workspace_id, api_key_override=api_key, days_from=int(days_from), threshold=float(threshold), run_learning_after=bool(run_learning))
+                report = run_predictor_full_update(workspace_id, api_key_override=api_key, days_from=int(days_from), run_learning_after=bool(run_learning))
                 st.subheader('Result sync report')
                 if report.get('status') == 'updated':
-                    st.success('Wins/losses updated.')
+                    st.success('Wins/losses updated and dashboard synced.')
                 else:
                     st.warning(f"Result sync status: {report.get('status')} / {report.get('reason', 'no reason')}")
                 st.json(report)
@@ -133,10 +153,10 @@ def render_predictor_automation_panel() -> None:
                 st.error(f'Auto Learning Cycle failed: {exc}')
         if actions[2].button('Full auto update', type='primary', use_container_width=True, key='predictor_full_auto_update'):
             try:
-                report = run_auto_result_sync(workspace_id, api_key_override=api_key, days_from=int(days_from), threshold=float(threshold), run_learning_after=True)
+                report = run_predictor_full_update(workspace_id, api_key_override=api_key, days_from=int(days_from), run_learning_after=True)
                 st.subheader('Full auto update report')
                 if report.get('status') == 'updated':
-                    st.success('Results and learning update completed where new results were found.')
+                    st.success('Results, dashboard sync, and learning update completed where new results were found.')
                 else:
                     st.warning(f"Full auto update status: {report.get('status')} / {report.get('reason', 'no reason')}")
                 st.json(report)
