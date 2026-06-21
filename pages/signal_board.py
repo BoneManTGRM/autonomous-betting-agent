@@ -17,10 +17,10 @@ st.set_page_config(page_title='ABA Signal Board', layout='wide')
 LANG = render_app_sidebar('signal_board', language_key='signal_board_language', selector='radio')
 
 HANDOFF_SOURCES = [
-    ('pro_predictor_high_confidence_rows', 'Pro Predictor high-confidence'),
-    ('pro_predictor_latest_rows', 'Pro Predictor latest'),
-    ('what_are_the_odds_latest_rows', 'What Are the Odds'),
-    ('ara_latest_predictions', 'Latest predictions'),
+    ('pro_predictor_high_confidence_rows', 'pro_predictor_high_confidence'),
+    ('pro_predictor_latest_rows', 'pro_predictor_latest'),
+    ('what_are_the_odds_latest_rows', 'what_are_the_odds'),
+    ('ara_latest_predictions', 'latest_predictions'),
 ]
 
 TEXT = {
@@ -35,6 +35,9 @@ TEXT = {
         'tier_a': 'Tier A — strongest candidates',
         'tier_b': 'Tier B — high-confidence test',
         'tier_c': 'Tier C — research volume',
+        'tier_a_metric': 'Tier A',
+        'tier_b_metric': 'Tier B',
+        'tier_c_metric': 'Tier C',
         'all_rows': 'All rows',
         'actions': 'Actions',
         'send_all_lock': 'Send A/B/C to Odds Lock Pro',
@@ -47,6 +50,10 @@ TEXT = {
         'open_threshold': 'Open Threshold Optimizer',
         'download': 'Download current signal board CSV',
         'guide_text': '1) Run Pro Predictor. 2) Review this Signal Board. 3) Send A/B/C to Research/Test locking. 4) Grade results. 5) Use Threshold Optimizer to learn which buckets are winning.',
+        'source_pro_predictor_high_confidence': 'Pro Predictor high-confidence',
+        'source_pro_predictor_latest': 'Pro Predictor latest',
+        'source_what_are_the_odds': 'What Are the Odds',
+        'source_latest_predictions': 'Latest predictions',
     },
     'es': {
         'title': 'ABA Signal Board',
@@ -56,13 +63,16 @@ TEXT = {
         'rows': 'Filas',
         'workspace': 'ID de workspace',
         'durable_loaded': 'Filas guardadas cargadas desde almacenamiento durable.',
-        'tier_a': 'Tier A — candidatos más fuertes',
-        'tier_b': 'Tier B — prueba de alta confianza',
-        'tier_c': 'Tier C — volumen de investigación',
+        'tier_a': 'Nivel A — candidatos más fuertes',
+        'tier_b': 'Nivel B — prueba de alta confianza',
+        'tier_c': 'Nivel C — volumen de investigación',
+        'tier_a_metric': 'Nivel A',
+        'tier_b_metric': 'Nivel B',
+        'tier_c_metric': 'Nivel C',
         'all_rows': 'Todas las filas',
         'actions': 'Acciones',
         'send_all_lock': 'Enviar A/B/C a Odds Lock Pro',
-        'send_a_lock': 'Enviar solo Tier A a Odds Lock Pro',
+        'send_a_lock': 'Enviar solo Nivel A a Odds Lock Pro',
         'send_odds': 'Enviar tablero a What Are the Odds',
         'sent': 'Filas guardadas en sesión y almacenamiento durable. Abre la página destino desde el menú Tools.',
         'open_predictor': 'Abrir Predictor Pro',
@@ -71,12 +81,20 @@ TEXT = {
         'open_threshold': 'Abrir Optimizador de Umbrales',
         'download': 'Descargar CSV del tablero actual',
         'guide_text': '1) Ejecuta Predictor Pro. 2) Revisa este Signal Board. 3) Envía A/B/C al bloqueo Investigación/Prueba. 4) Califica resultados. 5) Usa el Optimizador para aprender qué buckets ganan.',
+        'source_pro_predictor_high_confidence': 'Predictor Pro alta confianza',
+        'source_pro_predictor_latest': 'Predicciones recientes de Predictor Pro',
+        'source_what_are_the_odds': 'What Are the Odds',
+        'source_latest_predictions': 'Predicciones recientes',
     },
 }
 
 
 def t(key: str) -> str:
     return TEXT[LANG].get(key, TEXT['en'].get(key, key))
+
+
+def source_label(label_key: str) -> str:
+    return t(f'source_{label_key}')
 
 
 def go_to(path: str) -> None:
@@ -95,16 +113,16 @@ def frame_from_records(rows: list[dict[str, Any]]) -> pd.DataFrame:
 
 
 def session_source(workspace_id: str) -> tuple[str, pd.DataFrame]:
-    for key, label in HANDOFF_SOURCES:
+    for key, label_key in HANDOFF_SOURCES:
         rows = records_from(st.session_state.get(key))
         if rows:
-            return label, frame_from_records(rows)
+            return source_label(label_key), frame_from_records(rows)
 
-    key, rows = load_first_available([key for key, _label in HANDOFF_SOURCES], workspace_id)
+    key, rows = load_first_available([key for key, _label_key in HANDOFF_SOURCES], workspace_id)
     if rows:
         st.session_state[key] = rows
-        label = next((source_label for source_key, source_label in HANDOFF_SOURCES if source_key == key), key)
-        return f'{label} · durable', frame_from_records(rows)
+        label_key = next((source_label_key for source_key, source_label_key in HANDOFF_SOURCES if source_key == key), key)
+        return f'{source_label(label_key)} · durable', frame_from_records(rows)
 
     return '', pd.DataFrame()
 
@@ -197,9 +215,9 @@ counts = board['confidence_bucket'].value_counts().to_dict() if 'confidence_buck
 metrics = st.columns(5)
 metrics[0].metric(t('source'), source)
 metrics[1].metric(t('rows'), len(board))
-metrics[2].metric('Tier A', int(counts.get('A_top_candidate', 0)))
-metrics[3].metric('Tier B', int(counts.get('B_high_confidence_test', 0)))
-metrics[4].metric('Tier C', int(counts.get('C_research_volume', 0)))
+metrics[2].metric(t('tier_a_metric'), int(counts.get('A_top_candidate', 0)))
+metrics[3].metric(t('tier_b_metric'), int(counts.get('B_high_confidence_test', 0)))
+metrics[4].metric(t('tier_c_metric'), int(counts.get('C_research_volume', 0)))
 
 tabs = st.tabs([t('tier_a'), t('tier_b'), t('tier_c'), t('all_rows'), t('actions')])
 with tabs[0]:
