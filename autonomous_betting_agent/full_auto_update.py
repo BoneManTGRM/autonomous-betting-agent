@@ -1,15 +1,26 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pandas as pd
+import requests
 
 from .commercial_platform_tools import filter_locked_proof_rows, load_persistent_ledger
 from .dashboard_sync import sync_dashboard_state
 from .live_odds import _get_json, validate_api_key
 from .result_grading_v2 import apply_fuzzy_updates, odds_scores_to_result_frame_v2
 from .row_normalizer import safe_text
+
+ESPN_SCOREBOARD_MAP = {
+    'baseball_mlb': ('baseball', 'mlb'),
+    'basketball_nba': ('basketball', 'nba'),
+    'basketball_wnba': ('basketball', 'wnba'),
+    'americanfootball_nfl': ('football', 'nfl'),
+    'icehockey_nhl': ('hockey', 'nhl'),
+    'soccer_epl': ('soccer', 'eng.1'),
+}
 
 
 def get_api_key(override: str = '') -> str:
@@ -45,6 +56,91 @@ def _public_error(exc: Exception) -> str:
     return text[:240]
 
 
+def _score_int(value: Any) -> int | None:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _team_name(competitor: dict[str, Any]) -> str:
+    team = competitor.get('team') or {}
+    return safe_text(team.get('displayName') or team.get('shortDisplayName') or team.get('name') or competitor.get('id'))
+
+
+def _espn_event_row(event: dict[str, Any], sport_key: str) -> dict[str, Any] | None:
+    competitions = event.get('competitions') or []
+    if not competitions:
+        return None
+    competition = competitions[0] or {}
+    competitors = competition.get('competitors') or []
+    home = away = None
+    for competitor in competitors:
+        side = safe_text(competitor.get('homeAway')).lower()
+        if side == 'home':
+            home = competitor
+        elif side == 'away':
+            away = competitor
+    if home is None or away is None:
+        return None
+    status = event.get('status') or {}
+    status_type = status.get('type') or {}
+    completed = bool(status_type.get('completed')) or safe_text(status_type.get('state')).lower() == 'post'
+    if not completed:
+        return None
+    home_team = _team_name(home)
+    away_team = _team_name(away)
+    home_score = _score_int(home.get('score'))
+    away_score = _score_int(away.get('score'))
+    if not home_team or not away_team or home_score is None or away_score is None:
+        return None
+    winner = ''
+    if home.get('winner') is True or home_score > away_score:
+        winner = home_team
+    elif away.get('winner') is True or away_score > home_score:
+        winner = away_team
+    result_status = 'void' if home_score == away_score else 'final'
+    return {
+        'event': f'{away_team} at {home_team}',
+        'sport_key': sport_key,
+        'sport': sport_key,
+        'event_start_utc': safe_text(event.get('date')),
+        'home_team': home_team,
+        'away_team': away_team,
+        'home_score': home_score,
+        'away_score': away_score,
+        'winner': winner,
+        'result_status': result_status,
+        'final_score': f'{away_team} {away_score} - {home_score} {home_team}',
+        'result_source': 'espn_scoreboard_fallback',
+    }
+
+
+def fetch_espn_completed_scores(sport_key: str, *, days_from: int = 7) -> pd.DataFrame:
+    mapping = ESPN_SCOREBOARD_MAP.get(sport_key)
+    if not mapping:
+        return pd.DataFrame()
+    sport, league = mapping
+    rows: list[dict[str, Any]] = []
+    today = datetime.now(timezone.utc).date()
+    for offset in range(max(1, int(days_from))):
+        day = today - timedelta(days=offset)
+        url = f'https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard'
+        try:
+            response = requests.get(url, params={'dates': day.strftime('%Y%m%d')}, timeout=12)
+            response.raise_for_status()
+            payload = response.json()
+        except Exception:
+            continue
+        for event in payload.get('events') or []:
+            row = _espn_event_row(event, sport_key)
+            if row is not None:
+                rows.append(row)
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).drop_duplicates(subset=['event', 'event_start_utc', 'sport_key'])
+
+
 def fetch_completed_scores_for_ledger(
     ledger: pd.DataFrame | list[dict[str, Any]],
     *,
@@ -62,13 +158,19 @@ def fetch_completed_scores_for_ledger(
         try:
             payload = _get_json(f'/v4/sports/{key}/scores/', {'apiKey': api_key, 'daysFrom': int(days_from), 'dateFormat': 'iso'})
             frame = odds_scores_to_result_frame_v2(payload)
-            stats.append({'sport_key': key, 'result_rows': int(len(frame)), 'status': 'ok'})
+            stats.append({'sport_key': key, 'result_rows': int(len(frame)), 'status': 'ok', 'source': 'the_odds_api_scores'})
             if not frame.empty:
                 frames.append(frame)
-        except Exception as exc:
-            stats.append({'sport_key': key, 'result_rows': 0, 'status': 'skipped_error', 'error': _public_error(exc)})
             continue
-    results = pd.concat(frames, ignore_index=True, sort=False) if frames else pd.DataFrame()
+        except Exception as exc:
+            odds_error = _public_error(exc)
+        fallback = fetch_espn_completed_scores(key, days_from=int(days_from))
+        if not fallback.empty:
+            stats.append({'sport_key': key, 'result_rows': int(len(fallback)), 'status': 'ok_fallback', 'source': 'espn_scoreboard_fallback', 'odds_api_error': odds_error})
+            frames.append(fallback)
+        else:
+            stats.append({'sport_key': key, 'result_rows': 0, 'status': 'skipped_error', 'source': 'none', 'error': odds_error})
+    results = pd.concat(frames, ignore_index=True, sort=False).drop_duplicates() if frames else pd.DataFrame()
     return results, stats
 
 
@@ -92,8 +194,8 @@ def full_update_and_sync(
     updated, stats = apply_fuzzy_updates(locked, results)
     if not updated.empty:
         updated = sync_dashboard_state(updated, workspace_id=workspace_id)
-    ok_sports = [item for item in sport_stats if item.get('status') == 'ok']
-    errored_sports = [item for item in sport_stats if item.get('status') != 'ok']
+    ok_sports = [item for item in sport_stats if str(item.get('status', '')).startswith('ok')]
+    errored_sports = [item for item in sport_stats if not str(item.get('status', '')).startswith('ok')]
     reason = ''
     if results.empty and errored_sports and not ok_sports:
         reason = 'all_score_feeds_failed_or_unsupported'
