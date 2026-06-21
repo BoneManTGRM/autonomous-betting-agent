@@ -152,10 +152,6 @@ def _row_identity(row: dict[str, Any]) -> tuple[str, ...]:
 
 
 def dedupe_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Keep one row per durable identity while preserving the newest copy.
-
-    This prevents repeated button clicks from inflating durable storage counts.
-    """
     deduped: dict[tuple[str, ...], dict[str, Any]] = {}
     order: list[tuple[str, ...]] = []
     for raw in rows:
@@ -261,7 +257,6 @@ def _github_save_payload(key: str, rows: list[dict[str, Any]], workspace_id: Any
             {'version': 'held-picks-v8-deduped', 'format': 'chunk', 'workspace_id': workspace, 'key': key, 'part': part_index, 'rows': part_rows},
             f'Persist {key} part {part_index} for {workspace}',
         ) and ok
-    # Clear stale old chunks so old 1120-row ledgers cannot reappear after a smaller clean save.
     for stale_part in range(len(parts), old_parts):
         ok = _github_put_json(
             _github_part_path(key, workspace, stale_part),
@@ -314,7 +309,6 @@ def clear_held_rows(key: str, workspace_id: Any = 'test_01') -> int:
     aliases = [(key, workspace)]
     if key in LATEST_ALIAS_KEYS:
         aliases.append((f'latest_{key}', workspace))
-    # Also clear legacy test_01/latest aliases that older builds wrote to.
     if workspace != 'test_01':
         aliases.append((key, 'test_01'))
         aliases.append((f'latest_{key}', 'test_01'))
@@ -374,6 +368,14 @@ def load_held_rows(key: str, workspace_id: Any = 'test_01') -> list[dict[str, An
             store[_store_key(lookup_key, lookup_workspace)] = rows
             return rows
     return []
+
+
+def load_github_held_rows(key: str, workspace_id: Any = 'test_01') -> list[dict[str, Any]]:
+    if key not in HELD_KEYS:
+        return []
+    workspace = normalize_workspace_id(workspace_id)
+    rows, _sha = _github_get_payload(key, workspace)
+    return rows
 
 
 def load_first_available(keys: list[str] | tuple[str, ...], workspace_id: Any = 'test_01') -> tuple[str, list[dict[str, Any]]]:
