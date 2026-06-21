@@ -21,6 +21,7 @@ from autonomous_betting_agent.market_rules import (
 from autonomous_betting_agent.pick_hold_store import (
     HELD_KEYS,
     github_store_enabled,
+    load_github_held_rows,
     load_held_rows,
     normalize_workspace_id,
     save_held_rows,
@@ -90,10 +91,10 @@ def _unique_proof_count(frame: pd.DataFrame | list[dict[str, Any]]) -> int:
     return int(len(merged))
 
 
-def _unique_github_count(snapshot: pd.DataFrame, workspace_id: str) -> int:
+def _unique_github_count(workspace_id: str) -> int:
     frames: list[pd.DataFrame] = []
     for key in sorted(HELD_KEYS):
-        rows = load_held_rows(key, workspace_id)
+        rows = load_github_held_rows(key, workspace_id)
         if rows:
             frames.append(_frame_from_rows(rows))
     if not frames:
@@ -161,7 +162,7 @@ cleaned = supported_only(proof)
 rejected = unsupported_only(proof)
 summary = market_support_summary(proof)
 unique_loaded = len(proof)
-unique_github = _unique_github_count(snapshot, workspace_id)
+unique_github = _unique_github_count(workspace_id)
 physical_loaded = int(snapshot['loaded_rows'].sum()) if not snapshot.empty else 0
 physical_github = int(snapshot['github_rows'].sum()) if not snapshot.empty and 'github_rows' in snapshot.columns else 0
 
