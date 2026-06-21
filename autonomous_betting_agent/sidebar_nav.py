@@ -57,10 +57,11 @@ def _current_language(st: Any) -> str:
     return 'English'
 
 
-def _sync_global_from_key(language_key: str) -> None:
+def _sync_global_from_radio(widget_key: str, language_key: str) -> None:
     import streamlit as st
-    language = _language_label(st.session_state.get(language_key, st.session_state.get(GLOBAL_LANGUAGE_KEY, 'English')))
+    language = _language_label(st.session_state.get(widget_key, st.session_state.get(GLOBAL_LANGUAGE_KEY, 'English')))
     st.session_state[GLOBAL_LANGUAGE_KEY] = language
+    st.session_state[language_key] = language
 
 
 def _label(item: tuple[str, str, str], language: str) -> str:
@@ -70,19 +71,18 @@ def _label(item: tuple[str, str, str], language: str) -> str:
 def render_app_sidebar(current_page: str, *, language_key: str = 'global_language', selector: str = 'radio') -> str:
     import streamlit as st
     language = _language_label(_current_language(st))
+    widget_key = f'{language_key}_radio'
     st.session_state[GLOBAL_LANGUAGE_KEY] = language
-    if st.session_state.get(language_key) not in (None, language):
-        try:
-            del st.session_state[language_key]
-        except Exception:
-            pass
+    st.session_state[language_key] = language
+    st.session_state[widget_key] = language
     with st.sidebar:
         st.markdown(SIDEBAR_CSS, unsafe_allow_html=True)
         st.markdown('<div class="aba-sidebar-title">ABA Signal Pro</div>', unsafe_allow_html=True)
         tagline = APP_TAGLINE if language == 'English' else APP_TAGLINE_ES
         st.markdown(f'<div class="aba-sidebar-tagline">{html.escape(tagline)}</div>', unsafe_allow_html=True)
-        language = st.radio('Language / Idioma', ['English', 'Español'], index=0 if language == 'English' else 1, key=language_key, horizontal=True, on_change=_sync_global_from_key, args=(language_key,))
+        language = st.radio('Language / Idioma', ['English', 'Español'], key=widget_key, horizontal=True, on_change=_sync_global_from_radio, args=(widget_key, language_key))
         st.session_state[GLOBAL_LANGUAGE_KEY] = language
+        st.session_state[language_key] = language
         st.markdown('---')
         for item in TOOLS:
             label = _label(item, language)
