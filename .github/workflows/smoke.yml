@@ -35,6 +35,14 @@ jobs:
         run: |
           python -m compileall -q streamlit_app.py app_streamlit.py autonomous_betting_agent pages tests scripts
 
-      - name: Test
+      - name: Smoke pytest
         run: |
-          python -m pytest -q tests --disable-warnings --import-mode=importlib
+          set -o pipefail
+          python -m pytest -q tests --disable-warnings --import-mode=importlib --tb=short 2>&1 | tee smoke-pytest.log
+
+      - name: Upload smoke pytest log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-pytest-log
+          path: smoke-pytest.log
