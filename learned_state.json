@@ -16,7 +16,7 @@
   ],
   "slope": 0.28007468525929713,
   "source": "2026-06-20T01-01_export_UPDATED_13W_3L.csv",
-  "trained_at_utc": "2026-06-22T01:11:41+00:00",
+  "trained_at_utc": "2026-06-22T01:12:19+00:00",
   "training_strategy": "cross_validated_logistic_calibration_l2=0.0025",
   "validation_brier_after": 0.21895264877571696,
   "validation_brier_before": 0.22225433636363628,
