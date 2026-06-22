@@ -45,7 +45,8 @@ def merge_ledgers(*frames, active_only:bool=True):
  if 'proof_id' in out.columns: out=out.drop_duplicates(subset=['proof_id'],keep='last')
  cols=[c for c in ['event','prediction','event_start_utc','market_type'] if c in out.columns]
  if cols: out=out.drop_duplicates(subset=cols,keep='last')
- return latest_active_list(out) if active_only else filter_locked_proof_rows(out)
+ out=filter_locked_proof_rows(out)
+ return latest_active_list(out) if active_only else out
 def load_persistent_ledger(path:Path=DEFAULT_LEDGER_PATH, workspace_id:Any='', active_only:bool=True):
  disk=pd.DataFrame(); p=persistent_ledger_path(workspace_id,path)
  try:
@@ -54,7 +55,7 @@ def load_persistent_ledger(path:Path=DEFAULT_LEDGER_PATH, workspace_id:Any='', a
  held=load_held_rows(LOCKED_STORE_KEY,workspace_id) or load_held_rows(REFRESH_STORE_KEY,workspace_id)
  return merge_ledgers(disk, held, active_only=active_only)
 def save_persistent_ledger(frame,path:Path=DEFAULT_LEDGER_PATH,workspace_id:Any=''):
- out=latest_active_list(frame)
+ out=filter_locked_proof_rows(frame)
  if out.empty: return pd.DataFrame()
  save_held_rows(LOCKED_STORE_KEY,out,workspace_id); save_held_rows(REFRESH_STORE_KEY,out,workspace_id)
  try:
