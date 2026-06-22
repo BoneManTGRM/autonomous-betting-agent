@@ -11,6 +11,9 @@ from .row_normalizer import result_status, safe_text
 
 RESOLVED = {'win', 'loss', 'void'}
 PENDING = {'', 'pending', 'unknown', 'scheduled', 'live', 'needs_review'}
+AUTO_LOSS_MIN_SCORE = 0.97
+AUTO_LOSS_MIN_EVENT = 0.95
+AUTO_LOSS_MIN_DATE = 0.65
 
 TEAM_ALIASES = {
     'new york yankees': {'yankees', 'ny yankees', 'nyy'},
@@ -107,7 +110,6 @@ def split_event_teams(value: Any) -> tuple[str, str]:
     cleaned = clean(value)
     if not cleaned:
         return '', ''
-    # Important: split only on separator words with spaces. Do not split inside words like "Nationals" or "Athletics".
     parts = re.split(r'\s+(?:at|vs|v)\s+', cleaned, maxsplit=1)
     if len(parts) == 2:
         return parts[0].strip(), parts[1].strip()
@@ -272,7 +274,6 @@ def match_components(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any
 def match_score(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any]) -> float:
     comp = match_components(ledger_row, result_row)
     strict = comp['event'] * 0.50 + comp['sport'] * 0.12 + comp['date'] * 0.13 + comp['pick'] * 0.25
-    # Safe relaxed path: exact-ish teams + exact-ish pick should match even if date/sport labels are messy.
     if comp['event'] >= 0.88 and comp['pick'] >= 0.70:
         return max(strict, 0.91)
     if comp['event'] >= 0.75 and comp['pick'] >= 0.90 and comp['sport'] >= 0.50:
@@ -333,6 +334,28 @@ def grade_pick(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any]) -> 
     return 'pending'
 
 
+def safe_auto_loss(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any], best_score: float, components: Mapping[str, float]) -> bool:
+    """Losses need a higher standard than wins/voids.
+
+    Auto losses are the dangerous case for public proof because one bad fuzzy match hurts the record.
+    Only accept an automatic loss when the event, date, and pick-side evidence are all strong.
+    Otherwise route it to needs_review so it is excluded from dashboard win/loss math.
+    """
+    if safe_text(result_row.get('proof_id')) and safe_text(result_row.get('proof_id')) == safe_text(ledger_row.get('proof_id')):
+        return True
+    kind = market_kind(ledger_row)
+    event_ok = float(components.get('event', 0.0)) >= AUTO_LOSS_MIN_EVENT
+    date_ok = float(components.get('date', 0.0)) >= AUTO_LOSS_MIN_DATE
+    score_ok = best_score >= AUTO_LOSS_MIN_SCORE
+    if not (event_ok and date_ok and score_ok):
+        return False
+    if kind == 'spread':
+        return side_scores(ledger_row, result_row) is not None and line_value(ledger_row) is not None
+    if kind == 'total':
+        return line_value(ledger_row) is not None and score_value(result_row.get('home_score')) is not None and score_value(result_row.get('away_score')) is not None
+    return max(team_sim(ledger_row.get('prediction'), result_row.get('home_team')), team_sim(ledger_row.get('prediction'), result_row.get('away_team'))) >= 0.90
+
+
 def _best_match(item: Mapping[str, Any], result_rows: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, float, dict[str, float]]:
     best = None
     best_score = 0.0
@@ -341,7 +364,7 @@ def _best_match(item: Mapping[str, Any], result_rows: list[dict[str, Any]]) -> t
     if proof_id:
         for rrow in result_rows:
             if safe_text(rrow.get('proof_id')) == proof_id:
-                return rrow, 1.0, {'proof_id': 1.0}
+                return rrow, 1.0, {'proof_id': 1.0, 'event': 1.0, 'sport': 1.0, 'date': 1.0, 'pick': 1.0}
     for rrow in result_rows:
         score = match_score(item, rrow)
         if score > best_score:
@@ -360,7 +383,7 @@ def apply_fuzzy_updates(ledger: pd.DataFrame | list[dict[str, Any]], results: pd
         return locked, {'updated_rows': 0, 'matched_rows': 0, 'unmatched_pending_rows': 0, 'reason': 'empty_results'}
     result_rows = result_frame.to_dict(orient='records')
     rows = []
-    updated = matched = unmatched = skipped_resolved = pending_match = 0
+    updated = matched = unmatched = skipped_resolved = pending_match = review_losses = 0
     best_scores: list[float] = []
     preview: list[dict[str, Any]] = []
     for lrow in locked.to_dict(orient='records'):
@@ -377,6 +400,7 @@ def apply_fuzzy_updates(ledger: pd.DataFrame | list[dict[str, Any]], results: pd
             preview.append({
                 'ledger_event': safe_text(item.get('event')),
                 'ledger_prediction': safe_text(item.get('prediction')),
+                'current_status': current,
                 'best_result_event': safe_text((best or {}).get('event')),
                 'best_winner': safe_text((best or {}).get('winner')),
                 'best_score': round(best_score, 4),
@@ -392,17 +416,26 @@ def apply_fuzzy_updates(ledger: pd.DataFrame | list[dict[str, Any]], results: pd
             continue
         matched += 1
         grade = grade_pick(item, best)
-        item['grading_match_status'] = 'matched'
         item['grading_match_confidence'] = round(best_score, 4)
         item['matched_result_event'] = safe_text(best.get('event'))
         item['matched_result_source'] = safe_text(best.get('result_source'))
+        item['best_match_components'] = str(best_comp)
+        if grade == 'loss' and not safe_auto_loss(item, best, best_score, best_comp):
+            item['result_status'] = 'needs_review'
+            item['grading_match_status'] = 'matched_loss_needs_review'
+            item['review_reason'] = 'auto_loss_below_strict_confidence'
+            review_losses += 1
+            rows.append(item)
+            continue
         if grade in RESOLVED:
+            item['grading_match_status'] = 'matched'
             item['result_status'] = grade
             item['winner'] = safe_text(best.get('winner') or item.get('winner'))
             item['final_score'] = safe_text(best.get('final_score') or item.get('final_score'))
             item['graded_at_utc'] = pd.Timestamp.utcnow().isoformat()
             updated += 1
         else:
+            item['grading_match_status'] = 'matched_pending_review'
             pending_match += 1
         rows.append(item)
     out = filter_locked_proof_rows(pd.DataFrame(rows))
@@ -414,8 +447,10 @@ def apply_fuzzy_updates(ledger: pd.DataFrame | list[dict[str, Any]], results: pd
         'skipped_resolved': skipped_resolved,
         'unmatched_pending_rows': unmatched,
         'pending_matched_needs_review': pending_match,
+        'auto_losses_sent_to_review': review_losses,
         'result_rows': int(len(result_frame)),
         'threshold': threshold,
+        'auto_loss_min_score': AUTO_LOSS_MIN_SCORE,
         'avg_best_match_score': avg_best,
         'max_best_match_score': max_best,
         'match_preview': preview,
