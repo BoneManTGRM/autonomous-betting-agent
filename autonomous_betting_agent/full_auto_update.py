@@ -22,6 +22,7 @@ ESPN_SCOREBOARD_MAP = {
     'soccer_epl': ('soccer', 'eng.1'),
 }
 ODDS_API_MAX_SCORE_DAYS_FROM = 3
+PROTECTED_RESULT_FIELDS = ['result_status', 'winner', 'final_score', 'graded_at_utc', 'profit_units']
 
 
 def get_api_key(override: str = '') -> str:
@@ -215,6 +216,37 @@ def _status_counts(frame: pd.DataFrame) -> dict[str, int]:
     return {'wins': wins, 'losses': losses, 'voids': voids, 'resolved': wins + losses + voids}
 
 
+def _row_key(row: dict[str, Any]) -> str:
+    proof_id = safe_text(row.get('proof_id'))
+    if proof_id:
+        return f'proof:{proof_id}'
+    return '|'.join([
+        safe_text(row.get('event')).lower(),
+        safe_text(row.get('prediction')).lower(),
+        safe_text(row.get('event_start_utc'))[:10],
+    ])
+
+
+def _protect_existing_wins(original: pd.DataFrame, proposed: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    if original.empty or proposed.empty:
+        return proposed, 0
+    original_by_key = {_row_key(row): row for row in original.to_dict(orient='records')}
+    rows = []
+    protected = 0
+    for row in proposed.to_dict(orient='records'):
+        item = dict(row)
+        old = original_by_key.get(_row_key(item))
+        if old and safe_text(old.get('result_status')).lower() == 'win' and safe_text(item.get('result_status')).lower() != 'win':
+            for field in PROTECTED_RESULT_FIELDS:
+                if field in old:
+                    item[field] = old.get(field)
+            item['grading_match_status'] = 'protected_existing_win'
+            item['protected_auto_downgrade'] = True
+            protected += 1
+        rows.append(item)
+    return pd.DataFrame(rows), protected
+
+
 def full_update_and_sync(
     *,
     workspace_id: Any = '',
@@ -233,9 +265,11 @@ def full_update_and_sync(
         days_from=days_from,
         sport_key=sport_key,
     )
-    # Regrade resolved rows too. This corrects bad historical auto-matches such as 11-11 staying stuck after matcher fixes.
+    # Regrade resolved rows to correct stale losses, but never let automation downgrade an existing win.
     updated, stats = apply_fuzzy_updates(locked, results, regrade_resolved=True)
+    protected_wins = 0
     if not updated.empty:
+        updated, protected_wins = _protect_existing_wins(locked, updated)
         updated = sync_dashboard_state(updated, workspace_id=workspace_id)
     after_counts = _status_counts(updated)
     ok_sports = [item for item in sport_stats if str(item.get('status', '')).startswith('ok')]
@@ -254,6 +288,7 @@ def full_update_and_sync(
         'total_result_rows': int(len(results)),
         'workspace_id': safe_text(workspace_id) or 'default',
         'regraded_resolved_rows': True,
+        'protected_existing_wins': protected_wins,
         'before_counts': before_counts,
         'after_counts': after_counts,
     })
