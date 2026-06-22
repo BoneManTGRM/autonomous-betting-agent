@@ -5,7 +5,8 @@ from typing import Any
 
 import pandas as pd
 
-from .odds_lock_tools import client_view, daily_report, lock_status, proof_hash, summarize_locked_picks, update_profit_columns
+from .event_exposure import exposure_metrics
+from .odds_lock_tools import client_view, daily_report, lock_rows, lock_status, proof_hash, summarize_locked_picks, update_profit_columns
 from .pick_hold_store import load_held_rows, save_held_rows
 from .row_normalizer import normalize_frame, result_status, safe_text
 
@@ -228,19 +229,30 @@ def _series_first_bool(frame: pd.DataFrame, fields: list[str]) -> pd.Series:
     return out
 
 
+def add_clv_columns(frame: pd.DataFrame | list[dict[str, Any]]) -> pd.DataFrame:
+    out = update_profit_columns(frame)
+    if out.empty:
+        return pd.DataFrame()
+    locked_price = _series_first_numeric(out, LOCKED_VALUE_FIELDS)
+    close_price = _series_first_numeric(out, CLOSING_VALUE_FIELDS)
+    computed_clv = (locked_price / close_price) - 1.0
+    explicit_clv = _series_first_numeric(out, CLV_VALUE_FIELDS)
+    clv = explicit_clv.where(explicit_clv.notna(), computed_clv)
+    clv = clv.where(clv.abs().le(1.0), clv / 100.0)
+    out['clv_percent'] = clv
+    explicit_beat = _series_first_bool(out, BEAT_CLOSE_FIELDS)
+    computed_beat = locked_price.gt(close_price).where(locked_price.notna() & close_price.notna())
+    out['beat_close'] = explicit_beat.where(explicit_beat.notna(), computed_beat)
+    return out
+
+
 def clv_metrics(frame: pd.DataFrame) -> dict[str, Any]:
     c = latest_active_list(frame)
     if c.empty:
         return {'avg_clv_percent': None, 'beat_close_rate': None, 'clv_sample_size': 0, 'beat_close_sample_size': 0}
-    explicit_clv = _series_first_numeric(c, CLV_VALUE_FIELDS)
-    locked_price = _series_first_numeric(c, LOCKED_VALUE_FIELDS)
-    close_price = _series_first_numeric(c, CLOSING_VALUE_FIELDS)
-    computed_clv = (locked_price / close_price) - 1.0
-    clv = explicit_clv.where(explicit_clv.notna(), computed_clv)
-    clv = clv.where(clv.abs().le(1.0), clv / 100.0).dropna()
-    explicit_beat = _series_first_bool(c, BEAT_CLOSE_FIELDS)
-    computed_beat = locked_price.gt(close_price).where(locked_price.notna() & close_price.notna())
-    beat = explicit_beat.where(explicit_beat.notna(), computed_beat).dropna()
+    with_clv = add_clv_columns(c)
+    clv = pd.to_numeric(with_clv.get('clv_percent', pd.Series(dtype=float)), errors='coerce').dropna()
+    beat = with_clv.get('beat_close', pd.Series(dtype=object)).dropna()
     return {'avg_clv_percent': None if clv.empty else round(float(clv.mean()), 6), 'beat_close_rate': None if beat.empty else round(float(beat.astype(bool).mean()), 6), 'clv_sample_size': int(len(clv)), 'beat_close_sample_size': int(len(beat))}
 
 
@@ -251,6 +263,7 @@ def dashboard_metrics(frame):
     st = c.get('result_status', pd.Series(dtype=str)).astype(str).str.lower() if not c.empty else pd.Series(dtype=str)
     s['pending_picks'] = int(st.isin(['pending', 'unknown', 'scheduled', 'live', '', 'needs_review']).sum())
     s.update(clv_metrics(c))
+    s.update(exposure_metrics(c))
     s['active_list_only'] = True
     return s
 
@@ -260,12 +273,28 @@ def public_dashboard_table(frame, limit: int = 200):
 
 
 def report_card_markdown(frame, **kw):
+    title = safe_text(kw.get('title')) or 'Proof Dashboard'
+    brand = safe_text(kw.get('brand')) or 'ABA Signal Pro'
     m = dashboard_metrics(frame)
-    return f"Record: {m['wins']}-{m['losses']}\nLocked: {m['locked_picks']}"
+    hit = 'N/A' if m.get('hit_rate') is None else f"{m['hit_rate'] * 100:.1f}%"
+    roi = 'N/A' if m.get('roi') is None else f"{m['roi'] * 100:.1f}%"
+    clv = 'N/A' if m.get('avg_clv_percent') is None else f"{m['avg_clv_percent'] * 100:.2f}%"
+    return '\n'.join([
+        f'# {title}',
+        f'**{brand}**',
+        '',
+        f"Record: {m['wins']}-{m['losses']} | Pushes/Voids: {m.get('pushes', m.get('voids', 0))}",
+        f"Locked pick rows: {m.get('locked_picks', 0)} | Unique events: {m.get('unique_events', 0)} | Completed events: {m.get('completed_events', 0)}",
+        f"Hit rate: {hit} | ROI: {roi} | Units: {m.get('profit_units', 0)}",
+        f"Avg CLV: {clv} | Beat close: {'N/A' if m.get('beat_close_rate') is None else f'{m['beat_close_rate'] * 100:.1f}%'}",
+        f"Proof quality: {m.get('proof_quality_score', 0)}/100",
+    ])
 
 
 def report_card_html(frame, **kw):
-    return '<pre>' + report_card_markdown(frame) + '</pre>'
+    markdown = report_card_markdown(frame, **kw)
+    escaped = markdown.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    return '<div class="aba-proof-card"><pre>' + escaped + '</pre></div>'
 
 
 def daily_locked_report(frame, language='English', public_only=True):
@@ -273,4 +302,14 @@ def daily_locked_report(frame, language='English', public_only=True):
 
 
 def demo_ledger():
-    return pd.DataFrame()
+    rows = pd.DataFrame([
+        {'event': 'Demo FC at Sample United', 'sport': 'soccer', 'market_type': 'h2h', 'prediction': 'Sample United', 'model_probability': 0.64, 'decimal_price': 1.86, 'closing_decimal_price': 1.78, 'agent_decision': 'play_small', 'event_start_utc': '2099-01-01T18:00:00Z', 'result_status': 'win', 'source_file': 'demo_ledger'},
+        {'event': 'Example Hawks at Demo Bears', 'sport': 'basketball', 'market_type': 'spreads', 'prediction': 'Demo Bears -3.5', 'model_probability': 0.61, 'decimal_price': 1.91, 'closing_decimal_price': 1.88, 'agent_decision': 'play_small', 'event_start_utc': '2099-01-02T18:00:00Z', 'result_status': 'loss', 'source_file': 'demo_ledger'},
+        {'event': 'Sample City at Test Rovers', 'sport': 'soccer', 'market_type': 'totals', 'prediction': 'Under 3.5', 'model_probability': 0.63, 'decimal_price': 1.80, 'closing_decimal_price': 1.76, 'agent_decision': 'play_small', 'event_start_utc': '2099-01-03T18:00:00Z', 'result_status': 'void', 'source_file': 'demo_ledger'},
+    ])
+    locked = lock_rows(rows, analyst='demo_analyst')
+    if not locked.empty:
+        locked['source_file'] = 'demo_ledger'
+        locked['active_list_id'] = 'demo_ledger'
+        locked['ledger_batch_id'] = 'demo_ledger'
+    return locked
