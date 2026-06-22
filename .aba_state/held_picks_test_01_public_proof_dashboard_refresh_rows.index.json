@@ -4,6 +4,6 @@
   "workspace_id": "test_01",
   "key": "public_proof_dashboard_refresh_rows",
   "parts": 3,
-  "rows_count": 111,
+  "rows_count": 145,
   "chunk_size": 50
 }
