@@ -97,19 +97,24 @@ def apply_volume_pattern_points(frame, *args, **kwargs):
 
 def run_predictor_full_update(workspace_id: str, *, api_key_override: str, days_from: int, run_learning_after: bool) -> dict:
     updated, stats = full_update_and_sync(workspace_id=workspace_id, api_key_override=api_key_override, days_from=int(days_from))
+    actual_changed = int(stats.get('actual_changed_rows') or 0)
+    matched_rows = int(stats.get('matched_rows') or 0)
+    status = 'updated' if actual_changed > 0 else ('matched_no_change' if matched_rows > 0 else 'no_updates')
     report = {
-        'version': 'predictor-full-auto-update-v2',
+        'version': 'predictor-full-auto-update-v3-actual-change-aware',
         'workspace_id': workspace_id,
         'locked_rows': int(stats.get('locked_rows') or len(updated) or 0),
-        'status': 'updated' if int(stats.get('updated_rows') or 0) > 0 else 'no_updates',
+        'status': status,
         'reason': stats.get('reason', 'no_matching_completed_scores'),
         'grading': stats,
         'updated_rows': int(stats.get('updated_rows') or 0),
-        'matched_rows': int(stats.get('matched_rows') or 0),
+        'actual_changed_rows': actual_changed,
+        'matched_rows': matched_rows,
         'total_result_rows': int(stats.get('total_result_rows') or 0),
+        'active_list_identity': stats.get('active_list_identity', {}),
         'sports_checked': stats.get('sports_checked', []),
     }
-    if run_learning_after and int(stats.get('updated_rows') or 0) > 0:
+    if run_learning_after and actual_changed > 0:
         report['learning'] = run_auto_learning_cycle(workspace_id, save_to_github=True)
     return report
 
