@@ -42,8 +42,8 @@ TEAM_ALIASES = {
     'chicago cubs': {'cubs', 'chc'},
     'minnesota twins': {'twins', 'min'},
     'seattle mariners': {'mariners', 'sea'},
-    'oakland athletics': {'athletics', 'a s', 'athletics', 'oak'},
-    'sacramento athletics': {'athletics', 'a s', 'athletics', 'ath'},
+    'oakland athletics': {'athletics', 'a s', 'oak'},
+    'sacramento athletics': {'athletics', 'a s', 'ath'},
 }
 
 ALIAS_TO_CANONICAL: dict[str, str] = {}
@@ -52,11 +52,24 @@ for canonical, aliases in TEAM_ALIASES.items():
     for alias in aliases:
         ALIAS_TO_CANONICAL[alias] = canonical
 
+STOP_TOKENS = {'at', 'vs', 'v', 'the', 'fc', 'cf', 'club', 'team', 'ml', 'moneyline', 'winner', 'pick'}
+
 
 def clean(value: Any) -> str:
     text = safe_text(value).lower().replace('&', ' and ').replace('@', ' at ')
     text = re.sub(r'[^a-z0-9.+\- ]+', ' ', text.replace('_', ' ').replace('-', ' '))
     return ' '.join(text.split())
+
+
+def tokens(value: Any) -> set[str]:
+    return {tok for tok in clean(value).split() if tok and tok not in STOP_TOKENS and len(tok) > 1}
+
+
+def token_overlap(a: Any, b: Any) -> float:
+    left, right = tokens(a), tokens(b)
+    if not left or not right:
+        return 0.0
+    return len(left & right) / max(1, min(len(left), len(right)))
 
 
 def sim(a: Any, b: Any) -> float:
@@ -65,7 +78,7 @@ def sim(a: Any, b: Any) -> float:
         return 0.0
     if left == right or left in right or right in left:
         return 1.0
-    return SequenceMatcher(None, left, right).ratio()
+    return max(SequenceMatcher(None, left, right).ratio(), token_overlap(left, right))
 
 
 def canonical_team(value: Any) -> str:
@@ -74,11 +87,10 @@ def canonical_team(value: Any) -> str:
         return ''
     if text in ALIAS_TO_CANONICAL:
         return ALIAS_TO_CANONICAL[text]
-    # Prefer nickname/city aliases embedded in longer strings.
     best = ''
     best_len = 0
     for alias, canonical in ALIAS_TO_CANONICAL.items():
-        if alias and (alias == text or alias in text or text in alias) and len(alias) > best_len:
+        if alias and (alias == text or re.search(rf'(^|\s){re.escape(alias)}($|\s)', text) or text in alias) and len(alias) > best_len:
             best = canonical
             best_len = len(alias)
     return best or text
@@ -88,17 +100,17 @@ def team_sim(a: Any, b: Any) -> float:
     ca, cb = canonical_team(a), canonical_team(b)
     if ca and cb and ca == cb:
         return 1.0
-    return sim(ca or a, cb or b)
+    return max(sim(ca or a, cb or b), token_overlap(a, b))
 
 
 def split_event_teams(value: Any) -> tuple[str, str]:
-    text = safe_text(value)
-    cleaned = clean(text)
-    for sep in [' at ', ' vs ', ' v ']:
-        if sep in f' {cleaned} ':
-            parts = cleaned.split(sep.strip(), 1)
-            if len(parts) == 2:
-                return parts[0].strip(), parts[1].strip()
+    cleaned = clean(value)
+    if not cleaned:
+        return '', ''
+    # Important: split only on separator words with spaces. Do not split inside words like "Nationals" or "Athletics".
+    parts = re.split(r'\s+(?:at|vs|v)\s+', cleaned, maxsplit=1)
+    if len(parts) == 2:
+        return parts[0].strip(), parts[1].strip()
     return '', ''
 
 
@@ -110,7 +122,7 @@ def event_team_score(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any
         direct = (team_sim(ledger_away, result_away) + team_sim(ledger_home, result_home)) / 2.0
         swapped = (team_sim(ledger_away, result_home) + team_sim(ledger_home, result_away)) / 2.0
         return max(direct, swapped)
-    return sim(ledger_row.get('event'), result_row.get('event'))
+    return max(sim(ledger_row.get('event'), result_row.get('event')), token_overlap(ledger_row.get('event'), result_row.get('event')))
 
 
 def day(value: Any) -> str:
@@ -245,7 +257,7 @@ def odds_scores_to_result_frame_v2(payload: list[dict[str, Any]]) -> pd.DataFram
     return pd.DataFrame(rows)
 
 
-def match_score(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any]) -> float:
+def match_components(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any]) -> dict[str, float]:
     event_score = max(sim(ledger_row.get('event'), result_row.get('event')), event_team_score(ledger_row, result_row))
     sport_score = max(sim(ledger_row.get('sport'), result_row.get('sport')), sim(ledger_row.get('sport_key'), result_row.get('sport_key')))
     dscore = date_score(ledger_row.get('event_start_utc'), result_row.get('event_start_utc'))
@@ -254,7 +266,18 @@ def match_score(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any]) ->
         team_sim(ledger_row.get('prediction'), result_row.get('home_team')),
         team_sim(ledger_row.get('prediction'), result_row.get('away_team')),
     )
-    return event_score * 0.50 + sport_score * 0.12 + dscore * 0.13 + pick_score * 0.25
+    return {'event': event_score, 'sport': sport_score, 'date': dscore, 'pick': pick_score}
+
+
+def match_score(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any]) -> float:
+    comp = match_components(ledger_row, result_row)
+    strict = comp['event'] * 0.50 + comp['sport'] * 0.12 + comp['date'] * 0.13 + comp['pick'] * 0.25
+    # Safe relaxed path: exact-ish teams + exact-ish pick should match even if date/sport labels are messy.
+    if comp['event'] >= 0.88 and comp['pick'] >= 0.70:
+        return max(strict, 0.91)
+    if comp['event'] >= 0.75 and comp['pick'] >= 0.90 and comp['sport'] >= 0.50:
+        return max(strict, 0.86)
+    return strict
 
 
 def side_scores(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any]) -> tuple[float, float] | None:
@@ -310,20 +333,22 @@ def grade_pick(ledger_row: Mapping[str, Any], result_row: Mapping[str, Any]) -> 
     return 'pending'
 
 
-def _best_match(item: Mapping[str, Any], result_rows: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, float]:
+def _best_match(item: Mapping[str, Any], result_rows: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, float, dict[str, float]]:
     best = None
     best_score = 0.0
+    best_comp: dict[str, float] = {}
     proof_id = safe_text(item.get('proof_id'))
     if proof_id:
         for rrow in result_rows:
             if safe_text(rrow.get('proof_id')) == proof_id:
-                return rrow, 1.0
+                return rrow, 1.0, {'proof_id': 1.0}
     for rrow in result_rows:
         score = match_score(item, rrow)
         if score > best_score:
             best_score = score
             best = rrow
-    return best, best_score
+            best_comp = match_components(item, rrow)
+    return best, best_score, best_comp
 
 
 def apply_fuzzy_updates(ledger: pd.DataFrame | list[dict[str, Any]], results: pd.DataFrame | list[dict[str, Any]], *, threshold: float = 0.82, regrade_resolved: bool = False) -> tuple[pd.DataFrame, dict[str, Any]]:
@@ -346,20 +371,22 @@ def apply_fuzzy_updates(ledger: pd.DataFrame | list[dict[str, Any]], results: pd
             skipped_resolved += 1
             rows.append(item)
             continue
-        best, best_score = _best_match(item, result_rows)
+        best, best_score, best_comp = _best_match(item, result_rows)
         best_scores.append(best_score)
-        if len(preview) < 20:
+        if len(preview) < 30:
             preview.append({
                 'ledger_event': safe_text(item.get('event')),
                 'ledger_prediction': safe_text(item.get('prediction')),
                 'best_result_event': safe_text((best or {}).get('event')),
                 'best_winner': safe_text((best or {}).get('winner')),
                 'best_score': round(best_score, 4),
+                'components': {key: round(value, 4) for key, value in best_comp.items()},
             })
         if best is None or best_score < threshold:
             item['grading_match_status'] = 'no_match'
             item['grading_match_confidence'] = round(best_score, 4)
             item['best_result_event'] = safe_text((best or {}).get('event'))
+            item['best_match_components'] = str(best_comp)
             unmatched += 1
             rows.append(item)
             continue
