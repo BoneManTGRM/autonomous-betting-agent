@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 import requests
 
-from .commercial_platform_tools import filter_locked_proof_rows, load_persistent_ledger
+from .commercial_platform_tools import filter_locked_proof_rows, latest_active_list, load_persistent_ledger
 from .dashboard_sync import sync_dashboard_state
 from .live_odds import _get_json, validate_api_key
 from .result_grading_v2 import apply_fuzzy_updates, odds_scores_to_result_frame_v2
@@ -254,8 +254,8 @@ def full_update_and_sync(
     days_from: int = 7,
     sport_key: str = '',
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
-    ledger = load_persistent_ledger(workspace_id=workspace_id)
-    locked = filter_locked_proof_rows(ledger)
+    ledger_all = load_persistent_ledger(workspace_id=workspace_id)
+    locked = latest_active_list(ledger_all)
     if locked.empty:
         return pd.DataFrame(), {'updated_rows': 0, 'reason': 'empty_ledger', 'locked_rows': 0}
     before_counts = _status_counts(locked)
@@ -265,7 +265,6 @@ def full_update_and_sync(
         days_from=days_from,
         sport_key=sport_key,
     )
-    # Regrade resolved rows to correct stale losses, but never let automation downgrade an existing win.
     updated, stats = apply_fuzzy_updates(locked, results, regrade_resolved=True)
     protected_wins = 0
     if not updated.empty:
@@ -283,6 +282,8 @@ def full_update_and_sync(
         reason = 'completed_results_found_but_no_ledger_matches'
     stats.update({
         'locked_rows': int(len(locked)),
+        'all_workspace_rows': int(len(ledger_all)),
+        'active_list_only': True,
         'sports_checked': sport_stats,
         'score_feed_errors': errored_sports,
         'total_result_rows': int(len(results)),
