@@ -106,10 +106,11 @@ def _load_from_hold_store(workspace_id: Any = '') -> pd.DataFrame:
     return filter_locked_proof_rows(rows)
 
 
-def load_persistent_ledger(path: Path = DEFAULT_LEDGER_PATH, workspace_id: Any = '') -> pd.DataFrame:
+def load_persistent_ledger(path: Path = DEFAULT_LEDGER_PATH, workspace_id: Any = '', active_only: bool = False) -> pd.DataFrame:
     disk = _load_from_disk(workspace_id, path)
     held = _load_from_hold_store(workspace_id)
-    return merge_ledgers(disk, held)
+    merged = merge_ledgers(disk, held)
+    return latest_active_list(merged) if active_only else merged
 
 
 def save_persistent_ledger(frame: pd.DataFrame | list[dict[str, Any]], path: Path = DEFAULT_LEDGER_PATH, workspace_id: Any = '') -> pd.DataFrame:
@@ -146,6 +147,44 @@ def merge_ledgers(*frames: pd.DataFrame | list[dict[str, Any]]) -> pd.DataFrame:
     if fallback_cols:
         merged = merged.drop_duplicates(subset=fallback_cols, keep='last')
     return filter_locked_proof_rows(merged)
+
+
+def latest_active_list(frame: pd.DataFrame | list[dict[str, Any]]) -> pd.DataFrame:
+    """Return only the newest proof list for headline dashboard metrics.
+
+    Workspaces can hold more than one locked list while testing. The headline record must not blend old trackers
+    with the newest list, so rows are grouped by list_id/ledger_batch_id/source_file/locked_at_utc and the newest
+    group is used.
+    """
+    locked = filter_locked_proof_rows(frame)
+    if locked.empty:
+        return pd.DataFrame()
+    out = locked.copy()
+    if 'active_list_id' in out.columns:
+        values = [safe_text(v) for v in out['active_list_id']]
+        nonempty = [v for v in values if v]
+        if nonempty:
+            active = nonempty[-1]
+            selected = out[out['active_list_id'].map(safe_text).eq(active)].copy()
+            if not selected.empty:
+                return selected
+    for col in ['ledger_batch_id', 'list_id', 'source_file']:
+        if col in out.columns:
+            labels = out[col].map(safe_text)
+            nonempty = labels[labels.ne('')]
+            if not nonempty.empty:
+                last_label = nonempty.iloc[-1]
+                selected = out[labels.eq(last_label)].copy()
+                if not selected.empty:
+                    return selected
+    if 'locked_at_utc' in out.columns:
+        parsed = pd.to_datetime(out['locked_at_utc'], errors='coerce', utc=True)
+        if parsed.notna().any():
+            newest = parsed.max()
+            selected = out[parsed.eq(newest)].copy()
+            if not selected.empty:
+                return selected
+    return out
 
 
 def _key_text(value: Any) -> str:
@@ -223,150 +262,3 @@ def apply_result_updates(ledger: pd.DataFrame | list[dict[str, Any]], results: p
     updated_frame = filter_locked_proof_rows(pd.DataFrame(rows))
     unmatched = max(0, len(result_frame) - len(matched_result_keys))
     return updated_frame, {'updated_rows': updated, 'matched_by_proof_id': proof_matches, 'matched_by_event_pick': key_matches, 'unmatched_results': unmatched}
-
-
-def proof_audit_frame(frame: pd.DataFrame | list[dict[str, Any]]) -> pd.DataFrame:
-    locked = filter_locked_proof_rows(frame)
-    if locked.empty:
-        return pd.DataFrame(columns=['proof_id', 'hash_status', 'lock_status', 'audit_status'])
-    rows = []
-    for row in locked.to_dict(orient='records'):
-        stored_hash = safe_text(row.get('proof_hash'))
-        recomputed_hash = proof_hash(row)
-        hash_status = 'hash_match' if stored_hash and stored_hash == recomputed_hash else 'hash_mismatch'
-        current_lock_status = lock_status(row)
-        audit_status = 'pass' if hash_status == 'hash_match' and current_lock_status == 'locked_before_start' else 'review'
-        rows.append({
-            'proof_id': safe_text(row.get('proof_id')),
-            'event': safe_text(row.get('event')),
-            'prediction': safe_text(row.get('prediction')),
-            'locked_at_utc': safe_text(row.get('locked_at_utc')),
-            'event_start_utc': safe_text(row.get('event_start_utc')),
-            'hash_status': hash_status,
-            'lock_status': current_lock_status,
-            'audit_status': audit_status,
-            'stored_hash_prefix': stored_hash[:12],
-            'recomputed_hash_prefix': recomputed_hash[:12],
-        })
-    return pd.DataFrame(rows)
-
-
-def proof_audit_summary(frame: pd.DataFrame | list[dict[str, Any]]) -> dict[str, Any]:
-    audit = proof_audit_frame(frame)
-    if audit.empty:
-        return {'proof_rows': 0, 'hash_match': 0, 'hash_mismatch': 0, 'locked_before_start': 0, 'needs_review': 0, 'proof_quality_score': 0.0}
-    proof_rows = int(len(audit))
-    hash_match = int(audit['hash_status'].eq('hash_match').sum())
-    hash_mismatch = int(audit['hash_status'].eq('hash_mismatch').sum())
-    locked_before = int(audit['lock_status'].eq('locked_before_start').sum())
-    needs_review = int(audit['audit_status'].eq('review').sum())
-    score = 0.0
-    if proof_rows:
-        score += 50.0 * (hash_match / proof_rows)
-        score += 35.0 * (locked_before / proof_rows)
-        score += 15.0 * max(0.0, 1.0 - (needs_review / proof_rows))
-    return {'proof_rows': proof_rows, 'hash_match': hash_match, 'hash_mismatch': hash_mismatch, 'locked_before_start': locked_before, 'needs_review': needs_review, 'proof_quality_score': round(score, 2)}
-
-
-def dashboard_metrics(frame: pd.DataFrame | list[dict[str, Any]]) -> dict[str, Any]:
-    cleaned = filter_locked_proof_rows(frame)
-    summary = summarize_locked_picks(cleaned)
-    audit = proof_audit_summary(cleaned)
-    pending = 0
-    avg_stake = None
-    avg_clv = None
-    beat_close_rate = None
-    if not cleaned.empty:
-        status = cleaned.get('result_status', pd.Series(dtype=str)).astype(str).str.lower()
-        pending = int(status.isin(['pending', 'unknown', 'scheduled', 'live', '']).sum())
-        stake = pd.to_numeric(cleaned.get('stake_units', pd.Series(dtype=float)), errors='coerce').dropna()
-        avg_stake = None if stake.empty else round(float(stake.mean()), 4)
-        clv = pd.to_numeric(cleaned.get('clv_percent', pd.Series(dtype=float)), errors='coerce').dropna()
-        avg_clv = None if clv.empty else round(float(clv.mean()), 6)
-        beat_close = cleaned.get('beat_close', pd.Series(dtype=str)).astype(str).str.lower()
-        beat_mask = beat_close.isin(['true', 'false'])
-        if beat_mask.any():
-            beat_close_rate = round(float(beat_close[beat_mask].eq('true').mean()), 6)
-    out = dict(summary)
-    out.update(audit)
-    out['pending_picks'] = pending
-    out['avg_stake_units'] = avg_stake
-    out['avg_clv_percent'] = avg_clv
-    out['beat_close_rate'] = beat_close_rate
-    return out
-
-
-def public_dashboard_table(frame: pd.DataFrame | list[dict[str, Any]], limit: int = 200) -> pd.DataFrame:
-    cleaned = filter_locked_proof_rows(frame)
-    view = client_view(cleaned, public_only=True)
-    if view.empty:
-        return pd.DataFrame()
-    sort_cols = [col for col in ['locked_at_utc', 'event_start_utc'] if col in view.columns]
-    if sort_cols:
-        view = view.sort_values(sort_cols, ascending=False, na_position='last')
-    return view.head(limit)
-
-
-def report_card_markdown(frame: pd.DataFrame | list[dict[str, Any]], *, title: str = 'Proof Dashboard', brand: str = 'Private Analytics') -> str:
-    metrics = dashboard_metrics(frame)
-    hit_rate = metrics.get('hit_rate')
-    roi = metrics.get('roi')
-    clv = metrics.get('avg_clv_percent')
-    quality = metrics.get('proof_quality_score')
-    lines = [
-        f'# {title}', f'**{brand}**', '',
-        f"Locked picks: **{metrics['locked_picks']}**",
-        f"Resolved: **{metrics['resolved_picks']}**",
-        f"Record: **{metrics['wins']}-{metrics['losses']}**",
-        f"Hit rate: **{'N/A' if hit_rate is None else f'{hit_rate * 100:.1f}%'}**",
-        f"Units: **{metrics['profit_units']}**",
-        f"ROI: **{'N/A' if roi is None else f'{roi * 100:.1f}%'}**",
-        f"Avg CLV: **{'N/A' if clv is None else f'{clv * 100:.2f}%'}**",
-        f'Proof quality: **{quality}/100**', '', '_Research only. No guaranteed outcomes._',
-    ]
-    return '\n'.join(lines)
-
-
-def report_card_html(frame: pd.DataFrame | list[dict[str, Any]], *, title: str = 'Proof Dashboard', brand: str = 'Private Analytics') -> str:
-    metrics = dashboard_metrics(frame)
-    hit_rate = metrics.get('hit_rate')
-    roi = metrics.get('roi')
-    clv = metrics.get('avg_clv_percent')
-    quality = metrics.get('proof_quality_score')
-    hit_text = 'N/A' if hit_rate is None else f'{hit_rate * 100:.1f}%'
-    roi_text = 'N/A' if roi is None else f'{roi * 100:.1f}%'
-    clv_text = 'N/A' if clv is None else f'{clv * 100:.2f}%'
-    quality_text = 'N/A' if quality is None else f'{quality:.0f}/100'
-    return f'''
-<div style="font-family:Arial,sans-serif;border:1px solid #333;border-radius:18px;padding:22px;max-width:760px;background:#10141f;color:#f6f7fb;">
-  <div style="font-size:14px;letter-spacing:1px;text-transform:uppercase;color:#9fb3c8;">{brand}</div>
-  <div style="font-size:34px;font-weight:800;margin:6px 0 18px;">{title}</div>
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
-    <div style="background:#1b2233;border-radius:14px;padding:14px;"><div style="color:#9fb3c8;font-size:12px;">Record</div><div style="font-size:28px;font-weight:800;">{metrics['wins']}-{metrics['losses']}</div></div>
-    <div style="background:#1b2233;border-radius:14px;padding:14px;"><div style="color:#9fb3c8;font-size:12px;">Hit Rate</div><div style="font-size:28px;font-weight:800;">{hit_text}</div></div>
-    <div style="background:#1b2233;border-radius:14px;padding:14px;"><div style="color:#9fb3c8;font-size:12px;">ROI</div><div style="font-size:28px;font-weight:800;">{roi_text}</div></div>
-    <div style="background:#1b2233;border-radius:14px;padding:14px;"><div style="color:#9fb3c8;font-size:12px;">Units</div><div style="font-size:28px;font-weight:800;">{metrics['profit_units']}</div></div>
-    <div style="background:#1b2233;border-radius:14px;padding:14px;"><div style="color:#9fb3c8;font-size:12px;">Avg CLV</div><div style="font-size:28px;font-weight:800;">{clv_text}</div></div>
-    <div style="background:#1b2233;border-radius:14px;padding:14px;"><div style="color:#9fb3c8;font-size:12px;">Proof Quality</div><div style="font-size:28px;font-weight:800;">{quality_text}</div></div>
-  </div>
-  <div style="margin-top:16px;color:#9fb3c8;font-size:12px;">Research only. No guaranteed outcomes.</div>
-</div>
-'''.strip()
-
-
-def daily_locked_report(frame: pd.DataFrame | list[dict[str, Any]], *, language: str = 'English', public_only: bool = True) -> str:
-    cleaned = filter_locked_proof_rows(frame)
-    return daily_report(cleaned, language=language, public_only=public_only)
-
-
-def demo_ledger() -> pd.DataFrame:
-    rows = [
-        {'event': 'Demo FC at Sample United', 'sport': 'Soccer', 'market_type': 'h2h', 'prediction': 'Sample United', 'model_probability': 0.64, 'decimal_price': 2.05, 'closing_decimal_price': 1.91, 'bookmaker': 'DemoBook', 'agent_decision': 'play_small', 'agent_score': 81, 'scanner_strength_score': 78, 'lock_ready': True, 'event_start_utc': '2099-01-01T20:00:00Z', 'result_status': 'win'},
-        {'event': 'North Stars at South Kings', 'sport': 'Basketball', 'market_type': 'spread', 'prediction': 'South Kings -3.5', 'model_probability': 0.58, 'decimal_price': 1.95, 'closing_decimal_price': 1.88, 'bookmaker': 'DemoBook', 'agent_decision': 'play_small', 'agent_score': 74, 'scanner_strength_score': 84, 'lock_ready': True, 'event_start_utc': '2099-01-02T01:00:00Z', 'result_status': 'loss'},
-        {'event': 'A. Player vs B. Player', 'sport': 'Tennis', 'market_type': 'h2h', 'prediction': 'A. Player', 'model_probability': 0.67, 'decimal_price': 1.82, 'closing_decimal_price': 1.70, 'bookmaker': 'DemoBook', 'agent_decision': 'play_strong', 'agent_score': 88, 'scanner_strength_score': 82, 'lock_ready': True, 'event_start_utc': '2099-01-03T18:00:00Z', 'result_status': 'pending'},
-    ]
-    locked = lock_rows(pd.DataFrame(rows), analyst='Demo Brand', include_watch=False)
-    for idx, source in enumerate(rows):
-        for key in ['result_status', 'closing_decimal_price']:
-            locked.loc[idx, key] = source.get(key, '')
-    return filter_locked_proof_rows(locked)
