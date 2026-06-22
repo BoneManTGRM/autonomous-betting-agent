@@ -19,7 +19,6 @@ from .learning_memory_tools import (
     make_ara_memory_csv,
     merge_dedupe_rows,
     prune_rows,
-    read_compact_csv_bytes,
     rows_to_graded,
     valid_bank_row,
 )
@@ -67,8 +66,6 @@ def _compact_from_rows(rows: list[dict[str, Any]], source: str) -> tuple[list[di
         normalized = {clean_key(k): v for k, v in dict(raw).items() if k is not None}
         item = compact_row(normalized, row_number, source)
         if item is None:
-            # Run the CSV parser fallback on a one-row CSV-like payload only when needed is too expensive;
-            # compact_row already covers the same column rules used by Learning Memory.
             continue
         source_name = str(item.get('probability_source') or '')
         if source_name.startswith('fallback_'):
@@ -89,12 +86,20 @@ def collect_resolved_training_rows(workspace_id: Any = 'test_01') -> tuple[list[
     workspace = normalize_workspace_id(workspace_id)
     rows: list[dict[str, Any]] = []
     source_counts: dict[str, int] = {}
+    try:
+        from .commercial_platform_tools import load_persistent_ledger
+        all_saved = load_persistent_ledger(workspace_id=workspace, active_only=False)
+        source_counts['persistent_all_lists'] = int(len(all_saved))
+        if not all_saved.empty:
+            rows.extend(all_saved.to_dict(orient='records'))
+    except Exception:
+        source_counts['persistent_all_lists'] = 0
     for key in PROOF_SOURCES:
         loaded = load_held_rows(key, workspace)
         source_counts[key] = len(loaded)
         rows.extend(loaded)
-    compact, stats = _compact_from_rows(rows, f'auto_learning_cycle:{workspace}')
-    return compact, {'workspace_id': workspace, 'source_counts': source_counts, 'parse_stats': stats}
+    compact, stats = _compact_from_rows(rows, f'auto_learning_cycle_all_lists:{workspace}')
+    return compact, {'workspace_id': workspace, 'source_counts': source_counts, 'parse_stats': stats, 'learning_scope': 'all_saved_lists'}
 
 
 def _save_github(path: str, content: str, message: str) -> bool:
@@ -135,7 +140,7 @@ def run_auto_learning_cycle(
     merged_rows, duplicates_removed = merge_dedupe_rows(existing_rows, uploaded_rows)
     new_unique_rows = max(0, len(merged_rows) - len(existing_rows))
     report: dict[str, Any] = {
-        'version': 'auto-learning-cycle-v1',
+        'version': 'auto-learning-cycle-v2-all-lists',
         'workspace_id': workspace,
         'ran_at_utc': datetime.now(timezone.utc).isoformat(timespec='seconds'),
         'existing_rows': len(existing_rows),
@@ -155,7 +160,7 @@ def run_auto_learning_cycle(
         AUTO_REPORT_PATH.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n', encoding='utf-8')
         return report
     pruned_rows, prune_report = prune_rows(merged_rows, int(max_rows))
-    calibrator = fit_probability_calibrator(rows_to_graded(pruned_rows), min_events=int(min_total_rows), source=f'auto_learning_cycle:{workspace}')
+    calibrator = fit_probability_calibrator(rows_to_graded(pruned_rows), min_events=int(min_total_rows), source=f'auto_learning_cycle_all_lists:{workspace}')
     segments = build_segments(pruned_rows, int(min_patterns), int(max_patterns))
     ara_csv = make_ara_memory_csv(segments)
     memory_bank = build_memory_bank(
@@ -164,13 +169,14 @@ def run_auto_learning_cycle(
         segments=segments,
         parse_stats=dict(collection.get('parse_stats') or {}),
         prune_report=prune_report,
-        mode='auto_merge',
+        mode='auto_merge_all_lists',
         existing_count=len(existing_rows),
         uploaded_count=len(uploaded_rows),
         duplicates_removed=duplicates_removed,
     )
     memory_bank['summary']['auto_learning_cycle'] = True
     memory_bank['summary']['workspace_id'] = workspace
+    memory_bank['summary']['learning_scope'] = 'all_saved_lists'
     MEMORY_BANK_PATH.parent.mkdir(parents=True, exist_ok=True)
     learned_json = calibrator_json(calibrator)
     memory_json = json.dumps(memory_bank, indent=2, sort_keys=True) + '\n'
