@@ -174,7 +174,8 @@
       "grading_match_confidence": 0.511,
       "best_result_event": "Sweden at Netherlands",
       "matched_result_event": NaN,
-      "matched_result_source": NaN
+      "matched_result_source": NaN,
+      "best_match_components": "{'event': 0.5714285714285714, 'sport': 1.0, 'date': 0.0, 'pick': 0.42105263157894735}"
     },
     {
       "event": "Ghana at England",
@@ -345,7 +346,8 @@
       "grading_match_confidence": 0.4684,
       "best_result_event": "Sweden at Netherlands",
       "matched_result_event": NaN,
-      "matched_result_source": NaN
+      "matched_result_source": NaN,
+      "best_match_components": "{'event': 0.5405405405405406, 'sport': 1.0, 'date': 0.0, 'pick': 0.3125}"
     },
     {
       "event": "Belgium at New Zealand",
@@ -516,7 +518,8 @@
       "grading_match_confidence": 0.6867,
       "best_result_event": "Iran at Belgium",
       "matched_result_event": NaN,
-      "matched_result_source": NaN
+      "matched_result_source": NaN,
+      "best_match_components": "{'event': 0.6333333333333333, 'sport': 1.0, 'date': 0.0, 'pick': 1.0}"
     },
     {
       "event": "Los Angeles Angels at Athletics",
@@ -687,7 +690,8 @@
       "grading_match_confidence": NaN,
       "best_result_event": NaN,
       "matched_result_event": NaN,
-      "matched_result_source": NaN
+      "matched_result_source": NaN,
+      "best_match_components": NaN
     },
     {
       "event": "Cape Verde at Uruguay",
@@ -858,7 +862,8 @@
       "grading_match_confidence": 0.8611,
       "best_result_event": NaN,
       "matched_result_event": "Cape Verde at Uruguay",
-      "matched_result_source": ""
+      "matched_result_source": "",
+      "best_match_components": NaN
     },
     {
       "event": "Australia at Paraguay",
@@ -894,7 +899,7 @@
       "fusion_warning": "",
       "match_score": "100%",
       "prediction_timestamp": "2026-06-21T18:26:17Z",
-      "result_status": "pending",
+      "result_status": "loss",
       "odds_api_source_used": "yes",
       "sportsdataio_source_used": "no",
       "sportsdataio_status": "error: SportsDataIO request failed with HTTP 401: { \"statusCode\": 401, \"message\": \"Access denied due to invalid subscription key. Make sure to provide a valid key for an active subscription.\" }",
@@ -983,10 +988,10 @@
       "source_file": NaN,
       "american_odds": "",
       "odds_timestamp": "",
-      "winner": "",
-      "final_score": "",
+      "winner": "USA",
+      "final_score": "Australia 0 - 2 USA",
       "stake_units": 1.0,
-      "profit_units": NaN,
+      "profit_units": -1.0,
       "decision": "play_small",
       "confidence_tier": "HIGH",
       "volume_tier": "",
@@ -1024,12 +1029,13 @@
       "matched_event": NaN,
       "home_score": NaN,
       "away_score": NaN,
-      "graded_at_utc": NaN,
-      "grading_match_status": "no_match",
-      "grading_match_confidence": 0.7484,
+      "graded_at_utc": "2026-06-22T00:28:01.096465+00:00",
+      "grading_match_status": "matched",
+      "grading_match_confidence": 0.86,
       "best_result_event": "Australia at USA",
-      "matched_result_event": NaN,
-      "matched_result_source": NaN
+      "matched_result_event": "Australia at USA",
+      "matched_result_source": "",
+      "best_match_components": NaN
     },
     {
       "event": "Australia at Paraguay",
@@ -1200,7 +1206,8 @@
       "grading_match_confidence": 0.5725,
       "best_result_event": "Australia at USA",
       "matched_result_event": NaN,
-      "matched_result_source": NaN
+      "matched_result_source": NaN,
+      "best_match_components": "{'event': 0.7567567567567568, 'sport': 1.0, 'date': 0.0, 'pick': 0.2962962962962963}"
     },
     {
       "event": "Minnesota Twins at Arizona Diamondbacks",
@@ -1371,7 +1378,8 @@
       "grading_match_confidence": NaN,
       "best_result_event": NaN,
       "matched_result_event": NaN,
-      "matched_result_source": NaN
+      "matched_result_source": NaN,
+      "best_match_components": NaN
     },
     {
       "event": "Pittsburgh Pirates at Colorado Rockies",
@@ -1542,7 +1550,8 @@
       "grading_match_confidence": NaN,
       "best_result_event": NaN,
       "matched_result_event": NaN,
-      "matched_result_source": NaN
+      "matched_result_source": NaN,
+      "best_match_components": NaN
     },
     {
       "event": "Minnesota Twins at Arizona Diamondbacks",
@@ -1713,7 +1722,8 @@
       "grading_match_confidence": NaN,
       "best_result_event": NaN,
       "matched_result_event": NaN,
-      "matched_result_source": NaN
+      "matched_result_source": NaN,
+      "best_match_components": NaN
     },
     {
       "event": "Boston Red Sox at Seattle Mariners",
@@ -1884,7 +1894,8 @@
       "grading_match_confidence": NaN,
       "best_result_event": NaN,
       "matched_result_event": NaN,
-      "matched_result_source": NaN
+      "matched_result_source": NaN,
+      "best_match_components": NaN
     }
   ]
 }
