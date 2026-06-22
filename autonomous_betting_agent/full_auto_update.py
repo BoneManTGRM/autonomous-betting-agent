@@ -205,6 +205,16 @@ def fetch_completed_scores_for_ledger(
     return results, stats
 
 
+def _status_counts(frame: pd.DataFrame) -> dict[str, int]:
+    if frame is None or frame.empty or 'result_status' not in frame.columns:
+        return {'wins': 0, 'losses': 0, 'voids': 0, 'resolved': 0}
+    status = frame['result_status'].astype(str).str.lower()
+    wins = int(status.eq('win').sum())
+    losses = int(status.eq('loss').sum())
+    voids = int(status.isin(['void', 'push']).sum())
+    return {'wins': wins, 'losses': losses, 'voids': voids, 'resolved': wins + losses + voids}
+
+
 def full_update_and_sync(
     *,
     workspace_id: Any = '',
@@ -216,15 +226,18 @@ def full_update_and_sync(
     locked = filter_locked_proof_rows(ledger)
     if locked.empty:
         return pd.DataFrame(), {'updated_rows': 0, 'reason': 'empty_ledger', 'locked_rows': 0}
+    before_counts = _status_counts(locked)
     results, sport_stats = fetch_completed_scores_for_ledger(
         locked,
         api_key=get_api_key(api_key_override),
         days_from=days_from,
         sport_key=sport_key,
     )
-    updated, stats = apply_fuzzy_updates(locked, results)
+    # Regrade resolved rows too. This corrects bad historical auto-matches such as 11-11 staying stuck after matcher fixes.
+    updated, stats = apply_fuzzy_updates(locked, results, regrade_resolved=True)
     if not updated.empty:
         updated = sync_dashboard_state(updated, workspace_id=workspace_id)
+    after_counts = _status_counts(updated)
     ok_sports = [item for item in sport_stats if str(item.get('status', '')).startswith('ok')]
     errored_sports = [item for item in sport_stats if not str(item.get('status', '')).startswith('ok')]
     reason = ''
@@ -240,6 +253,9 @@ def full_update_and_sync(
         'score_feed_errors': errored_sports,
         'total_result_rows': int(len(results)),
         'workspace_id': safe_text(workspace_id) or 'default',
+        'regraded_resolved_rows': True,
+        'before_counts': before_counts,
+        'after_counts': after_counts,
     })
     if reason:
         stats['reason'] = reason
