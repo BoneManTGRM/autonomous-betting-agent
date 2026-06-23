@@ -35,6 +35,7 @@ TEXT = {
         'pdf': 'Download PDF', 'magazine_pdf': 'Download Magazine PDF', 'html': 'Download HTML', 'md': 'Download Markdown', 'json': 'Download JSON', 'csv': 'Download CSV', 'copy_download': 'Download WhatsApp copy',
         'deck_png': 'Download full card deck PNG', 'magazine_png': 'Download Magazine PNG', 'card_png': 'Download Card Image', 'images_note': 'Server-rendered PNG images for saving and sharing.',
         'background_upload': 'Optional background image for PNG exports', 'background_ready': 'Custom background enabled for Magazine PNG, Card Image, and full Card Deck downloads.',
+        'background_preview': 'Uploaded background preview', 'magazine_preview': 'Generated Magazine PNG preview',
         'feed_saved': 'Unified and legacy app feeds saved.', 'copy_label': 'Short copy', 'no_audit': 'No graded calibration data available yet.',
     },
     'es': {
@@ -49,6 +50,7 @@ TEXT = {
         'pdf': 'Descargar PDF', 'magazine_pdf': 'Descargar PDF revista', 'html': 'Descargar HTML', 'md': 'Descargar Markdown', 'json': 'Descargar JSON', 'csv': 'Descargar CSV', 'copy_download': 'Descargar copy WhatsApp',
         'deck_png': 'Descargar PNG de tarjetas', 'magazine_png': 'Descargar PNG de revista', 'card_png': 'Descargar imagen de tarjeta', 'images_note': 'Imágenes PNG generadas por servidor para guardar y compartir.',
         'background_upload': 'Imagen de fondo opcional para exportaciones PNG', 'background_ready': 'Fondo personalizado activo para PNG de revista, imágenes individuales y deck completo.',
+        'background_preview': 'Vista previa del fondo subido', 'magazine_preview': 'Vista previa del PNG de revista generado',
         'feed_saved': 'Feed unificado y feed legado guardados.', 'copy_label': 'Copy corto', 'no_audit': 'Aún no hay datos gradados para calibración.',
     },
 }
@@ -149,6 +151,7 @@ with st.expander(t('profile'), expanded=True):
     profile_background_bytes = background_profile_upload.getvalue() if background_profile_upload is not None else None
     if profile_background_bytes:
         st.success(t('background_ready'))
+        st.image(profile_background_bytes, caption=t('background_preview'), width=260)
     mode_options = ['Consumer Magazine', 'Tipster Report', 'Client-Safe Summary', 'Analyst Proof Report'] if LANG == 'en' else ['Revista consumidor', 'Reporte tipster', 'Resumen cliente', 'Reporte técnico']
     default_mode_index = mode_options.index(loaded.preferred_report_mode) if loaded.preferred_report_mode in mode_options else 0
     report_mode = b1.selectbox(t('mode'), mode_options, index=default_mode_index)
@@ -208,6 +211,8 @@ with tabs[1]:
     m1.download_button(t('magazine_pdf'), data=magazine_pdf_bytes, file_name=f'magazine_report_{safe_workspace}.pdf', mime='application/pdf', key='report_studio_magazine_pdf')
     magazine_tab_png = render_custom_background_summary_png(cards, brand, background_bytes=report_background_bytes) if report_background_bytes else render_magazine_summary_png(cards, brand)
     m2.download_button(t('magazine_png'), data=magazine_tab_png, file_name=f'magazine_report_{safe_workspace}.png', mime='image/png', key='report_studio_magazine_tab_png')
+    if report_background_bytes:
+        st.image(magazine_tab_png, caption=t('magazine_preview'), use_container_width=True)
     st.markdown(bundle.html, unsafe_allow_html=True)
 with tabs[2]:
     st.text_area(t('copy_label'), value=bundle.whatsapp, height=420, key='report_studio_whatsapp_copy_text')
@@ -241,8 +246,11 @@ with tabs[6]:
     background_bytes = background_upload.getvalue() if background_upload is not None else report_background_bytes
     if background_bytes:
         st.success(t('background_ready'))
+        st.image(background_bytes, caption=t('background_preview'), width=260)
     deck_png = render_custom_background_deck_png(cards, brand, background_bytes=background_bytes) if background_bytes else render_card_deck_png(cards, brand)
     magazine_png = render_custom_background_summary_png(cards, brand, background_bytes=background_bytes) if background_bytes else render_magazine_summary_png(cards, brand)
+    if background_bytes:
+        st.image(magazine_png, caption=t('magazine_preview'), use_container_width=True)
     c1, c2 = st.columns(2)
     c1.download_button(t('deck_png'), data=deck_png, file_name=f'card_deck_{safe_workspace}.png', mime='image/png', key='report_studio_image_deck_png')
     c2.download_button(t('magazine_png'), data=magazine_png, file_name=f'magazine_summary_{safe_workspace}.png', mime='image/png', key='report_studio_image_magazine_png')
