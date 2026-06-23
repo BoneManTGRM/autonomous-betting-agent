@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from autonomous_betting_agent.app_feed_delivery import build_app_feed
 from autonomous_betting_agent.report_export_service import build_report_export_bundle
 from autonomous_betting_agent.report_feed_service import build_report_feed
 from autonomous_betting_agent.report_learning_layer_compat import apply_learning_layer_compat
@@ -31,6 +32,11 @@ def run_smoke_test() -> None:
     assert len(feed["groups"]["official_ev"]) == 1
     assert len(feed["groups"]["data_blocked"]) == 2
     assert all(row.get("event") != "Unsupported Tennis" for row in feed["groups"]["graded_results"])
+
+    legacy = build_app_feed(cards, brand)
+    assert legacy["schema_version"] == "aba-report-feed-v1"
+    assert legacy["counts"]["best_plays"] == 1
+    assert "no_play" in legacy["groups"]
 
     bundle = build_report_export_bundle(cards, brand)
     assert bundle.html
