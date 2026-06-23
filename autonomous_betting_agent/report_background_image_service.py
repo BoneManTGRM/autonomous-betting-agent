@@ -4,7 +4,7 @@ from typing import Any, Mapping
 
 import pandas as pd
 
-from .mobile_png_layout import render_mobile_png
+from .mobile_png_layout import render_mobile_deck_png, render_mobile_png
 from .report_product_layer import MagazineBrand
 
 PNG_RENDERER_VERSION = "unified-large-text-layout"
@@ -20,5 +20,5 @@ def render_custom_background_summary_png(cards: pd.DataFrame, brand: MagazineBra
     return render_mobile_png(pd.DataFrame(cards), brand, background_bytes=background_bytes, top_n=3)
 
 
-def render_custom_background_deck_png(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any] | None = None, *, background_bytes: bytes | None = None, max_cards: int = 3) -> bytes:
-    return render_mobile_png(pd.DataFrame(cards), brand, background_bytes=background_bytes, top_n=3)
+def render_custom_background_deck_png(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any] | None = None, *, background_bytes: bytes | None = None, max_cards: int = 75) -> bytes:
+    return render_mobile_deck_png(pd.DataFrame(cards), brand, background_bytes=background_bytes, cards_per_page=3, max_cards=max_cards)
