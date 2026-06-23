@@ -21,7 +21,7 @@ from autonomous_betting_agent.consumer_report_engine import (
     report_quality_summary,
 )
 from autonomous_betting_agent.pick_hold_store import load_first_available
-from autonomous_betting_agent.row_normalizer import normalize_frame, result_status, safe_text
+from autonomous_betting_agent.row_normalizer import ALIASES, normalize_frame, result_status, safe_text
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 
 st.set_page_config(page_title='Consumer Report Studio', layout='wide')
@@ -239,6 +239,31 @@ def _market_probability_from_odds(odds: Any) -> float | None:
     return 1.0 / decimal_odds
 
 
+def _probability_source(source_row: pd.Series | dict[str, Any] | None) -> str:
+    if source_row is None:
+        return ''
+    aliases = ALIASES.get('model_probability', ('model_probability',))
+    lookup = dict(source_row)
+    lower_lookup = {str(key).strip().lower(): key for key in lookup}
+
+    non_canonical_sources: list[str] = []
+    for alias in aliases:
+        original_key = lower_lookup.get(alias.lower())
+        if original_key is None:
+            continue
+        if not safe_text(lookup.get(original_key)):
+            continue
+        if alias != 'model_probability':
+            non_canonical_sources.append(alias)
+    if non_canonical_sources:
+        return non_canonical_sources[0]
+
+    original_key = lower_lookup.get('model_probability')
+    if original_key is not None and safe_text(lookup.get(original_key)):
+        return 'model_probability'
+    return ''
+
+
 def _consumer_status(row: pd.Series, language: str) -> str:
     status = safe_text(row.get('publish_status')).lower()
     confidence = safe_text(row.get('confidence')).lower()
@@ -256,6 +281,33 @@ def _consumer_status(row: pd.Series, language: str) -> str:
     return 'Sin prueba' if spanish else 'Unverified'
 
 
+def _value_rating(edge: float | None, language: str) -> str:
+    spanish = language == 'es'
+    if edge is None:
+        return 'Sin dato' if spanish else 'Unknown'
+    if edge >= 0.05:
+        return 'Valor fuerte' if spanish else 'Strong Value'
+    if edge >= 0.02:
+        return 'Valor positivo' if spanish else 'Positive Value'
+    if edge > -0.01:
+        return 'Neutral'
+    return 'Valor negativo' if spanish else 'Negative Value'
+
+
+def _probability_audit(model_prob: float | None, market_prob: float | None, edge: float | None, source: str, language: str) -> str:
+    spanish = language == 'es'
+    source_label = source or ('sin fuente' if spanish else 'no source')
+    if model_prob is None:
+        return 'Falta probabilidad del modelo' if spanish else 'Missing model probability'
+    if market_prob is None:
+        return 'Falta cuota válida' if spanish else 'Missing valid odds'
+    if edge is not None and abs(edge) <= 0.003:
+        return 'Prob. modelo casi igual al mercado; sin edge claro' if spanish else 'Model prob nearly matches market; no clear edge'
+    if any(token in source_label.lower() for token in ('implied', 'market', 'odds_implied')):
+        return 'Revisar fuente de probabilidad' if spanish else 'Review probability source'
+    return f'Prob. modelo desde {source_label}' if spanish else f'Model prob from {source_label}'
+
+
 def _premium_verdict(row: pd.Series, language: str) -> str:
     return _consumer_status(row, language)
 
@@ -268,6 +320,7 @@ def _consumer_bullets(row: pd.Series, language: str) -> list[str]:
     probability = safe_text(row.get('probability_label'))
     market_probability = safe_text(row.get('market_probability_label'))
     edge = safe_text(row.get('edge_label'))
+    value_rating = safe_text(row.get('value_rating'))
     proof_id = safe_text(row.get('proof_id'))
     status = safe_text(row.get('consumer_status'))
     raw_bullets = [safe_text(row.get(f'bullet_{index}')) for index in range(1, 5)]
@@ -290,7 +343,7 @@ def _consumer_bullets(row: pd.Series, language: str) -> list[str]:
     if probability and not already_has_probability:
         fallback.append(f'El modelo estima {probability} para {pick}.' if spanish else f'Model probability is {probability} for {pick}.')
     if market_probability and edge:
-        fallback.append(f'Prob. mercado: {market_probability} | Edge: {edge}.' if spanish else f'Market probability: {market_probability} | Edge: {edge}.')
+        fallback.append(f'Prob. mercado: {market_probability} | Edge: {edge} | Valor: {value_rating}.' if spanish else f'Market probability: {market_probability} | Edge: {edge} | Value: {value_rating}.')
     elif market or odds:
         fallback.append(f'Mercado: {market} | Cuota: {odds}.' if spanish else f'Market: {market} | Odds: {odds}.')
     if proof_id:
@@ -306,24 +359,37 @@ def _consumer_bullets(row: pd.Series, language: str) -> list[str]:
     return clean[:3]
 
 
-def enrich_value_columns(cards: pd.DataFrame, language: str) -> pd.DataFrame:
+def enrich_value_columns(cards: pd.DataFrame, language: str, source_rows: pd.DataFrame | None = None) -> pd.DataFrame:
     if cards is None or cards.empty:
         return pd.DataFrame() if cards is None else cards
     out = cards.copy()
+    source_records = source_rows.to_dict('records') if source_rows is not None and not source_rows.empty else []
 
     model_probs: list[float | None] = []
     market_probs: list[float | None] = []
     edges: list[float | None] = []
     statuses: list[str] = []
+    probability_sources: list[str] = []
+    probability_audits: list[str] = []
+    value_ratings: list[str] = []
 
-    for _, row in out.iterrows():
+    for index, (_, row) in enumerate(out.iterrows()):
+        source_row = source_records[index] if index < len(source_records) else row.to_dict()
         model_prob = _probability_float(row.get('model_probability'))
         market_prob = _market_probability_from_odds(row.get('decimal_price'))
         edge = model_prob - market_prob if model_prob is not None and market_prob is not None else None
+        source = _probability_source(source_row)
+        status = _consumer_status(row, language)
+        rating = _value_rating(edge, language)
+        audit = _probability_audit(model_prob, market_prob, edge, source, language)
+
         model_probs.append(model_prob)
         market_probs.append(market_prob)
         edges.append(edge)
-        statuses.append(_consumer_status(row, language))
+        statuses.append(status)
+        probability_sources.append(source or ('normalized_model_probability' if model_prob is not None else ''))
+        probability_audits.append(audit)
+        value_ratings.append(rating)
 
     out['model_probability'] = model_probs
     out['probability_label'] = [_pct_label(value) for value in model_probs]
@@ -332,6 +398,9 @@ def enrich_value_columns(cards: pd.DataFrame, language: str) -> pd.DataFrame:
     out['edge'] = edges
     out['edge_label'] = [_pct_label(value, signed=True) for value in edges]
     out['consumer_status'] = statuses
+    out['probability_source'] = probability_sources
+    out['probability_audit'] = probability_audits
+    out['value_rating'] = value_ratings
     return out
 
 
@@ -351,6 +420,8 @@ def render_premium_cards_html(cards: pd.DataFrame, brand: BrandSettings) -> str:
         'market_prob': 'Prob. mercado' if spanish else 'Market Prob.',
         'edge': 'Edge',
         'status': 'Estado' if spanish else 'Status',
+        'value': 'Valor' if spanish else 'Value',
+        'data_check': 'Control de datos' if spanish else 'Data Check',
         'match': 'Partido' if spanish else 'Match',
         'source': 'Fuente' if spanish else 'Source',
         'proof_pending': 'Proof pendiente' if spanish else 'Proof pending',
@@ -379,6 +450,8 @@ def render_premium_cards_html(cards: pd.DataFrame, brand: BrandSettings) -> str:
     .aba-meter{height:8px;border-radius:999px;background:rgba(125,125,125,.25);overflow:hidden;margin:.65rem 0 .75rem 0}
     .aba-meter span{display:block;height:100%;border-radius:999px;background:rgba(255,255,255,.58)}
     .aba-proof{font-size:.83rem;opacity:.82;margin:.35rem 0 .2rem 0}
+    .aba-card-check{display:flex;flex-wrap:wrap;gap:.35rem;margin:.55rem 0 .15rem 0}
+    .aba-check-pill{display:inline-block;border:1px solid rgba(125,125,125,.35);border-radius:999px;padding:.26rem .58rem;font-size:.76rem;font-weight:750;opacity:.9}
     .aba-why{margin:.72rem 0 0 0;padding-left:1.15rem}
     .aba-why li{margin:.35rem 0;line-height:1.35}
     .aba-card-foot{font-size:.78rem;opacity:.62;margin-top:.65rem}
@@ -407,9 +480,13 @@ def render_premium_cards_html(cards: pd.DataFrame, brand: BrandSettings) -> str:
         market_probability = safe_text(row.get('market_probability_label')) or '-'
         edge = safe_text(row.get('edge_label')) or '-'
         status = safe_text(row.get('consumer_status')) or _consumer_status(row, language)
+        value_rating = safe_text(row.get('value_rating')) or '-'
+        probability_audit = safe_text(row.get('probability_audit')) or '-'
+        probability_source = safe_text(row.get('probability_source'))
         proof_id = safe_text(row.get('proof_id'))
         bullets = _consumer_bullets(row, language)
         proof_line = f'Proof ID: {proof_id}' if proof_id else labels['proof_pending']
+        data_check = probability_audit + (f' · {probability_source}' if probability_source else '')
 
         parts += [
             '<article class="aba-premium-card">',
@@ -431,6 +508,10 @@ def render_premium_cards_html(cards: pd.DataFrame, brand: BrandSettings) -> str:
             '</div>',
             f'<div class="aba-meter"><span style="width:{width}%"></span></div>',
             f'<div class="aba-proof">{html.escape(proof_line)}</div>',
+            '<div class="aba-card-check">',
+            f'<span class="aba-check-pill">{html.escape(labels["value"])}: {html.escape(value_rating)}</span>',
+            f'<span class="aba-check-pill">{html.escape(labels["data_check"])}: {html.escape(data_check)}</span>',
+            '</div>',
         ]
 
         if bullets:
@@ -529,7 +610,7 @@ report_rows = prepare_report_frame(
     pending_only=bool(pending_only),
     max_rows=int(max_rows),
 )
-cards = enrich_value_columns(consumer_cards(report_rows, brand), LANG)
+cards = enrich_value_columns(consumer_cards(report_rows, brand), LANG, report_rows)
 st.session_state['consumer_report_latest_cards'] = cards.to_dict('records') if not cards.empty else []
 
 proof_rows = int(cards.get('proof_id', pd.Series(dtype=str)).map(safe_text).ne('').sum()) if not cards.empty and 'proof_id' in cards.columns else 0
@@ -593,7 +674,8 @@ with tabs[5]:
     cols = [
         col for col in [
             'event', 'sport', 'market', 'prediction', 'decimal_price', 'probability_label',
-            'market_probability_label', 'edge_label', 'consumer_status', 'confidence', 'risk',
+            'market_probability_label', 'edge_label', 'value_rating', 'consumer_status',
+            'probability_source', 'probability_audit', 'confidence', 'risk',
             'publish_status', 'proof_id', 'quality_flags',
         ] + bullet_cols if col in cards.columns
     ]
