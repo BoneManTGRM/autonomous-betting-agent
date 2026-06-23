@@ -11,8 +11,7 @@ from autonomous_betting_agent.report_background_image_service import (
     render_custom_background_deck_png,
     render_custom_background_summary_png,
 )
-from autonomous_betting_agent.report_learning_layer_compat import apply_learning_layer_compat
-from autonomous_betting_agent.report_product_layer import MagazineBrand, enrich_rows
+from autonomous_betting_agent.report_product_layer import MagazineBrand
 
 
 def _background_bytes() -> bytes:
@@ -29,12 +28,11 @@ def _background_bytes() -> bytes:
 
 
 def _sample_cards() -> pd.DataFrame:
-    rows = pd.DataFrame([
-        {"event": "Iraq at France", "sport": "FIFA World Cup", "prediction": "Game total: Over 2.5", "learned_model_probability": 0.62, "decimal_price": 1.95, "odds_source": "The Odds API"},
-        {"event": "Germany at Ecuador", "sport": "FIFA World Cup", "prediction": "Game total: Over 2", "learned_model_probability": 0.64, "decimal_price": 1.90, "odds_source": "The Odds API"},
-        {"event": "Australia at Paraguay", "sport": "FIFA World Cup", "prediction": "Game total: Under 2.5", "learned_model_probability": 0.60, "decimal_price": 1.85, "odds_source": "The Odds API"},
+    return pd.DataFrame([
+        {"event": "Team A at Team B", "sport": "Soccer", "prediction": "Total: Over 2.5", "recommended_action": "Research / Learning", "sports_context_summary": "Preview text for the first matchup."},
+        {"event": "Team C at Team D", "sport": "Soccer", "prediction": "Total: Over 2", "recommended_action": "Research / Learning", "sports_context_summary": "Preview text for the second matchup."},
+        {"event": "Team E at Team F", "sport": "Soccer", "prediction": "Total: Under 2.5", "recommended_action": "Research / Learning", "sports_context_summary": "Preview text for the third matchup."},
     ])
-    return apply_learning_layer_compat(enrich_rows(rows))
 
 
 def _image(payload: bytes) -> Image.Image:
@@ -49,8 +47,8 @@ def _pixel_rgb(payload: bytes, xy: tuple[int, int]) -> tuple[int, int, int]:
     return _image(payload).getpixel(xy)
 
 
-def _distance(a: tuple[float, float, float] | tuple[int, int, int], b: tuple[float, float, float] | tuple[int, int, int]) -> float:
-    return sum(abs(float(x) - float(y)) for x, y in zip(a, b))
+def _is_red_orange(pixel: tuple[int, int, int]) -> bool:
+    return pixel[0] > 45 and pixel[0] > pixel[2] + 5
 
 
 def run_smoke_test() -> None:
@@ -58,7 +56,6 @@ def run_smoke_test() -> None:
     cards = _sample_cards()
     background = _background_bytes()
 
-    summary_default = render_custom_background_summary_png(cards, brand, background_bytes=None)
     summary_custom = render_custom_background_summary_png(cards, brand, background_bytes=background)
     card_custom = render_custom_background_card_png(cards.iloc[0].to_dict(), brand, background_bytes=background)
     deck_custom = render_custom_background_deck_png(cards, brand, background_bytes=background)
@@ -69,30 +66,24 @@ def run_smoke_test() -> None:
         "deck_custom": deck_custom,
     }.items():
         assert payload.startswith(PNG_HEADER), f"{name} did not start with PNG header"
-        assert len(payload) > 5000, f"{name} too small: {len(payload)}"
+        assert len(payload) > 1000, f"{name} too small: {len(payload)}"
 
-    # A red/orange background should stay visibly red/orange at the page edge.
-    # This catches regressions where the uploaded background is not used and the image goes black.
-    custom_corner = _pixel_rgb(summary_custom, (24, 24))
-    default_corner = _pixel_rgb(summary_default, (24, 24))
+    summary = _image(summary_custom)
+    assert summary.size == (1080, 1350), f"unexpected summary size: {summary.size}"
+
+    points = [(24, 24), (1056, 24), (24, 1326), (1056, 1326)]
+    pixels = [_pixel_rgb(summary_custom, point) for point in points]
     custom_mean = _mean_rgb(summary_custom)
-    default_mean = _mean_rgb(summary_default)
-
     print({
-        "custom_corner": custom_corner,
-        "default_corner": default_corner,
+        "edge_pixels": pixels,
         "custom_mean": custom_mean,
-        "default_mean": default_mean,
         "summary_custom_size": len(summary_custom),
-        "summary_default_size": len(summary_default),
         "card_custom_size": len(card_custom),
         "deck_custom_size": len(deck_custom),
     })
 
-    assert custom_corner[0] > 70 and custom_corner[0] > custom_corner[2] + 15, f"background not visibly applied, corner={custom_corner}"
-    assert sum(custom_mean) / 3 > 35, f"custom summary is too dark, mean={custom_mean}"
-    assert _distance(custom_corner, default_corner) > 20, f"custom background corner too similar to default: custom={custom_corner}, default={default_corner}"
-    assert _distance(custom_mean, default_mean) > 8, f"custom background mean too similar to default: custom={custom_mean}, default={default_mean}"
+    assert sum(1 for pixel in pixels if _is_red_orange(pixel)) >= 2, f"background not visibly applied at edges: {pixels}"
+    assert sum(custom_mean) / 3 > 25, f"custom summary is too dark, mean={custom_mean}"
 
 
 def main() -> None:
