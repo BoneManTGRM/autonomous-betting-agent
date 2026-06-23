@@ -77,6 +77,7 @@ def check_static_page_contract() -> None:
         "client_report_ready",
         "learning_ready",
         "report_studio_copy_tab_download",
+        "report_studio_magazine_tab_png",
         "report_studio_export_whatsapp",
         "report_studio_export_pdf",
         "report_studio_export_html",
