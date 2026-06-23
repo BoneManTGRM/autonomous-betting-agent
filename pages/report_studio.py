@@ -9,6 +9,7 @@ from autonomous_betting_agent.app_feed_delivery import save_app_feed
 from autonomous_betting_agent.commercial_platform_tools import load_persistent_ledger, normalize_workspace_id
 from autonomous_betting_agent.pick_hold_store import load_first_available
 from autonomous_betting_agent.report_feed_service import save_report_feed
+from autonomous_betting_agent.report_image_export_service import card_image_filename, render_card_deck_png, render_card_png, render_magazine_summary_png
 from autonomous_betting_agent.report_product_layer import MagazineBrand, safe_text
 from autonomous_betting_agent.report_studio_service import ReportStudioFilters, build_report_studio_state, report_studio_summary
 from autonomous_betting_agent.report_studio_ui import render_premium_card_deck, render_status_dashboard
@@ -28,8 +29,9 @@ TEXT = {
         'profile': 'White-label profile', 'profile_id': 'Profile ID', 'profile_key': 'Profile key', 'load_profile': 'Load profile', 'save_profile': 'Save profile',
         'brand_name': 'Brand / tipster name', 'tagline': 'Tagline', 'report_title': 'Report title', 'logo_url': 'Logo URL', 'disclaimer': 'Disclaimer',
         'mode': 'Report mode', 'risk': 'Risk preference', 'sports': 'Sport / League Filter', 'max_rows': 'Max rows', 'visibility': 'Feed visibility',
-        'cards': 'Premium Cards', 'magazine': 'Magazine Report', 'copy': 'WhatsApp / Telegram', 'audit': 'Learning Audit', 'proof': 'Analyst Proof', 'exports': 'Exports', 'profile_json': 'Profile JSON', 'feed_json': 'App Feed', 'diagnostics': 'Diagnostics',
+        'cards': 'Premium Cards', 'magazine': 'Magazine Report', 'copy': 'WhatsApp / Telegram', 'audit': 'Learning Audit', 'proof': 'Analyst Proof', 'exports': 'Exports', 'images': 'Images', 'profile_json': 'Profile JSON', 'feed_json': 'App Feed', 'diagnostics': 'Diagnostics',
         'pdf': 'Download PDF', 'html': 'Download HTML', 'md': 'Download Markdown', 'json': 'Download JSON', 'csv': 'Download CSV', 'copy_download': 'Download WhatsApp copy',
+        'deck_png': 'Download full card deck PNG', 'magazine_png': 'Download magazine summary PNG', 'card_png': 'Download Card Image', 'images_note': 'Server-rendered PNG images for saving and sharing.',
         'feed_saved': 'Unified and legacy app feeds saved.', 'copy_label': 'Short copy', 'no_audit': 'No graded calibration data available yet.',
     },
     'es': {
@@ -40,8 +42,9 @@ TEXT = {
         'profile': 'Perfil white-label', 'profile_id': 'ID del perfil', 'profile_key': 'Clave del perfil', 'load_profile': 'Cargar perfil', 'save_profile': 'Guardar perfil',
         'brand_name': 'Marca / tipster', 'tagline': 'Lema', 'report_title': 'Título del reporte', 'logo_url': 'URL del logo', 'disclaimer': 'Aviso legal',
         'mode': 'Modo de reporte', 'risk': 'Preferencia de riesgo', 'sports': 'Filtro deporte / liga', 'max_rows': 'Máximo de filas', 'visibility': 'Visibilidad del feed',
-        'cards': 'Tarjetas premium', 'magazine': 'Reporte revista', 'copy': 'WhatsApp / Telegram', 'audit': 'Auditoría de aprendizaje', 'proof': 'Prueba técnica', 'exports': 'Exportaciones', 'profile_json': 'JSON del perfil', 'feed_json': 'Feed de app', 'diagnostics': 'Diagnóstico',
+        'cards': 'Tarjetas premium', 'magazine': 'Reporte revista', 'copy': 'WhatsApp / Telegram', 'audit': 'Auditoría de aprendizaje', 'proof': 'Prueba técnica', 'exports': 'Exportaciones', 'images': 'Imágenes', 'profile_json': 'JSON del perfil', 'feed_json': 'Feed de app', 'diagnostics': 'Diagnóstico',
         'pdf': 'Descargar PDF', 'html': 'Descargar HTML', 'md': 'Descargar Markdown', 'json': 'Descargar JSON', 'csv': 'Descargar CSV', 'copy_download': 'Descargar copy WhatsApp',
+        'deck_png': 'Descargar PNG de tarjetas', 'magazine_png': 'Descargar PNG resumen revista', 'card_png': 'Descargar imagen de tarjeta', 'images_note': 'Imágenes PNG generadas por servidor para guardar y compartir.',
         'feed_saved': 'Feed unificado y feed legado guardados.', 'copy_label': 'Copy corto', 'no_audit': 'Aún no hay datos gradados para calibración.',
     },
 }
@@ -186,7 +189,7 @@ st.markdown(render_status_dashboard(cards, language=LANG), unsafe_allow_html=Tru
 st.caption(state.context_note)
 
 safe_workspace = safe_workspace_name(workspace_id)
-tabs = st.tabs([t('cards'), t('magazine'), t('copy'), t('audit'), t('proof'), t('exports'), t('profile_json'), t('feed_json'), t('diagnostics')])
+tabs = st.tabs([t('cards'), t('magazine'), t('copy'), t('audit'), t('proof'), t('exports'), t('images'), t('profile_json'), t('feed_json'), t('diagnostics')])
 with tabs[0]:
     st.markdown(render_premium_card_deck(cards, language=LANG), unsafe_allow_html=True)
 with tabs[1]:
@@ -217,11 +220,26 @@ with tabs[5]:
     st.download_button(t('json'), data=bundle.json_text, file_name=f'report_{safe_workspace}.json', mime='application/json', key='report_studio_export_json')
     st.download_button(t('csv'), data=bundle.csv_text, file_name=f'report_{safe_workspace}.csv', mime='text/csv', key='report_studio_export_csv')
 with tabs[6]:
-    st.json(asdict(WhiteLabelProfile(profile_id=profile_id, workspace_id=workspace_id, brand_name=brand_name, logo_url=logo_url, tagline=tagline, language=LANG, report_title=report_title, disclaimer=disclaimer, preferred_report_mode=report_mode, preferred_sports=preferred_sports, risk_preference=risk_preference, show_technical_fields=technical, default_audience='analyst' if technical else 'consumer')))
+    st.caption(t('images_note'))
+    deck_png = render_card_deck_png(cards, brand)
+    magazine_png = render_magazine_summary_png(cards, brand)
+    c1, c2 = st.columns(2)
+    c1.download_button(t('deck_png'), data=deck_png, file_name=f'card_deck_{safe_workspace}.png', mime='image/png', key='report_studio_image_deck_png')
+    c2.download_button(t('magazine_png'), data=magazine_png, file_name=f'magazine_summary_{safe_workspace}.png', mime='image/png', key='report_studio_image_magazine_png')
+    st.markdown('---')
+    for idx, (_, row) in enumerate(cards.head(50).iterrows()):
+        rowd = row.to_dict()
+        event = safe_text(rowd.get('event')) or f'Card {idx + 1}'
+        action = safe_text(rowd.get('consumer_action') or rowd.get('recommended_action')) or 'Research / Learning'
+        left, right = st.columns([3, 1])
+        left.markdown(f'**{idx + 1}. {event}**  \n{action}')
+        right.download_button(t('card_png'), data=render_card_png(rowd, brand), file_name=card_image_filename(rowd, workspace=safe_workspace, index=idx), mime='image/png', key=f'report_studio_image_card_{idx}')
 with tabs[7]:
+    st.json(asdict(WhiteLabelProfile(profile_id=profile_id, workspace_id=workspace_id, brand_name=brand_name, logo_url=logo_url, tagline=tagline, language=LANG, report_title=report_title, disclaimer=disclaimer, preferred_report_mode=report_mode, preferred_sports=preferred_sports, risk_preference=risk_preference, show_technical_fields=technical, default_audience='analyst' if technical else 'consumer')))
+with tabs[8]:
     st.success(t('feed_saved'))
     st.json(feed)
-with tabs[8]:
+with tabs[9]:
     st.json({
         'summary': summary,
         'diagnostics': asdict(state.diagnostics),
