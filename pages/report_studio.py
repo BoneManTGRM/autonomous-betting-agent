@@ -192,8 +192,8 @@ with tabs[0]:
 with tabs[1]:
     st.markdown(bundle.html, unsafe_allow_html=True)
 with tabs[2]:
-    st.text_area(t('copy_label'), value=bundle.whatsapp, height=420)
-    st.download_button(t('copy_download'), data=bundle.whatsapp, file_name=f'whatsapp_copy_{safe_workspace}.txt', mime='text/plain')
+    st.text_area(t('copy_label'), value=bundle.whatsapp, height=420, key='report_studio_whatsapp_copy_text')
+    st.download_button(t('copy_download'), data=bundle.whatsapp, file_name=f'whatsapp_copy_{safe_workspace}.txt', mime='text/plain', key='report_studio_copy_tab_download')
 with tabs[3]:
     if not state.audit:
         st.info(t('no_audit'))
@@ -210,12 +210,12 @@ with tabs[4]:
     cols = [col for col in proof_cols if col in cards.columns]
     st.dataframe(cards[cols] if cols else cards, use_container_width=True, hide_index=True)
 with tabs[5]:
-    st.download_button(t('pdf'), data=bundle.pdf_bytes, file_name=f'report_{safe_workspace}.pdf', mime='application/pdf')
-    st.download_button(t('html'), data=bundle.html, file_name=f'report_{safe_workspace}.html', mime='text/html')
-    st.download_button(t('md'), data=bundle.markdown, file_name=f'report_{safe_workspace}.md', mime='text/markdown')
-    st.download_button(t('copy_download'), data=bundle.whatsapp, file_name=f'whatsapp_copy_{safe_workspace}.txt', mime='text/plain')
-    st.download_button(t('json'), data=bundle.json_text, file_name=f'report_{safe_workspace}.json', mime='application/json')
-    st.download_button(t('csv'), data=bundle.csv_text, file_name=f'report_{safe_workspace}.csv', mime='text/csv')
+    st.download_button(t('pdf'), data=bundle.pdf_bytes, file_name=f'report_{safe_workspace}.pdf', mime='application/pdf', key='report_studio_export_pdf')
+    st.download_button(t('html'), data=bundle.html, file_name=f'report_{safe_workspace}.html', mime='text/html', key='report_studio_export_html')
+    st.download_button(t('md'), data=bundle.markdown, file_name=f'report_{safe_workspace}.md', mime='text/markdown', key='report_studio_export_md')
+    st.download_button(t('copy_download'), data=bundle.whatsapp, file_name=f'whatsapp_copy_{safe_workspace}.txt', mime='text/plain', key='report_studio_export_whatsapp')
+    st.download_button(t('json'), data=bundle.json_text, file_name=f'report_{safe_workspace}.json', mime='application/json', key='report_studio_export_json')
+    st.download_button(t('csv'), data=bundle.csv_text, file_name=f'report_{safe_workspace}.csv', mime='text/csv', key='report_studio_export_csv')
 with tabs[6]:
     st.json(asdict(WhiteLabelProfile(profile_id=profile_id, workspace_id=workspace_id, brand_name=brand_name, logo_url=logo_url, tagline=tagline, language=LANG, report_title=report_title, disclaimer=disclaimer, preferred_report_mode=report_mode, preferred_sports=preferred_sports, risk_preference=risk_preference, show_technical_fields=technical, default_audience='analyst' if technical else 'consumer')))
 with tabs[7]:
