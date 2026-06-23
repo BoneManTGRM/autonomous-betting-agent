@@ -76,6 +76,27 @@ jobs:
           print('compile ok')
           PY
 
-      - name: Run unit tests
+      - name: Run unit tests with failure summary
         run: |
-          python -m pytest -q tests --disable-warnings
+          set +e
+          python -m pytest -vv -ra --tb=short tests --disable-warnings 2>&1 | tee pytest-output.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo '--- pytest failure tail ---'
+            tail -n 120 pytest-output.log
+            python - <<'PY'
+          from pathlib import Path
+          import re
+
+          log = Path('pytest-output.log').read_text(encoding='utf-8', errors='replace')
+          failed = re.findall(r'^(tests/[^\s]+)::([^\s]+)\s+FAILED', log, flags=re.MULTILINE)
+          if failed:
+              summary = '; '.join(f'{path}::{name}' for path, name in failed[:10])
+          else:
+              lines = [line for line in log.splitlines() if 'FAILED' in line or 'ERROR' in line or 'AssertionError' in line or 'ImportError' in line or 'ModuleNotFoundError' in line]
+              summary = ' | '.join(lines[-10:]) if lines else 'pytest failed; inspect pytest failure tail'
+          summary = summary.replace('%', '%25').replace('\n', '%0A').replace('\r', '%0D')
+          print(f'::error title=pytest failed::{summary}')
+          PY
+            exit "$status"
+          fi
