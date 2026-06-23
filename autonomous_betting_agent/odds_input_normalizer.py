@@ -29,7 +29,6 @@ IMPLIED_PROBABILITY_ALIASES = (
     'price_implied_probability',
 )
 
-
 MISSING_TEXT = {'', 'nan', 'none', 'null', 'unknown', 'missing', 'n/a', 'na'}
 
 
@@ -114,12 +113,13 @@ def _copy_if_missing(frame: pd.DataFrame, target: str, aliases: Iterable[str]) -
 def _normalize_best_price(frame: pd.DataFrame) -> None:
     if 'best_price' not in frame.columns:
         return
-    frame['best_price'] = frame['best_price'].map(lambda value: '' if parse_price(value) is None else parse_price(value))
+    frame['best_price'] = frame['best_price'].map(lambda value: pd.NA if parse_price(value) is None else parse_price(value)).astype('Float64')
     if 'decimal_price' not in frame.columns:
         frame['decimal_price'] = frame['best_price']
     else:
         mask = _missing_mask(frame['decimal_price'])
-        frame.loc[mask, 'decimal_price'] = frame.loc[mask, 'best_price']
+        if bool(mask.any()):
+            frame.loc[mask, 'decimal_price'] = frame.loc[mask, 'best_price']
 
 
 def _derive_price_from_implied_probability(frame: pd.DataFrame) -> None:
@@ -127,21 +127,23 @@ def _derive_price_from_implied_probability(frame: pd.DataFrame) -> None:
     if source is None:
         return
 
-    def convert(value: Any) -> float | str:
+    def convert(value: Any) -> float | pd.NA:
         probability = parse_probability(value)
-        return '' if probability is None else round(1.0 / probability, 4)
+        return pd.NA if probability is None else round(1.0 / probability, 4)
 
-    derived = frame[source].map(convert)
+    derived = frame[source].map(convert).astype('Float64')
     if 'best_price' not in frame.columns:
         frame['best_price'] = derived
     else:
         mask = _missing_mask(frame['best_price'])
-        frame.loc[mask, 'best_price'] = derived.loc[mask]
+        if bool(mask.any()):
+            frame.loc[mask, 'best_price'] = derived.loc[mask]
     if 'decimal_price' not in frame.columns:
         frame['decimal_price'] = frame['best_price']
     else:
         mask = _missing_mask(frame['decimal_price'])
-        frame.loc[mask, 'decimal_price'] = frame.loc[mask, 'best_price']
+        if bool(mask.any()):
+            frame.loc[mask, 'decimal_price'] = frame.loc[mask, 'best_price']
 
 
 def normalize_odds_input(frame: pd.DataFrame) -> pd.DataFrame:
