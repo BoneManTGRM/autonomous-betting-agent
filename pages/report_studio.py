@@ -108,6 +108,7 @@ def safe_workspace_name(value: str) -> str:
 
 st.title(t('title'))
 st.caption(t('caption'))
+profile_background_bytes = None
 
 with st.expander(t('input'), expanded=True):
     workspace_input = st.text_input(t('workspace'), value=st.session_state.get('aba_test_window_id', 'test_01'))
@@ -144,6 +145,10 @@ with st.expander(t('profile'), expanded=True):
     tagline = b2.text_input(t('tagline'), value=loaded.tagline)
     report_title = b1.text_input(t('report_title'), value=loaded.report_title)
     logo_url = b2.text_input(t('logo_url'), value=loaded.logo_url)
+    background_profile_upload = st.file_uploader(t('background_upload'), type=['png', 'jpg', 'jpeg'], key='report_studio_profile_background_upload')
+    profile_background_bytes = background_profile_upload.getvalue() if background_profile_upload is not None else None
+    if profile_background_bytes:
+        st.success(t('background_ready'))
     mode_options = ['Consumer Magazine', 'Tipster Report', 'Client-Safe Summary', 'Analyst Proof Report'] if LANG == 'en' else ['Revista consumidor', 'Reporte tipster', 'Resumen cliente', 'Reporte técnico']
     default_mode_index = mode_options.index(loaded.preferred_report_mode) if loaded.preferred_report_mode in mode_options else 0
     report_mode = b1.selectbox(t('mode'), mode_options, index=default_mode_index)
@@ -194,13 +199,15 @@ st.caption(state.context_note)
 
 safe_workspace = safe_workspace_name(workspace_id)
 magazine_pdf_bytes = render_vintage_magazine_pdf(cards, brand)
+report_background_bytes = profile_background_bytes
 tabs = st.tabs([t('cards'), t('magazine'), t('copy'), t('audit'), t('proof'), t('exports'), t('images'), t('profile_json'), t('feed_json'), t('diagnostics')])
 with tabs[0]:
     st.markdown(render_premium_card_deck(cards, language=LANG), unsafe_allow_html=True)
 with tabs[1]:
     m1, m2 = st.columns(2)
     m1.download_button(t('magazine_pdf'), data=magazine_pdf_bytes, file_name=f'magazine_report_{safe_workspace}.pdf', mime='application/pdf', key='report_studio_magazine_pdf')
-    m2.download_button(t('magazine_png'), data=render_magazine_summary_png(cards, brand), file_name=f'magazine_report_{safe_workspace}.png', mime='image/png', key='report_studio_magazine_tab_png')
+    magazine_tab_png = render_custom_background_summary_png(cards, brand, background_bytes=report_background_bytes) if report_background_bytes else render_magazine_summary_png(cards, brand)
+    m2.download_button(t('magazine_png'), data=magazine_tab_png, file_name=f'magazine_report_{safe_workspace}.png', mime='image/png', key='report_studio_magazine_tab_png')
     st.markdown(bundle.html, unsafe_allow_html=True)
 with tabs[2]:
     st.text_area(t('copy_label'), value=bundle.whatsapp, height=420, key='report_studio_whatsapp_copy_text')
@@ -231,7 +238,7 @@ with tabs[5]:
 with tabs[6]:
     st.caption(t('images_note'))
     background_upload = st.file_uploader(t('background_upload'), type=['png', 'jpg', 'jpeg'], key='report_studio_image_background_upload')
-    background_bytes = background_upload.getvalue() if background_upload is not None else None
+    background_bytes = background_upload.getvalue() if background_upload is not None else report_background_bytes
     if background_bytes:
         st.success(t('background_ready'))
     deck_png = render_custom_background_deck_png(cards, brand, background_bytes=background_bytes) if background_bytes else render_card_deck_png(cards, brand)
