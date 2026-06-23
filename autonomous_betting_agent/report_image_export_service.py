@@ -28,20 +28,16 @@ def card_image_filename(row: Mapping[str, Any], *, workspace: str = "report", in
     return f"{workspace_part}_{index + 1:03d}_{event}.png"
 
 
-def render_card_png(row: Mapping[str, Any], brand: MagazineBrand | Mapping[str, Any] | None = None, *, width: int = 1100) -> bytes:
-    """Render one readable, magazine-style PNG card.
-
-    The width parameter is accepted for backward compatibility. The output uses
-    a fixed portrait magazine canvas so text remains readable on mobile.
-    """
+def render_card_png(row: Mapping[str, Any], brand: MagazineBrand | Mapping[str, Any] | None = None, *, width: int = 1080) -> bytes:
+    """Render one readable, mobile-first PNG card."""
     return render_vintage_card_png(row, brand)
 
 
-def render_card_deck_png(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any] | None = None, *, max_cards: int = 20, width: int = 1100) -> bytes:
-    """Render a tall share image containing multiple magazine-style cards."""
-    return render_vintage_card_deck_png(cards, brand, max_cards=min(int(max_cards or 8), 8))
+def render_card_deck_png(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any] | None = None, *, max_cards: int = 3, width: int = 1080) -> bytes:
+    """Render a tall share image. Default is 3 cards so mobile text stays readable."""
+    return render_vintage_card_deck_png(cards, brand, max_cards=min(int(max_cards or 3), 3))
 
 
-def render_magazine_summary_png(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any] | None = None, *, top_n: int = 8, width: int = 1200) -> bytes:
-    """Render a readable parchment-style magazine summary PNG."""
-    return render_vintage_summary_png(pd.DataFrame(cards).head(top_n), brand)
+def render_magazine_summary_png(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any] | None = None, *, top_n: int = 3, width: int = 1080) -> bytes:
+    """Render a mobile-readable magazine summary PNG."""
+    return render_vintage_summary_png(pd.DataFrame(cards).head(min(int(top_n or 3), 3)), brand)
