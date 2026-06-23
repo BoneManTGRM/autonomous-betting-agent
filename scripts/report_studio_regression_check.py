@@ -42,9 +42,19 @@ def check_static_page_contract() -> None:
         "official_publish_ready",
         "client_report_ready",
         "learning_ready",
+        "report_studio_copy_tab_download",
+        "report_studio_export_whatsapp",
+        "report_studio_export_pdf",
+        "report_studio_export_html",
+        "report_studio_export_md",
+        "report_studio_export_json",
+        "report_studio_export_csv",
     ]
     for token in required_tokens:
         assert token in page, f"Report Studio missing required token: {token}"
+    download_button_count = page.count("st.download_button")
+    download_key_count = page.count("key='report_studio_")
+    assert download_key_count >= download_button_count, "Every Report Studio download button needs a stable unique key"
 
 
 def check_export_label_contract() -> None:
