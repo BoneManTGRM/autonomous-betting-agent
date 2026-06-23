@@ -12,6 +12,7 @@ from .report_learning_layer_compat import apply_learning_layer_compat
 from .report_product_layer import MagazineBrand, safe_float, safe_text
 
 PNG_HEADER = b"\x89PNG\r\n\x1a\n"
+PNG_RENDERER_VERSION = "client-ready-png-v3"
 PAGE_W = 1080
 PAGE_H = 1350
 INK = (255, 255, 255)
@@ -207,6 +208,7 @@ def render_custom_background_card_png(row: Mapping[str, Any], brand: MagazineBra
     draw = ImageDraw.Draw(image)
     draw.text((90, 88), brand_name.upper(), font=_bold(44), fill=GOLD)
     draw.text((90, 150), sport.upper(), font=_font(35), fill=MUTED)
+    draw.text((PAGE_W - 250, 90), PNG_RENDERER_VERSION, font=_font(22), fill=MUTED)
     y = 235
     for line in wrap(title, width=18)[:3]:
         y = _center(draw, y, line, _bold(86), fill=INK) + 12
@@ -249,6 +251,7 @@ def render_custom_background_summary_png(cards: pd.DataFrame, brand: MagazineBra
     _center(draw, 78, brand_name.upper(), _bold(54), fill=GOLD)
     _center(draw, 150, title, _bold(72), fill=INK)
     _center(draw, 224, f"{today}  •  {workspace}", _font(31), fill=MUTED)
+    draw.text((PAGE_W - 320, 226), PNG_RENDERER_VERSION, font=_font(22), fill=MUTED)
 
     total, official, research, issues = _summary_counts(pd.DataFrame(cards))
     _panel(image, (66, 286, PAGE_W - 66, 372), radius=28, alpha=145, outline_alpha=165, width=2)
