@@ -7,7 +7,7 @@ from typing import Any
 APP_TAGLINE = 'Powered by Reparodynamics'
 APP_TAGLINE_ES = 'Impulsado por Reparodynamics'
 GLOBAL_LANGUAGE_KEY = 'aba_global_language'
-LANGUAGE_KEYS = ['global_language','signal_board_language','pro_predictor_language','threshold_optimizer_language','what_are_the_odds_language','what_are_the_odds_pro_language','odds_lock_pro_language','consumer_report_studio_language','consumer_magazine_builder_language','public_proof_dashboard_language','clv_sandbox_tester_language','storage_diagnostics_language','learning_memory_language','learning_impact_report_language','simulation_lab_language','proof_control_center_language','reset_storage_language']
+LANGUAGE_KEYS = ['global_language','signal_board_language','pro_predictor_language','threshold_optimizer_language','what_are_the_odds_language','what_are_the_odds_pro_language','odds_lock_pro_language','report_studio_language','consumer_report_studio_language','consumer_magazine_builder_language','public_proof_dashboard_language','clv_sandbox_tester_language','storage_diagnostics_language','learning_memory_language','learning_impact_report_language','simulation_lab_language','proof_control_center_language','reset_storage_language']
 TOOLS: tuple[tuple[str, str, str], ...] = (
     ('Signal Board', 'Panel de Señales', 'pages/signal_board.py'),
     ('Pro Predictor', 'Predictor Pro', 'pages/pro_predictor_volume.py'),
@@ -15,8 +15,7 @@ TOOLS: tuple[tuple[str, str, str], ...] = (
     ('Threshold Optimizer', 'Optimizador de Umbral', 'pages/threshold_optimizer.py'),
     ('What Are the Odds', 'Cuáles Son las Cuotas', 'pages/what_are_the_odds.py'),
     ('Odds Lock Pro', 'Bloqueo de Cuotas Pro', 'pages/odds_lock_pro.py'),
-    ('Consumer Report Studio', 'Estudio de Reportes', 'pages/consumer_report_studio.py'),
-    ('Consumer Magazine Builder', 'Revista para Consumidor', 'pages/consumer_magazine_builder.py'),
+    ('Report Studio', 'Estudio de Reportes', 'pages/report_studio.py'),
     ('Proof Control Center', 'Centro de Control de Prueba', 'pages/proof_control_center.py'),
     ('Public Proof Dashboard', 'Panel Público de Prueba', 'pages/public_proof_dashboard.py'),
     ('CLV Sandbox Tester', 'Probador CLV Sandbox', 'pages/clv_sandbox_tester.py'),
