@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import datetime, timezone
 
 import pandas as pd
 import streamlit as st
 
-from autonomous_betting_agent.app_feed_delivery import save_app_feed
 from autonomous_betting_agent.commercial_platform_tools import load_persistent_ledger, normalize_workspace_id
 from autonomous_betting_agent.pdf_report import render_report_pdf
 from autonomous_betting_agent.pick_hold_store import load_first_available
@@ -21,10 +21,11 @@ from autonomous_betting_agent.white_label_profiles import WhiteLabelProfile, lis
 st.set_page_config(page_title='Learning Report Studio', layout='wide')
 LANG = render_app_sidebar('report_learning_studio', language_key='report_studio_language', selector='radio')
 T = {
-    'en': {'title':'Learning Report Studio','caption':'Separates final result, price value, official +EV status, and calibration learning.','workspace':'Client / Workspace ID','saved':'Use saved workspace rows','upload':'Upload CSV rows','profile':'White-label profile','profile_id':'Profile ID','load':'Load','save':'Save','brand':'Brand / tipster name','tagline':'Tagline','report_title':'Report title','disclaimer':'Disclaimer','sports':'Sports / League Filter','max_rows':'Max rows','cards':'Premium Cards','mag':'Magazine Report','copy':'WhatsApp / Telegram','proof':'Analyst Proof','audit':'Calibration Audit','exports':'Exports','feed':'Saved app feed','pdf':'Download PDF','html':'Download HTML','md':'Download Markdown','json':'Download JSON','csv':'Download CSV','copy_download':'Download WhatsApp copy','empty':'No rows found. Use Pro Predictor / Odds Lock Pro first or upload a CSV.'},
-    'es': {'title':'Estudio de aprendizaje','caption':'Separa resultado final, valor de precio, estado oficial +EV y aprendizaje de calibración.','workspace':'ID de cliente / workspace','saved':'Usar filas guardadas','upload':'Subir CSV','profile':'Perfil white-label','profile_id':'ID del perfil','load':'Cargar','save':'Guardar','brand':'Marca / tipster','tagline':'Lema','report_title':'Título del reporte','disclaimer':'Aviso legal','sports':'Filtro deporte / liga','max_rows':'Máximo de filas','cards':'Tarjetas premium','mag':'Reporte revista','copy':'WhatsApp / Telegram','proof':'Prueba técnica','audit':'Auditoría calibración','exports':'Exportaciones','feed':'Feed guardado','pdf':'Descargar PDF','html':'Descargar HTML','md':'Descargar Markdown','json':'Descargar JSON','csv':'Descargar CSV','copy_download':'Descargar copy WhatsApp','empty':'No hay filas. Usa Pro Predictor / Odds Lock Pro primero o sube un CSV.'},
+    'en': {'title':'Learning Report Studio','caption':'Separates final result, price value, official +EV status, and calibration learning.','workspace':'Client / Workspace ID','saved':'Use saved workspace rows','upload':'Upload CSV rows','profile':'White-label profile','profile_id':'Profile ID','load':'Load','save':'Save','brand':'Brand / tipster name','tagline':'Tagline','report_title':'Report title','disclaimer':'Disclaimer','sports':'Sports / League Filter','max_rows':'Max rows','cards':'Premium Cards','mag':'Magazine Report','copy':'WhatsApp / Telegram','proof':'Analyst Proof','audit':'Calibration Audit','exports':'Exports','feed':'Learning app feed','pdf':'Download PDF','html':'Download HTML','md':'Download Markdown','json':'Download JSON','csv':'Download CSV','copy_download':'Download WhatsApp copy','empty':'No rows found. Use Pro Predictor / Odds Lock Pro first or upload a CSV.'},
+    'es': {'title':'Estudio de aprendizaje','caption':'Separa resultado final, valor de precio, estado oficial +EV y aprendizaje de calibración.','workspace':'ID de cliente / workspace','saved':'Usar filas guardadas','upload':'Subir CSV','profile':'Perfil white-label','profile_id':'ID del perfil','load':'Cargar','save':'Guardar','brand':'Marca / tipster','tagline':'Lema','report_title':'Título del reporte','disclaimer':'Aviso legal','sports':'Filtro deporte / liga','max_rows':'Máximo de filas','cards':'Tarjetas premium','mag':'Reporte revista','copy':'WhatsApp / Telegram','proof':'Prueba técnica','audit':'Auditoría calibración','exports':'Exportaciones','feed':'Feed de aprendizaje','pdf':'Descargar PDF','html':'Descargar HTML','md':'Descargar Markdown','json':'Descargar JSON','csv':'Descargar CSV','copy_download':'Descargar copy WhatsApp','empty':'No hay filas. Usa Pro Predictor / Odds Lock Pro primero o sube un CSV.'},
 }
 HANDOFF_KEYS = ('odds_lock_pro_locked_rows','public_proof_dashboard_refresh_rows','pro_predictor_high_confidence_rows','pro_predictor_latest_rows','what_are_the_odds_latest_rows','ara_latest_predictions')
+FEED_FIELDS = ['event','sport','public_pick','consumer_action','model_lean_label','price_value_label','official_status_label','result_status','learning_status','official_publish_ready','client_report_ready','learning_ready','data_issue_reason','market_read','why_it_matters','game_preview','report_lane_v2','model_probability','market_probability','model_market_edge','expected_value_per_unit','profit_units']
 
 def t(k: str) -> str:
     return T.get(LANG, T['en']).get(k, k)
@@ -66,6 +67,23 @@ def copy_text(cards: pd.DataFrame, brand: MagazineBrand, limit: int = 8) -> str:
     if brand.disclaimer:
         lines += ['', brand.disclaimer]
     return '\n'.join(lines)
+
+def learning_feed(cards: pd.DataFrame, brand: MagazineBrand) -> dict:
+    cols = [c for c in FEED_FIELDS if c in cards.columns]
+    records = cards[cols].fillna('').to_dict('records') if cols else []
+    return {
+        'schema_version': 'aba-learning-feed-v1',
+        'generated_at': datetime.now(timezone.utc).isoformat(),
+        'brand': asdict(brand),
+        'counts': {
+            'total_cards': int(len(cards)),
+            'official_publish_ready': int(cards.get('official_publish_ready', pd.Series(dtype=bool)).astype(bool).sum()) if not cards.empty else 0,
+            'client_report_ready': int(cards.get('client_report_ready', pd.Series(dtype=bool)).astype(bool).sum()) if not cards.empty else 0,
+            'learning_ready': int(cards.get('learning_ready', pd.Series(dtype=bool)).astype(bool).sum()) if not cards.empty else 0,
+            'data_issues': int(cards.get('data_issue_reason', pd.Series(dtype=str)).map(lambda x: bool(safe_text(x))).sum()) if not cards.empty else 0,
+        },
+        'records': records,
+    }
 
 st.title(t('title'))
 st.caption(t('caption'))
@@ -113,7 +131,7 @@ wa = copy_text(cards, brand)
 json_report = cards_to_json(cards)
 pdf = render_report_pdf(cards, brand)
 csv = cards.to_csv(index=False)
-feed = save_app_feed(cards, brand, mode='consumer', public=False)
+feed = learning_feed(cards, brand)
 audit = calibration_audit(cards, min_sample=10)
 
 st.markdown(render_status_dashboard(cards, language=LANG), unsafe_allow_html=True)
