@@ -50,8 +50,6 @@ TEXT = {
         'pending_only': 'Pending/upcoming only',
         'sport_filter': 'Sports',
         'market_filter': 'Markets',
-        'risk_filter': 'Risk labels',
-        'confidence_filter': 'Confidence labels',
         'cards_tab': 'High-level cards',
         'magazine_tab': 'Magazine report',
         'copy_tab': 'WhatsApp / Telegram copy',
@@ -100,8 +98,6 @@ TEXT = {
         'pending_only': 'Solo pendientes/próximos',
         'sport_filter': 'Deportes',
         'market_filter': 'Mercados',
-        'risk_filter': 'Riesgos',
-        'confidence_filter': 'Confianzas',
         'cards_tab': 'Tarjetas premium',
         'magazine_tab': 'Reporte revista',
         'copy_tab': 'Copy WhatsApp / Telegram',
@@ -195,15 +191,13 @@ def probability_metric(cards: pd.DataFrame) -> str:
 def unique_options(frame: pd.DataFrame, column: str) -> list[str]:
     if frame.empty or column not in frame.columns:
         return []
-    values = sorted({safe_text(value) for value in frame[column].tolist() if safe_text(value)})
-    return values
+    return sorted({safe_text(value) for value in frame[column].tolist() if safe_text(value)})
 
 
 def filter_by_multiselect(frame: pd.DataFrame, column: str, selected: list[str]) -> pd.DataFrame:
     if frame.empty or not selected or column not in frame.columns:
         return frame
-    values = frame[column].map(safe_text)
-    return frame[values.isin(selected)].copy()
+    return frame[frame[column].map(safe_text).isin(selected)].copy()
 
 
 def status_series(frame: pd.DataFrame) -> pd.Series:
@@ -221,9 +215,7 @@ def _probability_float(value: object) -> float | None:
         return None
     if parsed > 1.0:
         parsed /= 100.0
-    if 0.0 < parsed < 1.0:
-        return parsed
-    return None
+    return parsed if 0.0 < parsed < 1.0 else None
 
 
 def _premium_verdict(row: pd.Series, language: str) -> str:
@@ -255,6 +247,7 @@ def _consumer_bullets(row: pd.Series, language: str) -> list[str]:
         'no clear price edge', 'estimated ev per unit: -0.0', 'estimated ev per unit: 0.0',
         'review before publishing', 'internal decision', 'decisión interna', 'decision interna',
         'señal sin ventaja de cuota clara', 'ev estimado por unidad: -0.0', 'ev estimado por unidad: 0.0',
+        'logged price', 'cuota registrada', 'consensus_average',
     )
     clean: list[str] = []
     for bullet in raw_bullets:
@@ -263,9 +256,11 @@ def _consumer_bullets(row: pd.Series, language: str) -> list[str]:
             continue
         if bullet not in clean:
             clean.append(bullet)
-    fallback = []
-    if probability:
-        fallback.append(f'El modelo marca {probability} para {pick}.' if spanish else f'Model probability is {probability} for {pick}.')
+
+    already_has_probability = any(('probability' in item.lower() or 'probabilidad' in item.lower()) for item in clean)
+    fallback: list[str] = []
+    if probability and not already_has_probability:
+        fallback.append(f'El modelo estima {probability} para {pick}.' if spanish else f'Model probability is {probability} for {pick}.')
     if market or odds:
         fallback.append(f'Mercado: {market} | Cuota: {odds}.' if spanish else f'Market: {market} | Odds: {odds}.')
     if proof_id:
@@ -288,6 +283,7 @@ def render_premium_cards_html(cards: pd.DataFrame, brand: BrandSettings) -> str:
         return '<p>No hay picks disponibles.</p>' if spanish else '<p>No picks available.</p>'
     title = brand.report_title or ('Reporte de Tendencias' if spanish else 'Trend Report')
     subtitle = 'Vista ejecutiva para consumidores' if spanish else 'Executive consumer view'
+    model_prob_label = 'Prob. modelo' if spanish else 'Model Prob.'
     css = '''
     <style>
     .aba-premium-wrap{margin:1rem 0 1.5rem 0}.aba-premium-hero{border:1px solid rgba(125,125,125,.35);border-radius:24px;padding:1.1rem 1.25rem;margin-bottom:1rem;background:linear-gradient(135deg,rgba(255,255,255,.10),rgba(255,255,255,.035))}.aba-premium-hero h2{margin:.1rem 0 .25rem 0;font-size:1.55rem}.aba-premium-hero p{margin:.15rem 0;opacity:.82}.aba-premium-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:1.05rem}.aba-premium-card{position:relative;overflow:hidden;border:1px solid rgba(125,125,125,.38);border-radius:24px;padding:1.05rem 1.08rem;background:radial-gradient(circle at top right,rgba(255,255,255,.12),rgba(255,255,255,.035) 38%,rgba(255,255,255,.025));box-shadow:0 10px 28px rgba(0,0,0,.18)}.aba-premium-card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:rgba(255,255,255,.42)}.aba-card-top{display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start}.aba-card-league{font-size:.78rem;letter-spacing:.04em;text-transform:uppercase;opacity:.68;font-weight:750}.aba-verdict{display:inline-block;border:1px solid rgba(125,125,125,.45);border-radius:999px;padding:.22rem .55rem;font-size:.76rem;font-weight:800;white-space:nowrap}.aba-premium-card h3{font-size:1.55rem;line-height:1.08;margin:.52rem 0 .7rem 0}.aba-recommendation{border-radius:18px;padding:.82rem .9rem;background:rgba(255,255,255,.07);margin:.4rem 0 .85rem 0}.aba-recommendation .label{font-size:.75rem;text-transform:uppercase;letter-spacing:.07em;opacity:.67;font-weight:850}.aba-recommendation .pick{font-size:1.22rem;font-weight:900;margin:.2rem 0 0 0}.aba-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.45rem;margin:.7rem 0}.aba-metric{border:1px solid rgba(125,125,125,.33);border-radius:16px;padding:.48rem .55rem}.aba-metric .k{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;opacity:.62;font-weight:800}.aba-metric .v{font-size:.93rem;font-weight:850;margin-top:.08rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.aba-meter{height:8px;border-radius:999px;background:rgba(125,125,125,.25);overflow:hidden;margin:.65rem 0 .75rem 0}.aba-meter span{display:block;height:100%;border-radius:999px;background:rgba(255,255,255,.58)}.aba-proof{font-size:.83rem;opacity:.82;margin:.35rem 0 .2rem 0}.aba-why{margin:.72rem 0 0 0;padding-left:1.15rem}.aba-why li{margin:.35rem 0;line-height:1.35}.aba-card-foot{font-size:.78rem;opacity:.62;margin-top:.65rem}@media(max-width:640px){.aba-premium-grid{grid-template-columns:1fr}.aba-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.aba-premium-card h3{font-size:1.35rem}}
@@ -316,7 +312,7 @@ def render_premium_cards_html(cards: pd.DataFrame, brand: BrandSettings) -> str:
         proof_id = safe_text(row.get('proof_id'))
         verdict = _premium_verdict(row, language)
         bullets = _consumer_bullets(row, language)
-        proof_line = (f'Proof ID: {proof_id}' if not spanish else f'Proof ID: {proof_id}') if proof_id else ('Proof pending' if not spanish else 'Proof pendiente')
+        proof_line = f'Proof ID: {proof_id}' if proof_id else ('Proof pending' if not spanish else 'Proof pendiente')
         parts += [
             '<article class="aba-premium-card">',
             '<div class="aba-card-top">',
@@ -330,7 +326,7 @@ def render_premium_cards_html(cards: pd.DataFrame, brand: BrandSettings) -> str:
             '</div>',
             '<div class="aba-metrics">',
             f'<div class="aba-metric"><div class="k">{html.escape("Odds" if not spanish else "Cuota")}</div><div class="v">{html.escape(odds)}</div></div>',
-            f'<div class="aba-metric"><div class="k">{html.escape("Model" if not spanish else "Modelo")}</div><div class="v">{html.escape(probability_label)}</div></div>',
+            f'<div class="aba-metric"><div class="k">{html.escape(model_prob_label)}</div><div class="v">{html.escape(probability_label)}</div></div>',
             f'<div class="aba-metric"><div class="k">{html.escape("Confidence" if not spanish else "Confianza")}</div><div class="v">{html.escape(confidence)}</div></div>',
             f'<div class="aba-metric"><div class="k">{html.escape("Risk" if not spanish else "Riesgo")}</div><div class="v">{html.escape(risk)}</div></div>',
             '</div>',
