@@ -97,7 +97,7 @@ def run_browser_smoke() -> None:
             ]
             for token in forbidden:
                 assert token not in body, f"Browser smoke found Streamlit error token: {token}"
-            required = ["Premium Cards", "Magazine Report", "WhatsApp", "Analyst Proof", "Exports", "App Feed", "Diagnostics"]
+            required = ["Premium Cards", "Magazine Report", "WhatsApp", "Analyst Proof", "Exports", "Images", "App Feed", "Diagnostics"]
             missing = [token for token in required if token not in body]
             assert not missing, f"Report Studio missing visible tab labels after upload: {missing}"
         finally:
