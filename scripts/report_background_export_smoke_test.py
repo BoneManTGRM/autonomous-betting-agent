@@ -39,8 +39,12 @@ def _mean_rgb(payload: bytes) -> tuple[float, float, float]:
     return tuple(ImageStat.Stat(_image(payload)).mean)  # type: ignore[return-value]
 
 
-def _corner_rgb(payload: bytes) -> tuple[int, int, int]:
-    return _image(payload).getpixel((24, 24))
+def _pixel_rgb(payload: bytes, xy: tuple[int, int]) -> tuple[int, int, int]:
+    return _image(payload).getpixel(xy)
+
+
+def _distance(a: tuple[float, float, float] | tuple[int, int, int], b: tuple[float, float, float] | tuple[int, int, int]) -> float:
+    return sum(abs(float(x) - float(y)) for x, y in zip(a, b))
 
 
 def run_smoke_test() -> None:
@@ -63,12 +67,15 @@ def run_smoke_test() -> None:
 
     # A red/orange background should stay visibly red/orange at the page edge.
     # This catches regressions where the uploaded background is not used and the image goes black.
-    corner = _corner_rgb(summary_custom)
-    assert corner[0] > 85 and corner[0] > corner[2] + 25, f"background not visibly applied, corner={corner}"
+    custom_corner = _pixel_rgb(summary_custom, (24, 24))
+    default_corner = _pixel_rgb(summary_default, (24, 24))
+    assert custom_corner[0] > 85 and custom_corner[0] > custom_corner[2] + 25, f"background not visibly applied, corner={custom_corner}"
 
-    mean = _mean_rgb(summary_custom)
-    assert sum(mean) / 3 > 45, f"custom summary is too dark, mean={mean}"
-    assert abs(len(summary_custom) - len(summary_default)) > 500, "custom background render is suspiciously similar to default render"
+    custom_mean = _mean_rgb(summary_custom)
+    default_mean = _mean_rgb(summary_default)
+    assert sum(custom_mean) / 3 > 45, f"custom summary is too dark, mean={custom_mean}"
+    assert _distance(custom_corner, default_corner) > 40, f"custom background corner too similar to default: custom={custom_corner}, default={default_corner}"
+    assert _distance(custom_mean, default_mean) > 15, f"custom background mean too similar to default: custom={custom_mean}, default={default_mean}"
 
 
 def main() -> None:
