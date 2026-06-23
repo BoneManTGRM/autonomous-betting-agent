@@ -8,6 +8,7 @@ import streamlit as st
 from autonomous_betting_agent.app_feed_delivery import save_app_feed
 from autonomous_betting_agent.commercial_platform_tools import load_persistent_ledger, normalize_workspace_id
 from autonomous_betting_agent.pick_hold_store import load_first_available
+from autonomous_betting_agent.report_background_image_service import render_custom_background_card_png, render_custom_background_summary_png
 from autonomous_betting_agent.report_feed_service import save_report_feed
 from autonomous_betting_agent.report_image_export_service import card_image_filename, render_card_deck_png, render_card_png, render_magazine_summary_png
 from autonomous_betting_agent.report_magazine_pdf_service import render_vintage_magazine_pdf
@@ -33,6 +34,7 @@ TEXT = {
         'cards': 'Premium Cards', 'magazine': 'Magazine Report', 'copy': 'WhatsApp / Telegram', 'audit': 'Learning Audit', 'proof': 'Analyst Proof', 'exports': 'Exports', 'images': 'Images', 'profile_json': 'Profile JSON', 'feed_json': 'App Feed', 'diagnostics': 'Diagnostics',
         'pdf': 'Download PDF', 'magazine_pdf': 'Download Magazine PDF', 'html': 'Download HTML', 'md': 'Download Markdown', 'json': 'Download JSON', 'csv': 'Download CSV', 'copy_download': 'Download WhatsApp copy',
         'deck_png': 'Download full card deck PNG', 'magazine_png': 'Download Magazine PNG', 'card_png': 'Download Card Image', 'images_note': 'Server-rendered PNG images for saving and sharing.',
+        'background_upload': 'Optional background image for PNG exports', 'background_ready': 'Custom background enabled for Magazine PNG and individual Card Image downloads.',
         'feed_saved': 'Unified and legacy app feeds saved.', 'copy_label': 'Short copy', 'no_audit': 'No graded calibration data available yet.',
     },
     'es': {
@@ -46,6 +48,7 @@ TEXT = {
         'cards': 'Tarjetas premium', 'magazine': 'Reporte revista', 'copy': 'WhatsApp / Telegram', 'audit': 'Auditoría de aprendizaje', 'proof': 'Prueba técnica', 'exports': 'Exportaciones', 'images': 'Imágenes', 'profile_json': 'JSON del perfil', 'feed_json': 'Feed de app', 'diagnostics': 'Diagnóstico',
         'pdf': 'Descargar PDF', 'magazine_pdf': 'Descargar PDF revista', 'html': 'Descargar HTML', 'md': 'Descargar Markdown', 'json': 'Descargar JSON', 'csv': 'Descargar CSV', 'copy_download': 'Descargar copy WhatsApp',
         'deck_png': 'Descargar PNG de tarjetas', 'magazine_png': 'Descargar PNG de revista', 'card_png': 'Descargar imagen de tarjeta', 'images_note': 'Imágenes PNG generadas por servidor para guardar y compartir.',
+        'background_upload': 'Imagen de fondo opcional para exportaciones PNG', 'background_ready': 'Fondo personalizado activo para PNG de revista e imágenes individuales.',
         'feed_saved': 'Feed unificado y feed legado guardados.', 'copy_label': 'Copy corto', 'no_audit': 'Aún no hay datos gradados para calibración.',
     },
 }
@@ -227,8 +230,12 @@ with tabs[5]:
     st.download_button(t('csv'), data=bundle.csv_text, file_name=f'report_{safe_workspace}.csv', mime='text/csv', key='report_studio_export_csv')
 with tabs[6]:
     st.caption(t('images_note'))
+    background_upload = st.file_uploader(t('background_upload'), type=['png', 'jpg', 'jpeg'], key='report_studio_image_background_upload')
+    background_bytes = background_upload.getvalue() if background_upload is not None else None
+    if background_bytes:
+        st.success(t('background_ready'))
     deck_png = render_card_deck_png(cards, brand)
-    magazine_png = render_magazine_summary_png(cards, brand)
+    magazine_png = render_custom_background_summary_png(cards, brand, background_bytes=background_bytes) if background_bytes else render_magazine_summary_png(cards, brand)
     c1, c2 = st.columns(2)
     c1.download_button(t('deck_png'), data=deck_png, file_name=f'card_deck_{safe_workspace}.png', mime='image/png', key='report_studio_image_deck_png')
     c2.download_button(t('magazine_png'), data=magazine_png, file_name=f'magazine_summary_{safe_workspace}.png', mime='image/png', key='report_studio_image_magazine_png')
@@ -237,9 +244,10 @@ with tabs[6]:
         rowd = row.to_dict()
         event = safe_text(rowd.get('event')) or f'Card {idx + 1}'
         action = safe_text(rowd.get('consumer_action') or rowd.get('recommended_action')) or 'Research / Learning'
+        card_png = render_custom_background_card_png(rowd, brand, background_bytes=background_bytes, index=idx) if background_bytes else render_card_png(rowd, brand)
         left, right = st.columns([3, 1])
         left.markdown(f'**{idx + 1}. {event}**  \n{action}')
-        right.download_button(t('card_png'), data=render_card_png(rowd, brand), file_name=card_image_filename(rowd, workspace=safe_workspace, index=idx), mime='image/png', key=f'report_studio_image_card_{idx}')
+        right.download_button(t('card_png'), data=card_png, file_name=card_image_filename(rowd, workspace=safe_workspace, index=idx), mime='image/png', key=f'report_studio_image_card_{idx}')
 with tabs[7]:
     st.json(asdict(WhiteLabelProfile(profile_id=profile_id, workspace_id=workspace_id, brand_name=brand_name, logo_url=logo_url, tagline=tagline, language=LANG, report_title=report_title, disclaimer=disclaimer, preferred_report_mode=report_mode, preferred_sports=preferred_sports, risk_preference=risk_preference, show_technical_fields=technical, default_audience='analyst' if technical else 'consumer')))
 with tabs[8]:
