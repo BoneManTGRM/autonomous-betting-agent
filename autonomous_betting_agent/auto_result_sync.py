@@ -11,6 +11,7 @@ from .auto_learning_cycle import run_auto_learning_cycle
 from .auto_result_grading_tools import odds_scores_to_result_frame
 from .commercial_platform_tools import filter_locked_proof_rows, load_persistent_ledger, save_persistent_ledger
 from .live_odds import _get_json, validate_api_key
+from .odds_lock_tools import profit_units as compute_profit_units
 from .row_normalizer import safe_text
 
 RESOLVED_STATUSES = {'win', 'loss', 'void', 'push', 'cancelled', 'canceled'}
@@ -236,6 +237,7 @@ def apply_fuzzy_result_updates(ledger: pd.DataFrame, results: pd.DataFrame, *, t
         if result in {'win', 'loss', 'void'}:
             item['result_status'] = result
             item['graded_at_utc'] = datetime.now(timezone.utc).isoformat(timespec='seconds')
+            item['profit_units'] = compute_profit_units(item)
             updated += 1
             wins += int(result == 'win')
             losses += int(result == 'loss')
@@ -258,23 +260,17 @@ def run_auto_result_sync(
     ledger = load_persistent_ledger(workspace_id=workspace_id)
     locked = filter_locked_proof_rows(ledger)
     sports = pending_sport_keys(locked)
-    report: dict[str, Any] = {'version': 'auto-result-sync-v1', 'workspace_id': safe_text(workspace_id), 'locked_rows': int(len(locked)), 'pending_sport_keys': sports}
-    if locked.empty:
-        report.update({'status': 'skipped', 'reason': 'no_locked_rows'})
-        return report
     if not sports:
-        report.update({'status': 'skipped', 'reason': 'no_pending_sport_keys'})
-        return report
-    results, fetch_report = fetch_completed_results(_api_key(api_key_override), sports, days_from=int(days_from))
-    report['fetch'] = fetch_report
+        return {'status': 'no_pending_sports', 'updated_rows': 0, 'sport_keys': []}
+    api_key = _api_key(api_key_override)
+    if not api_key:
+        return {'status': 'missing_api_key', 'updated_rows': 0, 'sport_keys': sports}
+    results, fetch_stats = fetch_completed_results(api_key, sports, days_from=days_from)
     if results.empty:
-        report.update({'status': 'skipped', 'reason': 'no_completed_results_found'})
-        return report
-    updated, stats = apply_fuzzy_result_updates(locked, results, threshold=float(threshold))
-    report['grading'] = stats
-    if not updated.empty:
-        save_persistent_ledger(updated, workspace_id=workspace_id)
-    if run_learning_after and int(stats.get('updated_rows') or 0) > 0:
-        report['learning'] = run_auto_learning_cycle(workspace_id, save_to_github=True)
-    report['status'] = 'updated' if int(stats.get('updated_rows') or 0) > 0 else 'no_updates'
-    return report
+        return {'status': 'no_completed_results', 'updated_rows': 0, **fetch_stats}
+    updated, stats = apply_fuzzy_result_updates(locked, results, threshold=threshold)
+    save_persistent_ledger(updated, workspace_id=workspace_id)
+    payload = {'status': 'ok', **fetch_stats, **stats}
+    if run_learning_after and stats.get('updated_rows', 0) > 0:
+        payload['learning'] = run_auto_learning_cycle(workspace_id=workspace_id)
+    return payload
