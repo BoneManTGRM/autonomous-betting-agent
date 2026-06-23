@@ -5,6 +5,7 @@ from dataclasses import asdict
 import pandas as pd
 import streamlit as st
 
+from autonomous_betting_agent.app_feed_delivery import save_app_feed
 from autonomous_betting_agent.commercial_platform_tools import load_persistent_ledger, normalize_workspace_id
 from autonomous_betting_agent.pick_hold_store import load_first_available
 from autonomous_betting_agent.report_feed_service import save_report_feed
@@ -29,7 +30,7 @@ TEXT = {
         'mode': 'Report mode', 'risk': 'Risk preference', 'sports': 'Sport / League Filter', 'max_rows': 'Max rows', 'visibility': 'Feed visibility',
         'cards': 'Premium Cards', 'magazine': 'Magazine Report', 'copy': 'WhatsApp / Telegram', 'audit': 'Learning Audit', 'proof': 'Analyst Proof', 'exports': 'Exports', 'profile_json': 'Profile JSON', 'feed_json': 'App Feed', 'diagnostics': 'Diagnostics',
         'pdf': 'Download PDF', 'html': 'Download HTML', 'md': 'Download Markdown', 'json': 'Download JSON', 'csv': 'Download CSV', 'copy_download': 'Download WhatsApp copy',
-        'feed_saved': 'Latest unified app feed saved.', 'copy_label': 'Short copy', 'no_audit': 'No graded calibration data available yet.',
+        'feed_saved': 'Unified and legacy app feeds saved.', 'copy_label': 'Short copy', 'no_audit': 'No graded calibration data available yet.',
     },
     'es': {
         'title': 'Estudio de Reportes',
@@ -41,7 +42,7 @@ TEXT = {
         'mode': 'Modo de reporte', 'risk': 'Preferencia de riesgo', 'sports': 'Filtro deporte / liga', 'max_rows': 'Máximo de filas', 'visibility': 'Visibilidad del feed',
         'cards': 'Tarjetas premium', 'magazine': 'Reporte revista', 'copy': 'WhatsApp / Telegram', 'audit': 'Auditoría de aprendizaje', 'proof': 'Prueba técnica', 'exports': 'Exportaciones', 'profile_json': 'JSON del perfil', 'feed_json': 'Feed de app', 'diagnostics': 'Diagnóstico',
         'pdf': 'Descargar PDF', 'html': 'Descargar HTML', 'md': 'Descargar Markdown', 'json': 'Descargar JSON', 'csv': 'Descargar CSV', 'copy_download': 'Descargar copy WhatsApp',
-        'feed_saved': 'Feed unificado de app guardado.', 'copy_label': 'Copy corto', 'no_audit': 'Aún no hay datos gradados para calibración.',
+        'feed_saved': 'Feed unificado y feed legado guardados.', 'copy_label': 'Copy corto', 'no_audit': 'Aún no hay datos gradados para calibración.',
     },
 }
 
@@ -176,7 +177,9 @@ filters = ReportStudioFilters(selected_sports=tuple(preferred_sports), max_rows=
 state = build_report_studio_state(raw, brand, filters=filters, source_note=source_note)
 cards = state.cards
 bundle = state.exports
-feed = save_report_feed(cards, brand, mode=mode_key, public=visibility == 'public')
+legacy_feed = save_app_feed(cards, brand, mode=mode_key, public=visibility == 'public')
+unified_feed = save_report_feed(cards, brand, mode=mode_key, public=visibility == 'public')
+feed = {'unified_v2': unified_feed, 'legacy_v1': legacy_feed}
 summary = report_studio_summary(state)
 
 st.markdown(render_status_dashboard(cards, language=LANG), unsafe_allow_html=True)
@@ -224,5 +227,6 @@ with tabs[8]:
         'diagnostics': asdict(state.diagnostics),
         'filters': asdict(state.filters),
         'source': source_note,
-        'saved_feed_paths': feed.get('saved_paths', {}),
+        'unified_feed_paths': unified_feed.get('saved_paths', {}),
+        'legacy_feed_paths': legacy_feed.get('saved_paths', {}),
     })
