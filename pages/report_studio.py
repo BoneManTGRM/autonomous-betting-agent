@@ -1,26 +1,18 @@
 from __future__ import annotations
 
-import html
 from dataclasses import asdict
 
 import pandas as pd
 import streamlit as st
 
-from autonomous_betting_agent.app_feed_delivery import save_app_feed
 from autonomous_betting_agent.commercial_platform_tools import load_persistent_ledger, normalize_workspace_id
-from autonomous_betting_agent.pdf_report import render_report_pdf
 from autonomous_betting_agent.pick_hold_store import load_first_available
-from autonomous_betting_agent.report_product_layer import (
-    MagazineBrand,
-    cards_to_json,
-    enrich_rows,
-    grouped_report,
-    render_consumer_magazine_html,
-    render_markdown_summary,
-)
-from autonomous_betting_agent.row_normalizer import normalize_frame, safe_text
+from autonomous_betting_agent.report_feed_service import save_report_feed
+from autonomous_betting_agent.report_product_layer import MagazineBrand, safe_text
+from autonomous_betting_agent.report_studio_service import ReportStudioFilters, build_report_studio_state, report_studio_summary
+from autonomous_betting_agent.report_studio_ui import render_premium_card_deck, render_status_dashboard
+from autonomous_betting_agent.row_normalizer import normalize_frame
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
-from autonomous_betting_agent.sports_context import CONTEXT_UNAVAILABLE, enrich_sports_context
 from autonomous_betting_agent.white_label_profiles import WhiteLabelProfile, list_profiles, load_profile, save_profile
 
 st.set_page_config(page_title='Report Studio', layout='wide')
@@ -29,31 +21,27 @@ LANG = render_app_sidebar('report_studio', language_key='report_studio_language'
 TEXT = {
     'en': {
         'title': 'Report Studio',
-        'caption': 'Unified consumer magazine, tipster, client-safe, and analyst-proof reporting.',
+        'caption': 'Unified premium reports, official +EV proof, learning audit, exports, profiles, and app feed.',
         'input': 'Input rows', 'workspace': 'Client / Workspace ID', 'use_saved': 'Use saved workspace rows', 'upload': 'Upload CSV rows', 'source': 'Source',
         'empty': 'No rows found. Use Pro Predictor / Odds Lock Pro first or upload a CSV.',
         'profile': 'White-label profile', 'profile_id': 'Profile ID', 'profile_key': 'Profile key', 'load_profile': 'Load profile', 'save_profile': 'Save profile',
         'brand_name': 'Brand / tipster name', 'tagline': 'Tagline', 'report_title': 'Report title', 'logo_url': 'Logo URL', 'disclaimer': 'Disclaimer',
-        'mode': 'Report mode', 'risk': 'Risk preference', 'sports': 'Sports', 'max_rows': 'Max rows', 'visibility': 'Feed visibility',
-        'best': 'Best Plays', 'watch': 'Watchlist', 'no_play': 'No Play', 'avg': 'Avg model probability', 'publish': 'Publish-ready', 'warnings': 'Warnings',
-        'cards': 'Premium Cards', 'magazine': 'Magazine Report', 'copy': 'WhatsApp / Telegram', 'proof': 'Analyst Proof', 'exports': 'Exports', 'profile_json': 'Profile JSON', 'feed_json': 'Saved app feed',
+        'mode': 'Report mode', 'risk': 'Risk preference', 'sports': 'Sport / League Filter', 'max_rows': 'Max rows', 'visibility': 'Feed visibility',
+        'cards': 'Premium Cards', 'magazine': 'Magazine Report', 'copy': 'WhatsApp / Telegram', 'audit': 'Learning Audit', 'proof': 'Analyst Proof', 'exports': 'Exports', 'profile_json': 'Profile JSON', 'feed_json': 'App Feed', 'diagnostics': 'Diagnostics',
         'pdf': 'Download PDF', 'html': 'Download HTML', 'md': 'Download Markdown', 'json': 'Download JSON', 'csv': 'Download CSV', 'copy_download': 'Download WhatsApp copy',
-        'feed_saved': 'Latest app feed saved.', 'context_note': 'Sports context is added only when fields or configured JSON context are available. Missing context is labeled unavailable.',
-        'copy_label': 'Short copy', 'no_approved': 'No approved plays in this report.', 'cards_note': 'This restores the card-first view. Rows stay grouped by Best Plays, Watchlist, and No Play.',
+        'feed_saved': 'Latest unified app feed saved.', 'copy_label': 'Short copy', 'no_audit': 'No graded calibration data available yet.',
     },
     'es': {
         'title': 'Estudio de Reportes',
-        'caption': 'Reportes unificados para consumidor, tipster, cliente y prueba técnica.',
+        'caption': 'Reportes premium, prueba oficial +EV, auditoría de aprendizaje, exportaciones, perfiles y feed de app.',
         'input': 'Filas de entrada', 'workspace': 'ID de cliente / workspace', 'use_saved': 'Usar filas guardadas', 'upload': 'Subir CSV', 'source': 'Fuente',
         'empty': 'No hay filas. Usa Pro Predictor / Odds Lock Pro primero o sube un CSV.',
         'profile': 'Perfil white-label', 'profile_id': 'ID del perfil', 'profile_key': 'Clave del perfil', 'load_profile': 'Cargar perfil', 'save_profile': 'Guardar perfil',
         'brand_name': 'Marca / tipster', 'tagline': 'Lema', 'report_title': 'Título del reporte', 'logo_url': 'URL del logo', 'disclaimer': 'Aviso legal',
-        'mode': 'Modo de reporte', 'risk': 'Preferencia de riesgo', 'sports': 'Deportes', 'max_rows': 'Máximo de filas', 'visibility': 'Visibilidad del feed',
-        'best': 'Mejores jugadas', 'watch': 'Seguimiento', 'no_play': 'No jugar', 'avg': 'Probabilidad media del modelo', 'publish': 'Listas para publicar', 'warnings': 'Alertas',
-        'cards': 'Tarjetas premium', 'magazine': 'Reporte revista', 'copy': 'WhatsApp / Telegram', 'proof': 'Prueba técnica', 'exports': 'Exportaciones', 'profile_json': 'JSON del perfil', 'feed_json': 'Feed de app guardado',
+        'mode': 'Modo de reporte', 'risk': 'Preferencia de riesgo', 'sports': 'Filtro deporte / liga', 'max_rows': 'Máximo de filas', 'visibility': 'Visibilidad del feed',
+        'cards': 'Tarjetas premium', 'magazine': 'Reporte revista', 'copy': 'WhatsApp / Telegram', 'audit': 'Auditoría de aprendizaje', 'proof': 'Prueba técnica', 'exports': 'Exportaciones', 'profile_json': 'JSON del perfil', 'feed_json': 'Feed de app', 'diagnostics': 'Diagnóstico',
         'pdf': 'Descargar PDF', 'html': 'Descargar HTML', 'md': 'Descargar Markdown', 'json': 'Descargar JSON', 'csv': 'Descargar CSV', 'copy_download': 'Descargar copy WhatsApp',
-        'feed_saved': 'Feed de app actualizado guardado.', 'context_note': 'El contexto deportivo solo se agrega cuando existen campos o JSON configurado. Si falta, se marca como no disponible.',
-        'copy_label': 'Copy corto', 'no_approved': 'No hay jugadas aprobadas en este reporte.', 'cards_note': 'Esto restaura la vista primero con tarjetas. Las filas siguen agrupadas por mejores jugadas, seguimiento y no jugar.',
+        'feed_saved': 'Feed unificado de app guardado.', 'copy_label': 'Copy corto', 'no_audit': 'Aún no hay datos gradados para calibración.',
     },
 }
 
@@ -106,97 +94,8 @@ def sport_options(frame: pd.DataFrame) -> list[str]:
     return sorted({safe_text(value) for value in frame['sport'].tolist() if safe_text(value)})
 
 
-def avg_model_probability(cards: pd.DataFrame) -> str:
-    values = pd.to_numeric(cards.get('model_probability', pd.Series(dtype=float)), errors='coerce').dropna()
-    return 'N/A' if values.empty else f'{float(values.mean()) * 100:.1f}%'
-
-
-def _pct_label(value: object, *, signed: bool = False) -> str:
-    try:
-        if pd.isna(value):
-            return 'N/A'
-        numeric = float(value)
-    except (TypeError, ValueError):
-        return 'N/A'
-    return f'{numeric * 100:+.1f}%' if signed else f'{numeric * 100:.1f}%'
-
-
-def render_card_deck_html(cards: pd.DataFrame) -> str:
-    if cards is None or cards.empty:
-        return f'<p>{html.escape(t("no_approved"))}</p>'
-    labels = {
-        'best_plays': t('best'),
-        'watchlist': t('watch'),
-        'no_play': t('no_play'),
-    }
-    css = '''<style>.aba-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(295px,1fr));gap:1rem}.aba-mini-card{border:1px solid rgba(125,125,125,.35);border-radius:18px;padding:1rem}.aba-mini-k{font-size:.74rem;opacity:.65;text-transform:uppercase;font-weight:800;letter-spacing:.04em}.aba-mini-v{font-weight:800}.aba-mini-row{display:grid;grid-template-columns:repeat(3,1fr);gap:.45rem}.aba-mini-box{border:1px solid rgba(125,125,125,.25);border-radius:12px;padding:.5rem}.aba-section-title{margin-top:1.2rem}</style>'''
-    parts = [css, f'<p style="opacity:.72">{html.escape(t("cards_note"))}</p>']
-    groups = grouped_report(cards)
-    for key in ('best_plays', 'watchlist', 'no_play'):
-        section = groups.get(key, pd.DataFrame())
-        parts.append(f'<h2 class="aba-section-title">{html.escape(labels[key])}</h2>')
-        if section.empty:
-            parts.append(f'<p>{html.escape(t("no_approved"))}</p>')
-            continue
-        parts.append('<div class="aba-card-grid">')
-        for _, row in section.iterrows():
-            rowd = row.to_dict()
-            title = safe_text(rowd.get('event')) or 'Matchup'
-            sport = safe_text(rowd.get('public_sport')) or safe_text(rowd.get('sport')) or 'Sport'
-            pick = safe_text(rowd.get('public_pick')) or safe_text(rowd.get('prediction'))
-            action = safe_text(rowd.get('recommended_action'))
-            confidence = safe_text(rowd.get('confidence_tier'))
-            risk = safe_text(rowd.get('risk_tier'))
-            market = safe_text(rowd.get('market_read'))
-            preview = safe_text(rowd.get('game_preview'))
-            parts.extend([
-                '<article class="aba-mini-card">',
-                f'<div class="aba-mini-k">{html.escape(sport)}</div>',
-                f'<h3>{html.escape(title)}</h3>',
-                f'<p><b>{html.escape("Selección" if LANG == "es" else "Pick")}:</b> {html.escape(pick)}</p>',
-                '<div class="aba-mini-row">',
-                f'<div class="aba-mini-box"><div class="aba-mini-k">{html.escape("Acción" if LANG == "es" else "Action")}</div><div class="aba-mini-v">{html.escape(action)}</div></div>',
-                f'<div class="aba-mini-box"><div class="aba-mini-k">{html.escape("Confianza" if LANG == "es" else "Confidence")}</div><div class="aba-mini-v">{html.escape(confidence)}</div></div>',
-                f'<div class="aba-mini-box"><div class="aba-mini-k">{html.escape("Riesgo" if LANG == "es" else "Risk")}</div><div class="aba-mini-v">{html.escape(risk)}</div></div>',
-                '</div>',
-                f'<p><b>{html.escape("Mercado" if LANG == "es" else "Market read")}:</b> {html.escape(market)}</p>',
-                f'<p>{html.escape(preview)}</p>',
-                '</article>',
-            ])
-        parts.append('</div>')
-    return '\n'.join(parts)
-
-
-def render_whatsapp_copy(cards: pd.DataFrame, brand: MagazineBrand, *, max_items: int = 8) -> str:
-    groups = grouped_report(cards)
-    es = LANG == 'es'
-    title = brand.report_title or ('Reporte de tendencias' if es else 'Trend Report')
-    lines = [f'{title}', f'{brand.brand_name} — {brand.tagline}', '']
-    sections = [
-        ('best_plays', '✅ Mejores jugadas' if es else '✅ Best Plays'),
-        ('watchlist', '👀 Seguimiento' if es else '👀 Watchlist'),
-        ('no_play', '⛔ No jugar / removidas' if es else '⛔ No Play / Removed'),
-    ]
-    for key, label in sections:
-        section = groups.get(key, pd.DataFrame())
-        lines.append(label)
-        if section.empty:
-            lines.append('— ' + ('Sin selecciones en esta sección.' if es else 'No picks in this section.'))
-        else:
-            for _, row in section.head(max_items).iterrows():
-                rowd = row.to_dict()
-                event = safe_text(rowd.get('event')) or 'Matchup'
-                pick = safe_text(rowd.get('public_pick') or rowd.get('prediction'))
-                action = safe_text(rowd.get('recommended_action'))
-                market = safe_text(rowd.get('market_read'))
-                lines.append(f'— {event}: {pick}')
-                lines.append(f'  {"Acción" if es else "Action"}: {action}')
-                if market:
-                    lines.append(f'  {"Mercado" if es else "Market"}: {market}')
-        lines.append('')
-    if brand.disclaimer:
-        lines.append(brand.disclaimer)
-    return '\n'.join(lines).strip()
+def safe_workspace_name(value: str) -> str:
+    return ''.join(ch if ch.isalnum() or ch in {'_', '-'} else '_' for ch in str(value or 'report'))
 
 
 st.title(t('title'))
@@ -210,14 +109,15 @@ with st.expander(t('input'), expanded=True):
     saved_source, saved_rows = rows_from_saved_sources(workspace_id) if use_saved else ('', pd.DataFrame())
     upload_source, upload_rows = read_uploaded_rows()
     raw = pd.concat([frame for frame in (saved_rows, upload_rows) if frame is not None and not frame.empty], ignore_index=True, sort=False) if (not saved_rows.empty or not upload_rows.empty) else pd.DataFrame()
-    st.caption(f"{t('source')}: " + (', '.join([name for name in (saved_source, upload_source) if name]) or 'none'))
+    source_note = ', '.join([name for name in (saved_source, upload_source) if name]) or 'none'
+    st.caption(f"{t('source')}: {source_note}")
 
 if raw.empty:
     st.warning(t('empty'))
     st.stop()
 
-normalized = normalize_frame(raw)
-all_sport_options = sport_options(normalized)
+normalized_preview = normalize_frame(raw)
+all_sport_options = sport_options(normalized_preview)
 
 with st.expander(t('profile'), expanded=True):
     profile_rows = list_profiles()
@@ -270,70 +170,59 @@ with st.expander(t('profile'), expanded=True):
         st.success(t('save_profile'))
 
 max_rows = st.number_input(t('max_rows'), min_value=1, max_value=500, value=75, step=1)
-
-filtered = normalized.copy()
-if preferred_sports and 'sport' in filtered.columns:
-    filtered = filtered[filtered['sport'].map(safe_text).isin(preferred_sports)].copy()
-filtered = filtered.head(int(max_rows)).copy()
-filtered = enrich_sports_context(filtered, language=LANG)
-
-brand = MagazineBrand(
-    brand_name=brand_name,
-    tagline=tagline,
-    report_title=report_title,
-    workspace_id=workspace_id,
-    language=LANG,
-    logo_url=logo_url,
-    disclaimer=disclaimer,
-)
-cards = enrich_rows(filtered, language=LANG)
-if 'sports_context_summary' in cards.columns:
-    unavailable = CONTEXT_UNAVAILABLE.get(LANG, CONTEXT_UNAVAILABLE['en'])
-    has_context = cards['sports_context_summary'].map(safe_text).ne('').astype(bool) & cards['sports_context_summary'].ne(unavailable)
-    cards.loc[has_context, 'game_preview'] = cards.loc[has_context, 'sports_context_summary']
-
-groups = grouped_report(cards)
 mode_key = 'analyst' if technical else 'consumer'
-card_deck_html = render_card_deck_html(cards)
-html_report = render_consumer_magazine_html(cards, brand, mode=mode_key)
-markdown_report = render_markdown_summary(cards, brand, mode=mode_key)
-whatsapp_copy = render_whatsapp_copy(cards, brand)
-json_report = cards_to_json(cards)
-pdf_bytes = render_report_pdf(cards, brand, mode=mode_key)
-csv_payload = cards.to_csv(index=False)
-feed = save_app_feed(cards, brand, mode=mode_key, public=visibility == 'public')
+brand = MagazineBrand(brand_name=brand_name, tagline=tagline, report_title=report_title, workspace_id=workspace_id, language=LANG, logo_url=logo_url, disclaimer=disclaimer)
+filters = ReportStudioFilters(selected_sports=tuple(preferred_sports), max_rows=int(max_rows), language=LANG, mode=mode_key, public_feed=visibility == 'public')
+state = build_report_studio_state(raw, brand, filters=filters, source_note=source_note)
+cards = state.cards
+bundle = state.exports
+feed = save_report_feed(cards, brand, mode=mode_key, public=visibility == 'public')
+summary = report_studio_summary(state)
 
-m1, m2, m3, m4, m5, m6 = st.columns(6)
-m1.metric(t('best'), len(groups['best_plays']))
-m2.metric(t('watch'), len(groups['watchlist']))
-m3.metric(t('no_play'), len(groups['no_play']))
-m4.metric(t('avg'), avg_model_probability(cards))
-m5.metric(t('publish'), int(cards.get('publish_ready', pd.Series(dtype=bool)).astype(bool).sum()) if not cards.empty else 0)
-m6.metric(t('warnings'), int((~cards.get('publish_ready', pd.Series(dtype=bool)).astype(bool)).sum()) if not cards.empty else 0)
-st.caption(t('context_note'))
+st.markdown(render_status_dashboard(cards, language=LANG), unsafe_allow_html=True)
+st.caption(state.context_note)
 
-safe_workspace = ''.join(ch if ch.isalnum() or ch in {'_', '-'} else '_' for ch in workspace_id)
-tabs = st.tabs([t('cards'), t('magazine'), t('copy'), t('proof'), t('exports'), t('profile_json'), t('feed_json')])
+safe_workspace = safe_workspace_name(workspace_id)
+tabs = st.tabs([t('cards'), t('magazine'), t('copy'), t('audit'), t('proof'), t('exports'), t('profile_json'), t('feed_json'), t('diagnostics')])
 with tabs[0]:
-    st.markdown(card_deck_html, unsafe_allow_html=True)
+    st.markdown(render_premium_card_deck(cards, language=LANG), unsafe_allow_html=True)
 with tabs[1]:
-    st.markdown(html_report, unsafe_allow_html=True)
+    st.markdown(bundle.html, unsafe_allow_html=True)
 with tabs[2]:
-    st.text_area(t('copy_label'), value=whatsapp_copy, height=420)
-    st.download_button(t('copy_download'), data=whatsapp_copy, file_name=f'whatsapp_copy_{safe_workspace}.txt', mime='text/plain')
+    st.text_area(t('copy_label'), value=bundle.whatsapp, height=420)
+    st.download_button(t('copy_download'), data=bundle.whatsapp, file_name=f'whatsapp_copy_{safe_workspace}.txt', mime='text/plain')
 with tabs[3]:
-    proof_cols = ['event', 'sport', 'prediction', 'decimal_price', 'model_probability', 'market_probability', 'model_market_edge', 'expected_value_per_unit', 'odds_verified', 'report_lane', 'publish_ready', 'tennis_blocked', 'proof_id', 'locked_at_utc', 'odds_source', 'bookmaker', 'model_probability_source', 'sports_context_summary']
+    if not state.audit:
+        st.info(t('no_audit'))
+    for name, table in state.audit.items():
+        st.subheader(name.replace('_', ' ').title())
+        st.dataframe(table, use_container_width=True, hide_index=True)
+with tabs[4]:
+    proof_cols = [
+        'event', 'sport', 'prediction', 'decimal_price', 'model_probability', 'market_probability', 'model_market_edge', 'expected_value_per_unit',
+        'model_lean_label', 'price_value_label', 'official_status_label', 'result_status', 'learning_status', 'official_publish_ready', 'client_report_ready', 'learning_ready',
+        'data_issue_reason', 'odds_verified', 'report_lane', 'report_lane_v2', 'publish_ready', 'tennis_blocked', 'proof_id', 'locked_at_utc', 'odds_source', 'bookmaker',
+        'model_probability_source', 'sports_context_summary', 'profit_units',
+    ]
     cols = [col for col in proof_cols if col in cards.columns]
     st.dataframe(cards[cols] if cols else cards, use_container_width=True, hide_index=True)
-with tabs[4]:
-    st.download_button(t('pdf'), data=pdf_bytes, file_name=f'report_{safe_workspace}.pdf', mime='application/pdf')
-    st.download_button(t('html'), data=html_report, file_name=f'report_{safe_workspace}.html', mime='text/html')
-    st.download_button(t('md'), data=markdown_report, file_name=f'report_{safe_workspace}.md', mime='text/markdown')
-    st.download_button(t('copy_download'), data=whatsapp_copy, file_name=f'whatsapp_copy_{safe_workspace}.txt', mime='text/plain')
-    st.download_button(t('json'), data=json_report, file_name=f'report_{safe_workspace}.json', mime='application/json')
-    st.download_button(t('csv'), data=csv_payload, file_name=f'report_{safe_workspace}.csv', mime='text/csv')
 with tabs[5]:
-    st.json(asdict(WhiteLabelProfile(profile_id=profile_id, workspace_id=workspace_id, brand_name=brand_name, logo_url=logo_url, tagline=tagline, language=LANG, report_title=report_title, disclaimer=disclaimer, preferred_report_mode=report_mode, preferred_sports=preferred_sports, risk_preference=risk_preference, show_technical_fields=technical, default_audience='analyst' if technical else 'consumer')))
+    st.download_button(t('pdf'), data=bundle.pdf_bytes, file_name=f'report_{safe_workspace}.pdf', mime='application/pdf')
+    st.download_button(t('html'), data=bundle.html, file_name=f'report_{safe_workspace}.html', mime='text/html')
+    st.download_button(t('md'), data=bundle.markdown, file_name=f'report_{safe_workspace}.md', mime='text/markdown')
+    st.download_button(t('copy_download'), data=bundle.whatsapp, file_name=f'whatsapp_copy_{safe_workspace}.txt', mime='text/plain')
+    st.download_button(t('json'), data=bundle.json_text, file_name=f'report_{safe_workspace}.json', mime='application/json')
+    st.download_button(t('csv'), data=bundle.csv_text, file_name=f'report_{safe_workspace}.csv', mime='text/csv')
 with tabs[6]:
+    st.json(asdict(WhiteLabelProfile(profile_id=profile_id, workspace_id=workspace_id, brand_name=brand_name, logo_url=logo_url, tagline=tagline, language=LANG, report_title=report_title, disclaimer=disclaimer, preferred_report_mode=report_mode, preferred_sports=preferred_sports, risk_preference=risk_preference, show_technical_fields=technical, default_audience='analyst' if technical else 'consumer')))
+with tabs[7]:
     st.success(t('feed_saved'))
     st.json(feed)
+with tabs[8]:
+    st.json({
+        'summary': summary,
+        'diagnostics': asdict(state.diagnostics),
+        'filters': asdict(state.filters),
+        'source': source_note,
+        'saved_feed_paths': feed.get('saved_paths', {}),
+    })
