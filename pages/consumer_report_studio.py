@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import html
-from typing import Any
+from typing import Any, Mapping
 
 import pandas as pd
 import streamlit as st
@@ -21,7 +21,7 @@ from autonomous_betting_agent.consumer_report_engine import (
     report_quality_summary,
 )
 from autonomous_betting_agent.pick_hold_store import load_first_available
-from autonomous_betting_agent.row_normalizer import ALIASES, normalize_frame, result_status, safe_text
+from autonomous_betting_agent.row_normalizer import normalize_frame, result_status, safe_text
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 
 st.set_page_config(page_title='Consumer Report Studio', layout='wide')
@@ -75,6 +75,8 @@ TEXT = {
         'settings_json': 'Current brand payload',
         'preview_cols': 'Preview columns',
         'quality_summary': 'Quality summary',
+        'require_odds': 'Require verified sportsbook odds for publish-ready status',
+        'odds_warning': 'Odds are unavailable or not verified on {count} selected row(s). These rows are model-only, edge is N/A, and they are not publish-ready.',
     },
     'es': {
         'title': 'Estudio de Reportes para Consumidores',
@@ -123,6 +125,8 @@ TEXT = {
         'settings_json': 'Payload actual de marca',
         'preview_cols': 'Columnas de vista previa',
         'quality_summary': 'Resumen de calidad',
+        'require_odds': 'Requerir cuotas verificadas para marcar listo para publicar',
+        'odds_warning': 'No hay cuotas verificadas en {count} fila(s). Estas filas son solo modelo, el edge es N/A y no están listas para publicar.',
     },
 }
 
@@ -134,6 +138,15 @@ HANDOFF_KEYS = (
     'what_are_the_odds_latest_rows',
     'ara_latest_predictions',
 )
+
+UNVERIFIED_SOURCE_TOKENS = (
+    '.csv', 'session:', 'saved:', 'persistent', 'ledger', 'storage', 'upload', 'export',
+    'model', 'model_only', 'high_confidence', 'pro_predictor', 'consensus_average',
+    'fallback', 'unavailable', 'missing', 'no odds', 'no_odds', 'api limit', 'limit reached',
+    'quota', 'maxed', 'rate limit', 'offline', 'simulated', 'research', 'test',
+)
+ODDS_BLOCKER_TEXT = 'Missing valid odds'
+ODDS_BLOCKER_TEXT_ES = 'Falta cuota válida'
 
 
 def t(key: str) -> str:
@@ -228,305 +241,193 @@ def _probability_float(value: Any) -> float | None:
 
 def _pct_label(value: float | None, *, signed: bool = False) -> str:
     if value is None:
-        return '-'
+        return 'N/A'
     return f'{value * 100:+.1f}%' if signed else f'{value * 100:.1f}%'
 
 
-def _market_probability_from_odds(odds: Any) -> float | None:
-    decimal_odds = _safe_float(odds)
-    if decimal_odds is None or decimal_odds <= 1.0:
-        return None
-    return 1.0 / decimal_odds
+def _decimal_price(row: Mapping[str, Any]) -> float | None:
+    for name in ('decimal_price', 'best_price', 'average_price', 'avg_price', 'sportsbook_odds', 'odds_decimal'):
+        value = _safe_float(row.get(name))
+        if value is not None and value > 1.0:
+            return value
+    return None
 
 
-def _probability_source(source_row: pd.Series | dict[str, Any] | None) -> str:
-    if source_row is None:
-        return ''
-    aliases = ALIASES.get('model_probability', ('model_probability',))
-    lookup = dict(source_row)
-    lower_lookup = {str(key).strip().lower(): key for key in lookup}
-
-    non_canonical_sources: list[str] = []
-    for alias in aliases:
-        original_key = lower_lookup.get(alias.lower())
-        if original_key is None:
-            continue
-        if not safe_text(lookup.get(original_key)):
-            continue
-        if alias != 'model_probability':
-            non_canonical_sources.append(alias)
-    if non_canonical_sources:
-        return non_canonical_sources[0]
-
-    original_key = lower_lookup.get('model_probability')
-    if original_key is not None and safe_text(lookup.get(original_key)):
-        return 'model_probability'
-    return ''
+def _market_source(row: Mapping[str, Any]) -> str:
+    # Do not treat source_file as a sportsbook source. It only identifies the CSV/handoff origin.
+    return safe_text(row.get('bookmaker')) or safe_text(row.get('sportsbook')) or safe_text(row.get('book')) or safe_text(row.get('odds_source'))
 
 
-def _consumer_status(row: pd.Series, language: str) -> str:
-    status = safe_text(row.get('publish_status')).lower()
-    confidence = safe_text(row.get('confidence')).lower()
-    proof_id = safe_text(row.get('proof_id'))
-    spanish = language == 'es'
-
-    if 'official' in status or 'oficial' in status:
-        return 'Pick oficial' if spanish else 'Official Pick'
-    if 'research' in status or 'investigación' in status or 'investigacion' in status:
-        return 'Lean del modelo' if spanish else 'Research Lean'
-    if proof_id or 'locked' in status or 'bloqueado' in status:
-        return 'Pick trackeado' if spanish else 'Tracked Pick'
-    if 'high' in confidence or 'alta' in confidence:
-        return 'Señal alta' if spanish else 'High Signal'
-    return 'Sin prueba' if spanish else 'Unverified'
+def _source_is_verified(source: str) -> bool:
+    text = safe_text(source).lower()
+    if not text:
+        return False
+    return not any(token in text for token in UNVERIFIED_SOURCE_TOKENS)
 
 
-def _value_rating(edge: float | None, language: str) -> str:
-    spanish = language == 'es'
+def has_verified_market_odds(row: Mapping[str, Any]) -> bool:
+    return _decimal_price(row) is not None and _source_is_verified(_market_source(row))
+
+
+def sanitize_model_only_rows(frame: pd.DataFrame, *, require_verified_odds: bool) -> tuple[pd.DataFrame, int]:
+    if frame is None or frame.empty or not require_verified_odds:
+        return frame, 0
+    out = frame.copy()
+    invalid_indexes: list[int] = []
+    for idx, row in out.iterrows():
+        if not has_verified_market_odds(row.to_dict()):
+            invalid_indexes.append(idx)
+    if not invalid_indexes:
+        return out, 0
+
+    clear_price_cols = [
+        'decimal_price', 'best_price', 'average_price', 'avg_price', 'sportsbook_odds', 'odds_decimal',
+        'model_edge', 'model_market_edge', 'edge_probability', 'edge', 'expected_value_per_unit',
+        'computed_ev_decimal', 'estimated_ev_decimal', 'estimated_ev', 'ev', '_robust_expected_value',
+        'robust_expected_value', '_robust_profit_at_80_percent', 'robust_profit_at_80_percent',
+    ]
+    for idx in invalid_indexes:
+        for col in clear_price_cols:
+            if col in out.columns:
+                out.at[idx, col] = ''
+        for col in ('bookmaker', 'sportsbook', 'book'):
+            if col in out.columns:
+                out.at[idx, col] = ''
+        out.at[idx, 'odds_source'] = 'odds_unavailable_api_limit'
+        out.at[idx, 'odds_status'] = 'odds_unavailable'
+        out.at[idx, 'official_lock_ready'] = False
+        out.at[idx, 'official_ev_pick'] = False
+        out.at[idx, 'ledger_type'] = 'research_model_only'
+        existing = safe_text(out.at[idx, 'lock_blockers']) if 'lock_blockers' in out.columns else ''
+        blockers = [part.strip() for part in existing.split(';') if part.strip()]
+        if 'odds_unavailable' not in blockers:
+            blockers.append('odds_unavailable')
+        out.at[idx, 'lock_blockers'] = '; '.join(blockers)
+    return out, len(invalid_indexes)
+
+
+def _append_flag(flags: Any, value: str) -> str:
+    items = [part.strip() for part in safe_text(flags).split(';') if part.strip()]
+    if value not in items:
+        items.append(value)
+    return '; '.join(items)
+
+
+def _value_rating(edge: float | None, odds_valid: bool) -> str:
+    if not odds_valid:
+        return 'Odds unavailable' if LANG == 'en' else 'Cuotas no disponibles'
     if edge is None:
-        return 'Sin dato' if spanish else 'Unknown'
+        return 'Unknown' if LANG == 'en' else 'Sin dato'
     if edge >= 0.05:
-        return 'Valor fuerte' if spanish else 'Strong Value'
+        return 'Strong Value' if LANG == 'en' else 'Valor fuerte'
     if edge >= 0.02:
-        return 'Valor positivo' if spanish else 'Positive Value'
+        return 'Positive Value' if LANG == 'en' else 'Valor positivo'
     if edge > -0.01:
         return 'Neutral'
-    return 'Valor negativo' if spanish else 'Negative Value'
+    return 'Negative Value' if LANG == 'en' else 'Valor negativo'
 
 
-def _probability_audit(model_prob: float | None, market_prob: float | None, edge: float | None, source: str, language: str) -> str:
-    spanish = language == 'es'
-    source_label = source or ('sin fuente' if spanish else 'no source')
+def _audit_message(model_prob: float | None, market_prob: float | None, odds_valid: bool) -> str:
     if model_prob is None:
-        return 'Falta probabilidad del modelo' if spanish else 'Missing model probability'
-    if market_prob is None:
-        return 'Falta cuota válida' if spanish else 'Missing valid odds'
-    if edge is not None and abs(edge) <= 0.003:
-        return 'Prob. modelo casi igual al mercado; sin edge claro' if spanish else 'Model prob nearly matches market; no clear edge'
-    if any(token in source_label.lower() for token in ('implied', 'market', 'odds_implied')):
-        return 'Revisar fuente de probabilidad' if spanish else 'Review probability source'
-    return f'Prob. modelo desde {source_label}' if spanish else f'Model prob from {source_label}'
+        return 'Missing model probability' if LANG == 'en' else 'Falta probabilidad del modelo'
+    if not odds_valid or market_prob is None:
+        return 'Odds unavailable/API limit; model-only, not publish-ready' if LANG == 'en' else 'Cuotas no disponibles/límite API; solo modelo, no publicar'
+    return 'Verified sportsbook odds loaded' if LANG == 'en' else 'Cuotas verificadas cargadas'
 
 
-def _premium_verdict(row: pd.Series, language: str) -> str:
-    return _consumer_status(row, language)
-
-
-def _consumer_bullets(row: pd.Series, language: str) -> list[str]:
-    spanish = language == 'es'
-    pick = safe_text(row.get('tendency') or row.get('prediction'))
-    market = safe_text(row.get('market'))
-    odds = safe_text(row.get('decimal_price')) or '-'
-    probability = safe_text(row.get('probability_label'))
-    market_probability = safe_text(row.get('market_probability_label'))
-    edge = safe_text(row.get('edge_label'))
-    value_rating = safe_text(row.get('value_rating'))
-    proof_id = safe_text(row.get('proof_id'))
-    status = safe_text(row.get('consumer_status'))
-    raw_bullets = [safe_text(row.get(f'bullet_{index}')) for index in range(1, 5)]
-    banned_terms = (
-        'no clear price edge', 'estimated ev per unit: -0.0', 'estimated ev per unit: 0.0',
-        'review before publishing', 'internal decision', 'decisión interna', 'decision interna',
-        'señal sin ventaja de cuota clara', 'ev estimado por unidad: -0.0', 'ev estimado por unidad: 0.0',
-        'logged price', 'cuota registrada', 'consensus_average',
-    )
-    clean: list[str] = []
-    for bullet in raw_bullets:
-        lower = bullet.lower()
-        if not bullet or any(term in lower for term in banned_terms):
-            continue
-        if bullet not in clean:
-            clean.append(bullet)
-
-    already_has_probability = any(('probability' in item.lower() or 'probabilidad' in item.lower()) for item in clean)
-    fallback: list[str] = []
-    if probability and not already_has_probability:
-        fallback.append(f'El modelo estima {probability} para {pick}.' if spanish else f'Model probability is {probability} for {pick}.')
-    if market_probability and edge:
-        fallback.append(f'Prob. mercado: {market_probability} | Edge: {edge} | Valor: {value_rating}.' if spanish else f'Market probability: {market_probability} | Edge: {edge} | Value: {value_rating}.')
-    elif market or odds:
-        fallback.append(f'Mercado: {market} | Cuota: {odds}.' if spanish else f'Market: {market} | Odds: {odds}.')
-    if proof_id:
-        fallback.append(f'Registrado con Proof ID {proof_id}.' if spanish else f'Tracked with Proof ID {proof_id}.')
-    elif status:
-        fallback.append(f'Estado: {status}.' if spanish else f'Status: {status}.')
-
-    for item in fallback:
-        if len(clean) >= 3:
-            break
-        if item not in clean:
-            clean.append(item)
-    return clean[:3]
-
-
-def enrich_value_columns(cards: pd.DataFrame, language: str, source_rows: pd.DataFrame | None = None) -> pd.DataFrame:
+def enrich_card_values(cards: pd.DataFrame, source_rows: pd.DataFrame) -> pd.DataFrame:
     if cards is None or cards.empty:
         return pd.DataFrame() if cards is None else cards
     out = cards.copy()
     source_records = source_rows.to_dict('records') if source_rows is not None and not source_rows.empty else []
+    for pos, idx in enumerate(out.index):
+        source_row = source_records[pos] if pos < len(source_records) else out.loc[idx].to_dict()
+        model_prob = _probability_float(out.at[idx, 'model_probability'] if 'model_probability' in out.columns else None)
+        odds_valid = has_verified_market_odds(source_row)
+        price = _decimal_price(source_row) if odds_valid else None
+        market_prob = None if price is None else 1.0 / price
+        edge = None if model_prob is None or market_prob is None else model_prob - market_prob
 
-    model_probs: list[float | None] = []
-    market_probs: list[float | None] = []
-    edges: list[float | None] = []
-    statuses: list[str] = []
-    probability_sources: list[str] = []
-    probability_audits: list[str] = []
-    value_ratings: list[str] = []
-
-    for index, (_, row) in enumerate(out.iterrows()):
-        source_row = source_records[index] if index < len(source_records) else row.to_dict()
-        model_prob = _probability_float(row.get('model_probability'))
-        market_prob = _market_probability_from_odds(row.get('decimal_price'))
-        edge = model_prob - market_prob if model_prob is not None and market_prob is not None else None
-        source = _probability_source(source_row)
-        status = _consumer_status(row, language)
-        rating = _value_rating(edge, language)
-        audit = _probability_audit(model_prob, market_prob, edge, source, language)
-
-        model_probs.append(model_prob)
-        market_probs.append(market_prob)
-        edges.append(edge)
-        statuses.append(status)
-        probability_sources.append(source or ('normalized_model_probability' if model_prob is not None else ''))
-        probability_audits.append(audit)
-        value_ratings.append(rating)
-
-    out['model_probability'] = model_probs
-    out['probability_label'] = [_pct_label(value) for value in model_probs]
-    out['market_probability'] = market_probs
-    out['market_probability_label'] = [_pct_label(value) for value in market_probs]
-    out['edge'] = edges
-    out['edge_label'] = [_pct_label(value, signed=True) for value in edges]
-    out['consumer_status'] = statuses
-    out['probability_source'] = probability_sources
-    out['probability_audit'] = probability_audits
-    out['value_rating'] = value_ratings
+        out.at[idx, 'model_probability'] = model_prob
+        out.at[idx, 'probability_label'] = _pct_label(model_prob)
+        out.at[idx, 'decimal_price'] = f'{price:.2f}' if price is not None else 'N/A'
+        out.at[idx, 'odds_label'] = f'{price:.2f}' if price is not None else 'N/A'
+        out.at[idx, 'market_probability'] = market_prob
+        out.at[idx, 'market_probability_label'] = _pct_label(market_prob)
+        out.at[idx, 'edge'] = edge
+        out.at[idx, 'edge_label'] = _pct_label(edge, signed=True)
+        out.at[idx, 'value_rating'] = _value_rating(edge, odds_valid)
+        out.at[idx, 'probability_audit'] = _audit_message(model_prob, market_prob, odds_valid)
+        out.at[idx, 'odds_status'] = 'verified' if odds_valid else 'unavailable'
+        out.at[idx, 'probability_source'] = 'model_probability' if model_prob is not None else ''
+        if not odds_valid:
+            out.at[idx, 'publish_ready'] = False
+            out.at[idx, 'quality_flags'] = _append_flag(out.at[idx, 'quality_flags'] if 'quality_flags' in out.columns else '', ODDS_BLOCKER_TEXT if LANG == 'en' else ODDS_BLOCKER_TEXT_ES)
+            if 'publish_status' in out.columns and 'official' in safe_text(out.at[idx, 'publish_status']).lower():
+                out.at[idx, 'publish_status'] = 'Research / test' if LANG == 'en' else 'Investigación / prueba'
+            out.at[idx, 'consumer_status'] = 'Model-only / odds unavailable' if LANG == 'en' else 'Solo modelo / sin cuotas'
+        else:
+            out.at[idx, 'consumer_status'] = 'Official Pick' if safe_text(out.at[idx, 'proof_id'] if 'proof_id' in out.columns else '') else 'Tracked Pick'
     return out
 
 
-def render_premium_cards_html(cards: pd.DataFrame, brand: BrandSettings) -> str:
+def render_cards_html(cards: pd.DataFrame, brand: BrandSettings) -> str:
     brand = brand.normalized()
-    language = brand.language
-    spanish = language == 'es'
     if cards is None or cards.empty:
-        return '<p>No hay picks disponibles.</p>' if spanish else '<p>No picks available.</p>'
-
-    title = brand.report_title or ('Reporte de Tendencias' if spanish else 'Trend Report')
-    subtitle = 'Vista ejecutiva para consumidores' if spanish else 'Executive consumer view'
+        return '<p>No picks available.</p>' if brand.language == 'en' else '<p>No hay picks disponibles.</p>'
     labels = {
-        'recommendation': 'Recomendación' if spanish else 'Recommendation',
-        'odds': 'Cuota' if spanish else 'Odds',
-        'model_prob': 'Prob. modelo' if spanish else 'Model Prob.',
-        'market_prob': 'Prob. mercado' if spanish else 'Market Prob.',
+        'pick': 'Pick' if brand.language == 'en' else 'Pick',
+        'odds': 'Odds' if brand.language == 'en' else 'Cuota',
+        'model': 'Model Prob.' if brand.language == 'en' else 'Prob. modelo',
+        'market': 'Market Prob.' if brand.language == 'en' else 'Prob. mercado',
         'edge': 'Edge',
-        'status': 'Estado' if spanish else 'Status',
-        'value': 'Valor' if spanish else 'Value',
-        'data_check': 'Control de datos' if spanish else 'Data Check',
-        'match': 'Partido' if spanish else 'Match',
-        'source': 'Fuente' if spanish else 'Source',
-        'proof_pending': 'Proof pendiente' if spanish else 'Proof pending',
+        'status': 'Status' if brand.language == 'en' else 'Estado',
+        'data': 'Data Check' if brand.language == 'en' else 'Control de datos',
+        'value': 'Value' if brand.language == 'en' else 'Valor',
     }
-
     css = '''
     <style>
-    .aba-premium-wrap{margin:1rem 0 1.5rem 0}
-    .aba-premium-hero{border:1px solid rgba(125,125,125,.35);border-radius:24px;padding:1.1rem 1.25rem;margin-bottom:1rem;background:linear-gradient(135deg,rgba(255,255,255,.10),rgba(255,255,255,.035))}
-    .aba-premium-hero h2{margin:.1rem 0 .25rem 0;font-size:1.55rem}
-    .aba-premium-hero p{margin:.15rem 0;opacity:.82}
-    .aba-premium-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:1.05rem}
-    .aba-premium-card{position:relative;overflow:hidden;border:1px solid rgba(125,125,125,.38);border-radius:24px;padding:1.05rem 1.08rem;background:radial-gradient(circle at top right,rgba(255,255,255,.12),rgba(255,255,255,.035) 38%,rgba(255,255,255,.025));box-shadow:0 10px 28px rgba(0,0,0,.18)}
-    .aba-premium-card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:rgba(255,255,255,.42)}
-    .aba-card-top{display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start}
-    .aba-card-league{font-size:.78rem;letter-spacing:.04em;text-transform:uppercase;opacity:.68;font-weight:750}
-    .aba-verdict{display:inline-block;border:1px solid rgba(125,125,125,.45);border-radius:999px;padding:.22rem .55rem;font-size:.76rem;font-weight:800;white-space:nowrap}
-    .aba-premium-card h3{font-size:1.55rem;line-height:1.08;margin:.52rem 0 .7rem 0}
-    .aba-recommendation{border-radius:18px;padding:.82rem .9rem;background:rgba(255,255,255,.07);margin:.4rem 0 .85rem 0}
-    .aba-recommendation .label{font-size:.75rem;text-transform:uppercase;letter-spacing:.07em;opacity:.67;font-weight:850}
-    .aba-recommendation .pick{font-size:1.22rem;font-weight:900;margin:.2rem 0 0 0}
-    .aba-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.45rem;margin:.7rem 0}
-    .aba-metric{border:1px solid rgba(125,125,125,.33);border-radius:16px;padding:.48rem .55rem}
-    .aba-metric .k{font-size:.66rem;text-transform:uppercase;letter-spacing:.055em;opacity:.62;font-weight:800}
-    .aba-metric .v{font-size:.9rem;font-weight:850;margin-top:.08rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .aba-meter{height:8px;border-radius:999px;background:rgba(125,125,125,.25);overflow:hidden;margin:.65rem 0 .75rem 0}
-    .aba-meter span{display:block;height:100%;border-radius:999px;background:rgba(255,255,255,.58)}
-    .aba-proof{font-size:.83rem;opacity:.82;margin:.35rem 0 .2rem 0}
-    .aba-card-check{display:flex;flex-wrap:wrap;gap:.35rem;margin:.55rem 0 .15rem 0}
-    .aba-check-pill{display:inline-block;border:1px solid rgba(125,125,125,.35);border-radius:999px;padding:.26rem .58rem;font-size:.76rem;font-weight:750;opacity:.9}
-    .aba-why{margin:.72rem 0 0 0;padding-left:1.15rem}
-    .aba-why li{margin:.35rem 0;line-height:1.35}
-    .aba-card-foot{font-size:.78rem;opacity:.62;margin-top:.65rem}
-    @media(max-width:760px){.aba-premium-grid{grid-template-columns:1fr}.aba-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.aba-premium-card h3{font-size:1.35rem}}
+    .aba-premium-wrap{margin:1rem 0 1.5rem 0}.aba-premium-hero{border:1px solid rgba(125,125,125,.35);border-radius:24px;padding:1.1rem 1.25rem;margin-bottom:1rem;background:linear-gradient(135deg,rgba(255,255,255,.10),rgba(255,255,255,.035))}.aba-premium-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:1.05rem}.aba-premium-card{position:relative;overflow:hidden;border:1px solid rgba(125,125,125,.38);border-radius:24px;padding:1.05rem 1.08rem;background:radial-gradient(circle at top right,rgba(255,255,255,.12),rgba(255,255,255,.035) 38%,rgba(255,255,255,.025));box-shadow:0 10px 28px rgba(0,0,0,.18)}.aba-card-league{font-size:.78rem;letter-spacing:.04em;text-transform:uppercase;opacity:.68;font-weight:750}.aba-verdict{display:inline-block;border:1px solid rgba(125,125,125,.45);border-radius:999px;padding:.22rem .55rem;font-size:.76rem;font-weight:800;white-space:nowrap}.aba-card-top{display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start}.aba-premium-card h3{font-size:1.35rem;line-height:1.1;margin:.52rem 0 .7rem 0}.aba-recommendation{border-radius:18px;padding:.82rem .9rem;background:rgba(255,255,255,.07);margin:.4rem 0 .85rem 0}.aba-recommendation .label{font-size:.75rem;text-transform:uppercase;letter-spacing:.07em;opacity:.67;font-weight:850}.aba-recommendation .pick{font-size:1.12rem;font-weight:900;margin:.2rem 0 0 0}.aba-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.45rem;margin:.7rem 0}.aba-metric{border:1px solid rgba(125,125,125,.33);border-radius:16px;padding:.48rem .55rem}.aba-metric .k{font-size:.66rem;text-transform:uppercase;letter-spacing:.055em;opacity:.62;font-weight:800}.aba-metric .v{font-size:.9rem;font-weight:850;margin-top:.08rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.aba-meter{height:8px;border-radius:999px;background:rgba(125,125,125,.25);overflow:hidden;margin:.65rem 0 .75rem 0}.aba-meter span{display:block;height:100%;border-radius:999px;background:rgba(255,255,255,.58)}.aba-check-pill{display:inline-block;border:1px solid rgba(125,125,125,.35);border-radius:999px;padding:.26rem .58rem;font-size:.76rem;font-weight:750;opacity:.9;margin:.15rem}.aba-why{margin:.72rem 0 0 0;padding-left:1.15rem}.aba-why li{margin:.35rem 0;line-height:1.35}@media(max-width:760px){.aba-premium-grid{grid-template-columns:1fr}.aba-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
     </style>
     '''
-    parts = [
-        css,
-        '<div class="aba-premium-wrap">',
-        '<section class="aba-premium-hero">',
-        f'<h2>{html.escape(title)}</h2>',
-        f'<p><strong>{html.escape(brand.brand_name)}</strong> — {html.escape(brand.tagline)}</p>',
-        f'<p>{html.escape(subtitle)} · {html.escape(brand.workspace_id)}</p>',
-        '</section>',
-        '<div class="aba-premium-grid">',
-    ]
-
+    parts = [css, '<div class="aba-premium-wrap">', '<section class="aba-premium-hero">', f'<h2>{html.escape(brand.report_title or "Trend Report")}</h2>', f'<p><strong>{html.escape(brand.brand_name)}</strong> — {html.escape(brand.tagline)}</p>', f'<p>{html.escape(brand.workspace_id)}</p>', '</section>', '<div class="aba-premium-grid">']
     for _, row in cards.fillna('').iterrows():
-        probability = _probability_float(row.get('model_probability'))
-        width = 0 if probability is None else max(0, min(100, int(round(probability * 100))))
-        league = ' · '.join(part for part in [safe_text(row.get('sport')), safe_text(row.get('market'))] if part)
-        event = safe_text(row.get('event'))
-        pick = safe_text(row.get('tendency') or row.get('prediction'))
-        odds = safe_text(row.get('decimal_price')) or '-'
-        model_probability = safe_text(row.get('probability_label')) or '-'
-        market_probability = safe_text(row.get('market_probability_label')) or '-'
-        edge = safe_text(row.get('edge_label')) or '-'
-        status = safe_text(row.get('consumer_status')) or _consumer_status(row, language)
-        value_rating = safe_text(row.get('value_rating')) or '-'
-        probability_audit = safe_text(row.get('probability_audit')) or '-'
-        probability_source = safe_text(row.get('probability_source'))
-        proof_id = safe_text(row.get('proof_id'))
-        bullets = _consumer_bullets(row, language)
-        proof_line = f'Proof ID: {proof_id}' if proof_id else labels['proof_pending']
-        data_check = probability_audit + (f' · {probability_source}' if probability_source else '')
-
+        prob = _probability_float(row.get('model_probability'))
+        width = 0 if prob is None else max(0, min(100, int(round(prob * 100))))
+        bullets = [safe_text(row.get(f'bullet_{i}')) for i in range(1, 5) if safe_text(row.get(f'bullet_{i}'))]
         parts += [
             '<article class="aba-premium-card">',
             '<div class="aba-card-top">',
-            f'<div class="aba-card-league">{html.escape(league or labels["match"])}</div>',
-            f'<div class="aba-verdict">{html.escape(status)}</div>',
+            f'<div class="aba-card-league">{html.escape(safe_text(row.get("sport")) or "Match")}</div>',
+            f'<div class="aba-verdict">{html.escape(safe_text(row.get("consumer_status")) or safe_text(row.get("publish_status")))}</div>',
             '</div>',
-            f'<h3>{html.escape(event)}</h3>',
+            f'<h3>{html.escape(safe_text(row.get("event")))}</h3>',
             '<div class="aba-recommendation">',
-            f'<div class="label">{html.escape(labels["recommendation"])}</div>',
-            f'<div class="pick">{html.escape(pick)}</div>',
+            f'<div class="label">{html.escape(labels["pick"])}</div>',
+            f'<div class="pick">{html.escape(safe_text(row.get("tendency") or row.get("prediction")))}</div>',
             '</div>',
             '<div class="aba-metrics">',
-            f'<div class="aba-metric"><div class="k">{html.escape(labels["odds"])}</div><div class="v">{html.escape(odds)}</div></div>',
-            f'<div class="aba-metric"><div class="k">{html.escape(labels["model_prob"])}</div><div class="v">{html.escape(model_probability)}</div></div>',
-            f'<div class="aba-metric"><div class="k">{html.escape(labels["market_prob"])}</div><div class="v">{html.escape(market_probability)}</div></div>',
-            f'<div class="aba-metric"><div class="k">{html.escape(labels["edge"])}</div><div class="v">{html.escape(edge)}</div></div>',
-            f'<div class="aba-metric"><div class="k">{html.escape(labels["status"])}</div><div class="v">{html.escape(status)}</div></div>',
+            f'<div class="aba-metric"><div class="k">{html.escape(labels["odds"])}</div><div class="v">{html.escape(safe_text(row.get("decimal_price")) or "N/A")}</div></div>',
+            f'<div class="aba-metric"><div class="k">{html.escape(labels["model"])}</div><div class="v">{html.escape(safe_text(row.get("probability_label")) or "N/A")}</div></div>',
+            f'<div class="aba-metric"><div class="k">{html.escape(labels["market"])}</div><div class="v">{html.escape(safe_text(row.get("market_probability_label")) or "N/A")}</div></div>',
+            f'<div class="aba-metric"><div class="k">{html.escape(labels["edge"])}</div><div class="v">{html.escape(safe_text(row.get("edge_label")) or "N/A")}</div></div>',
+            f'<div class="aba-metric"><div class="k">{html.escape(labels["status"])}</div><div class="v">{html.escape(safe_text(row.get("publish_status")))}</div></div>',
             '</div>',
             f'<div class="aba-meter"><span style="width:{width}%"></span></div>',
-            f'<div class="aba-proof">{html.escape(proof_line)}</div>',
-            '<div class="aba-card-check">',
-            f'<span class="aba-check-pill">{html.escape(labels["value"])}: {html.escape(value_rating)}</span>',
-            f'<span class="aba-check-pill">{html.escape(labels["data_check"])}: {html.escape(data_check)}</span>',
-            '</div>',
+            f'<span class="aba-check-pill">{html.escape(labels["value"])}: {html.escape(safe_text(row.get("value_rating")))}</span>',
+            f'<span class="aba-check-pill">{html.escape(labels["data"])}: {html.escape(safe_text(row.get("probability_audit")))}</span>',
         ]
-
         if bullets:
             parts.append('<ul class="aba-why">')
-            for bullet in bullets:
+            for bullet in bullets[:3]:
                 parts.append(f'<li>{html.escape(bullet)}</li>')
             parts.append('</ul>')
-
-        source = safe_text(row.get('source'))
-        if source:
-            parts.append(f'<div class="aba-card-foot">{html.escape(labels["source"])}: {html.escape(source)}</div>')
+        proof = safe_text(row.get('proof_id'))
+        if proof:
+            parts.append(f'<p style="opacity:.72;font-size:.82rem">Proof ID: {html.escape(proof)}</p>')
         parts.append('</article>')
-
     parts += ['</div>', '</div>']
-    disclaimer = brand.disclaimer or ('Contenido informativo. No garantiza resultados.' if spanish else 'Informational content only. Results are not guaranteed.')
+    disclaimer = brand.disclaimer or ('Informational content only. Results are not guaranteed.' if brand.language == 'en' else 'Contenido informativo. No garantiza resultados.')
     if disclaimer:
         parts.append(f'<p style="opacity:.72;font-size:.88rem">{html.escape(disclaimer)}</p>')
     return '\n'.join(parts)
@@ -582,11 +483,12 @@ brand = BrandSettings(
 )
 
 with st.expander(t('filters'), expanded=True):
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     max_rows = c1.number_input(t('max_rows'), min_value=1, max_value=100, value=12, step=1)
     min_probability = c2.number_input(t('min_probability'), min_value=0.0, max_value=0.99, value=0.0, step=0.01)
     official_only = c3.checkbox(t('official_only'), value=False)
     pending_only = c4.checkbox(t('pending_only'), value=False)
+    require_verified_odds = c5.checkbox(t('require_odds'), value=True)
 
     f1, f2, f3, f4 = st.columns(4)
     sport_filter = f1.multiselect(t('sport_filter'), unique_options(normalized, 'sport'))
@@ -603,6 +505,10 @@ if result_filter and not filtered.empty:
     statuses = status_series(filtered)
     filtered = filtered[statuses.isin(result_filter)].copy()
 
+filtered, unavailable_count = sanitize_model_only_rows(filtered, require_verified_odds=require_verified_odds)
+if unavailable_count:
+    st.warning(t('odds_warning').format(count=unavailable_count))
+
 report_rows = prepare_report_frame(
     filtered,
     min_probability=float(min_probability),
@@ -610,7 +516,8 @@ report_rows = prepare_report_frame(
     pending_only=bool(pending_only),
     max_rows=int(max_rows),
 )
-cards = enrich_value_columns(consumer_cards(report_rows, brand), LANG, report_rows)
+report_rows, selected_unavailable_count = sanitize_model_only_rows(report_rows, require_verified_odds=require_verified_odds)
+cards = enrich_card_values(consumer_cards(report_rows, brand), report_rows)
 st.session_state['consumer_report_latest_cards'] = cards.to_dict('records') if not cards.empty else []
 
 proof_rows = int(cards.get('proof_id', pd.Series(dtype=str)).map(safe_text).ne('').sum()) if not cards.empty and 'proof_id' in cards.columns else 0
@@ -622,9 +529,10 @@ m2.metric(t('avg_prob'), probability_metric(cards))
 m3.metric(t('proof_rows'), proof_rows)
 m4.metric(t('publish_ready'), quality['publish_ready'])
 m5.metric(t('warnings'), quality['warnings'])
+st.caption('Edge requires verified sportsbook odds. Missing or API-limited odds display as N/A and block publish-ready status.' if LANG == 'en' else 'El edge requiere cuotas verificadas. Si faltan cuotas o la API está limitada, se muestra N/A y no se puede publicar.')
 
 markdown_report = render_magazine_markdown(cards, brand)
-html_cards = render_premium_cards_html(cards, brand)
+html_cards = render_cards_html(cards, brand)
 html_report = render_magazine_html(cards, brand)
 short_copy = render_short_copy(cards, brand)
 json_feed = cards_to_json(cards, brand)
@@ -670,14 +578,11 @@ with tabs[4]:
 with tabs[5]:
     st.json(quality)
     st.caption(t('quality_summary'))
-    bullet_cols = [col for col in cards.columns if col.startswith('bullet_')]
-    cols = [
-        col for col in [
-            'event', 'sport', 'market', 'prediction', 'decimal_price', 'probability_label',
-            'market_probability_label', 'edge_label', 'value_rating', 'consumer_status',
-            'probability_source', 'probability_audit', 'confidence', 'risk',
-            'publish_status', 'proof_id', 'quality_flags',
-        ] + bullet_cols if col in cards.columns
+    preview_cols = [
+        'event', 'sport', 'market', 'prediction', 'decimal_price', 'odds_status', 'probability_label',
+        'market_probability_label', 'edge_label', 'value_rating', 'consumer_status', 'probability_audit',
+        'confidence', 'risk', 'publish_status', 'proof_id', 'quality_flags', 'lock_blockers',
     ]
+    cols = [col for col in preview_cols if col in cards.columns]
     st.caption(t('preview_cols'))
     st.dataframe(cards[cols] if cols else cards, use_container_width=True, hide_index=True)
