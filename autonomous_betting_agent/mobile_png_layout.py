@@ -100,6 +100,21 @@ def pretty_pick(raw_pick: str, market: str, sport: str) -> str:
     return pick or 'Research / Learning'
 
 
+def win_condition(pick: str, market: str) -> str:
+    lower = safe_text(pick).lower()
+    if market == 'Game Total':
+        number = ''.join(ch for ch in lower.replace('over', '').replace('under', '').split()[0:1])
+        if 'over' in lower:
+            return 'Wins if both teams combine for 3+ goals' if '2.5' in lower else 'Wins if total score goes over the listed number'
+        if 'under' in lower:
+            return 'Wins if both teams combine for 2 or fewer goals' if '2.5' in lower else 'Wins if total score stays under the listed number'
+    if market == 'Moneyline':
+        return 'Wins if the selected team/player wins'
+    if market == 'Spread':
+        return 'Wins if the selected side covers the spread'
+    return ''
+
+
 def card_text(row: Mapping[str, Any]) -> tuple[str, str, str, str, str]:
     event = safe_text(row.get('event') or row.get('matchup')) or 'Matchup'
     raw_pick = first(row, ('public_pick', 'prediction', 'consumer_action', 'recommended_action')) or 'Research / Learning'
@@ -109,13 +124,17 @@ def card_text(row: Mapping[str, Any]) -> tuple[str, str, str, str, str]:
     market = pretty_market(market_raw)
     pick = pretty_pick(raw_pick, market, sport)
     price = safe_text(row.get('decimal_price') or row.get('best_price') or row.get('odds_decimal'))
-    detail_parts = [sport, f'Market: {market}']
+    confidence = first(row, ('confidence_tier', 'confidence', 'model_lean_label'))
+    edge = safe_text(row.get('model_market_edge') or row.get('edge') or row.get('edge_percent'))
+    detail_parts = [f'Teams: {event}', f'Market: {market}']
     if price:
         detail_parts.append(f'Odds: {price}')
-    explainer = ''
-    if market == 'Game Total' and ('over' in pick.lower() or 'under' in pick.lower()):
-        explainer = 'Total goals by both teams'
-    detail = '  |  '.join(detail_parts)
+    if confidence:
+        detail_parts.append(f'Confidence: {confidence}')
+    if edge:
+        detail_parts.append(f'Edge: {edge}')
+    detail = '  |  '.join(detail_parts[:3])
+    explainer = win_condition(pick, market)
     return event, pick, status, detail, explainer
 
 
@@ -167,7 +186,7 @@ def render_mobile_png(
     frame = all_rows.iloc[start:start + count].copy()
     if frame.empty:
         frame = pd.DataFrame([{'event': 'No rows available', 'prediction': 'Research / Learning'}])
-    card_h = 330
+    card_h = 360
     header_h = 285
     gap = 34
     height = header_h + len(frame) * (card_h + gap) + 78
@@ -191,13 +210,13 @@ def render_mobile_png(
         event, pick, status, detail, explainer = card_text(row.to_dict())
         panel(img, (58, y, W - 58, y + card_h), alpha=132)
         draw = ImageDraw.Draw(img)
-        write_wrap(draw, 96, y + 24, f'{row_number}. {event}', bold(42), 38, 2, WHITE, gap=5)
-        draw.text((96, y + 116), 'PICK', font=bold(30), fill=SOFT)
-        write_wrap(draw, 188, y + 106, pick, bold(46), 30, 2, GOLD, gap=4)
-        draw.text((96, y + 206), status[:32], font=bold(34), fill=GREEN)
-        write_wrap(draw, 96, y + 250, detail, bold(27), 55, 1, SOFT)
+        write_wrap(draw, 96, y + 22, f'{row_number}. {event}', bold(42), 38, 2, WHITE, gap=5)
+        draw.text((96, y + 108), 'PICK', font=bold(30), fill=SOFT)
+        write_wrap(draw, 188, y + 98, pick, bold(46), 30, 2, GOLD, gap=4)
+        draw.text((96, y + 196), status[:32], font=bold(34), fill=GREEN)
+        write_wrap(draw, 96, y + 240, detail, bold(25), 60, 2, SOFT)
         if explainer:
-            write_wrap(draw, 96, y + 286, explainer, font(26), 55, 1, SOFT)
+            write_wrap(draw, 96, y + 306, explainer, font(25), 60, 1, SOFT)
         y += card_h + gap
 
     out = BytesIO()
