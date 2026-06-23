@@ -1,6 +1,6 @@
-# deploy trigger: force-streamlit-rebuild-report-studio-v13
+# deploy trigger: force-streamlit-rebuild-report-studio-v14
 numpy
-pandas
+pandas<3.0
 python-dateutil
 requests
 pyyaml
