@@ -4,9 +4,9 @@ from typing import Any, Mapping
 
 import pandas as pd
 
-from .mobile_png_layout import render_mobile_png
+from .mobile_png_layout import render_mobile_deck_png, render_mobile_png
 from .report_product_layer import MagazineBrand, safe_text
-from .report_vintage_image_service import PNG_HEADER, render_vintage_card_deck_png, render_vintage_card_png
+from .report_vintage_image_service import PNG_HEADER, render_vintage_card_png
 
 
 def safe_filename_part(value: Any, *, fallback: str = "item", limit: int = 70) -> str:
@@ -29,11 +29,11 @@ def render_card_png(row: Mapping[str, Any], brand: MagazineBrand | Mapping[str, 
     return render_vintage_card_png(row, brand)
 
 
-def render_card_deck_png(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any] | None = None, *, max_cards: int = 3, width: int = 1080) -> bytes:
-    """Render a tall share image. Default is 3 cards so text stays readable."""
-    return render_vintage_card_deck_png(cards, brand, max_cards=min(int(max_cards or 3), 3))
+def render_card_deck_png(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any] | None = None, *, max_cards: int = 75, width: int = 1080) -> bytes:
+    """Render all cards as readable 3-card pages stacked into one deck PNG."""
+    return render_mobile_deck_png(pd.DataFrame(cards), brand, cards_per_page=3, max_cards=max_cards)
 
 
 def render_magazine_summary_png(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any] | None = None, *, top_n: int = 3, width: int = 1080) -> bytes:
-    """Render the standard Magazine PNG with the large text layout."""
+    """Render the standard Magazine PNG preview with the large text layout."""
     return render_mobile_png(pd.DataFrame(cards), brand, top_n=min(int(top_n or 3), 3))
