@@ -16,9 +16,9 @@ PAGE_H = 1350
 INK = (255, 255, 255)
 MUTED = (236, 241, 250)
 GOLD = (255, 210, 72)
-PANEL = (6, 10, 18, 155)
-PANEL_STRONG = (6, 10, 18, 188)
-BORDER = (255, 255, 255, 185)
+PANEL = (6, 10, 18)
+PANEL_STRONG = (6, 10, 18)
+BORDER = (255, 255, 255)
 DEFAULT_BG = (38, 48, 70)
 
 
@@ -70,10 +70,10 @@ def _background(background_bytes: bytes | None) -> Image.Image:
     if has_custom:
         canvas = ImageEnhance.Color(canvas).enhance(1.08)
         canvas = ImageEnhance.Brightness(canvas).enhance(1.02)
-        return canvas.convert("RGBA")
+        return canvas.convert("RGB")
     canvas = ImageEnhance.Color(canvas).enhance(0.82)
     canvas = ImageEnhance.Brightness(canvas).enhance(0.82)
-    return canvas.filter(ImageFilter.GaussianBlur(radius=0.35)).convert("RGBA")
+    return canvas.filter(ImageFilter.GaussianBlur(radius=0.35)).convert("RGB")
 
 
 def _png(image: Image.Image) -> bytes:
@@ -122,13 +122,14 @@ def render_custom_background_card_png(row: Mapping[str, Any], brand: MagazineBra
     row = dict(row or {})
     has_custom = _has_background(background_bytes)
     image = _background(background_bytes)
-    draw = ImageDraw.Draw(image, "RGBA")
+    draw = ImageDraw.Draw(image)
     brand_name = _brand_value(brand, "brand_name", "ABA Signal Pro")
     title = safe_text(row.get("event") or row.get("matchup")) or "Matchup"
     sport = safe_text(row.get("sport") or row.get("public_sport")) or "Sports"
     action = safe_text(row.get("consumer_action") or row.get("recommended_action")) or "Research / Learning"
-    draw.rectangle((0, 0, PAGE_W, PAGE_H), fill=(0, 0, 0, 18 if has_custom else 64))
-    draw.rounded_rectangle((58, 58, PAGE_W - 58, PAGE_H - 58), radius=34, outline=BORDER, width=3, fill=(0, 0, 0, 14 if has_custom else 38))
+    if not has_custom:
+        draw.rectangle((0, 0, PAGE_W, PAGE_H), fill=(0, 0, 0))
+    draw.rounded_rectangle((58, 58, PAGE_W - 58, PAGE_H - 58), radius=34, outline=BORDER, width=3, fill=None if has_custom else (10, 14, 24))
     draw.text((92, 92), brand_name.upper(), font=_bold(38), fill=GOLD)
     draw.text((92, 150), sport.upper(), font=_font(32), fill=MUTED)
     y = 226
@@ -156,10 +157,11 @@ def render_custom_background_summary_png(cards: pd.DataFrame, brand: MagazineBra
         frame = pd.DataFrame([{"event": "No cards available", "prediction": "Research / Learning"}])
     has_custom = _has_background(background_bytes)
     image = _background(background_bytes)
-    draw = ImageDraw.Draw(image, "RGBA")
+    draw = ImageDraw.Draw(image)
     brand_name = _brand_value(brand, "brand_name", "ABA Signal Pro")
     title = _brand_value(brand, "report_title", "Daily Sports Analysis")
-    draw.rectangle((0, 0, PAGE_W, PAGE_H), fill=(0, 0, 0, 16 if has_custom else 64))
+    if not has_custom:
+        draw.rectangle((0, 0, PAGE_W, PAGE_H), fill=(0, 0, 0))
     _center(draw, 70, brand_name.upper(), _bold(52), fill=GOLD)
     _center(draw, 158, title, _bold(84), fill=INK)
     draw.text((76, 304), "TOP CARDS", font=_bold(58), fill=GOLD)
