@@ -10,15 +10,18 @@ from autonomous_betting_agent.commercial_platform_tools import load_persistent_l
 from autonomous_betting_agent.consumer_report_engine import (
     BrandSettings,
     brand_payload,
+    cards_to_app_feed,
     cards_to_json,
     consumer_cards,
     prepare_report_frame,
     render_consumer_cards_html,
     render_magazine_html,
     render_magazine_markdown,
+    render_short_copy,
+    report_quality_summary,
 )
 from autonomous_betting_agent.pick_hold_store import load_first_available
-from autonomous_betting_agent.row_normalizer import normalize_frame, safe_text
+from autonomous_betting_agent.row_normalizer import normalize_frame, result_status, safe_text
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 
 st.set_page_config(page_title='Consumer Report Studio', layout='wide')
@@ -27,7 +30,7 @@ LANG = render_app_sidebar('consumer_report_studio', language_key='consumer_repor
 TEXT = {
     'en': {
         'title': 'Consumer Report Studio',
-        'caption': 'Turn ABA rows into consumer cards, magazine-style reports, Spanish output, and white-label feeds.',
+        'caption': 'Turn ABA rows into consumer cards, magazine reports, app feeds, and tipster-ready copy.',
         'workspace': 'Client / Workspace ID',
         'workspace_help': 'Use a separate ID per client, tipster, app, or report brand.',
         'input': 'Input rows',
@@ -46,25 +49,38 @@ TEXT = {
         'min_probability': 'Minimum model probability',
         'official_only': 'Official/proof-ready only',
         'pending_only': 'Pending/upcoming only',
+        'sport_filter': 'Sports',
+        'market_filter': 'Markets',
+        'risk_filter': 'Risk labels',
+        'confidence_filter': 'Confidence labels',
         'cards_tab': 'Consumer cards',
         'magazine_tab': 'Magazine report',
+        'copy_tab': 'WhatsApp / Telegram copy',
         'feed_tab': 'CSV / JSON feed',
         'settings_tab': 'Brand settings',
-        'diagnostics_tab': 'Explanation diagnostics',
+        'diagnostics_tab': 'Diagnostics',
         'cards': 'Cards',
         'avg_prob': 'Avg probability',
         'proof_rows': 'Proof rows',
+        'publish_ready': 'Publish-ready',
+        'warnings': 'Warnings',
         'download_cards_csv': 'Download cards CSV',
-        'download_json': 'Download JSON feed',
+        'download_json': 'Download full JSON',
+        'download_app_json': 'Download app feed JSON',
         'download_md': 'Download Markdown report',
         'download_html': 'Download HTML report',
+        'download_copy': 'Download copy text',
         'markdown': 'Copy/paste report',
+        'short_copy': 'Short copy',
         'json_feed': 'JSON feed',
+        'app_feed': 'App feed',
         'settings_json': 'Current brand payload',
+        'preview_cols': 'Preview columns',
+        'quality_summary': 'Quality summary',
     },
     'es': {
         'title': 'Estudio de Reportes para Consumidores',
-        'caption': 'Convierte filas ABA en tarjetas, reportes tipo revista, salida en español y feeds white-label.',
+        'caption': 'Convierte filas ABA en tarjetas, reportes tipo revista, feeds para app y copy para tipsters.',
         'workspace': 'ID de cliente / workspace',
         'workspace_help': 'Usa un ID separado para cada cliente, tipster, app o marca de reporte.',
         'input': 'Filas de entrada',
@@ -83,21 +99,34 @@ TEXT = {
         'min_probability': 'Probabilidad mínima del modelo',
         'official_only': 'Solo oficiales/listos para prueba',
         'pending_only': 'Solo pendientes/próximos',
+        'sport_filter': 'Deportes',
+        'market_filter': 'Mercados',
+        'risk_filter': 'Riesgos',
+        'confidence_filter': 'Confianzas',
         'cards_tab': 'Tarjetas consumidor',
         'magazine_tab': 'Reporte revista',
+        'copy_tab': 'Copy WhatsApp / Telegram',
         'feed_tab': 'Feed CSV / JSON',
         'settings_tab': 'Configuración de marca',
-        'diagnostics_tab': 'Diagnóstico de explicación',
+        'diagnostics_tab': 'Diagnóstico',
         'cards': 'Tarjetas',
         'avg_prob': 'Probabilidad media',
         'proof_rows': 'Filas con prueba',
+        'publish_ready': 'Listas para publicar',
+        'warnings': 'Alertas',
         'download_cards_csv': 'Descargar CSV de tarjetas',
-        'download_json': 'Descargar feed JSON',
+        'download_json': 'Descargar JSON completo',
+        'download_app_json': 'Descargar JSON para app',
         'download_md': 'Descargar reporte Markdown',
         'download_html': 'Descargar reporte HTML',
+        'download_copy': 'Descargar copy',
         'markdown': 'Reporte para copiar/pegar',
+        'short_copy': 'Copy corto',
         'json_feed': 'Feed JSON',
+        'app_feed': 'Feed para app',
         'settings_json': 'Payload actual de marca',
+        'preview_cols': 'Columnas de vista previa',
+        'quality_summary': 'Resumen de calidad',
     },
 }
 
@@ -164,6 +193,26 @@ def probability_metric(cards: pd.DataFrame) -> str:
     return f'{float(values.mean()) * 100:.1f}%'
 
 
+def unique_options(frame: pd.DataFrame, column: str) -> list[str]:
+    if frame.empty or column not in frame.columns:
+        return []
+    values = sorted({safe_text(value) for value in frame[column].tolist() if safe_text(value)})
+    return values
+
+
+def filter_by_multiselect(frame: pd.DataFrame, column: str, selected: list[str]) -> pd.DataFrame:
+    if frame.empty or not selected or column not in frame.columns:
+        return frame
+    values = frame[column].map(safe_text)
+    return frame[values.isin(selected)].copy()
+
+
+def status_series(frame: pd.DataFrame) -> pd.Series:
+    if frame.empty:
+        return pd.Series(dtype=str)
+    return frame.apply(lambda row: result_status(row.to_dict()), axis=1)
+
+
 st.title(t('title'))
 st.caption(t('caption'))
 
@@ -182,6 +231,8 @@ with st.expander(t('input'), expanded=True):
 if raw.empty:
     st.warning(t('no_rows'))
     st.stop()
+
+normalized = normalize_frame(raw)
 
 with st.expander(t('brand'), expanded=True):
     c1, c2 = st.columns(2)
@@ -218,9 +269,23 @@ with st.expander(t('filters'), expanded=True):
     official_only = c3.checkbox(t('official_only'), value=False)
     pending_only = c4.checkbox(t('pending_only'), value=False)
 
-normalized = normalize_frame(raw)
+    f1, f2, f3, f4 = st.columns(4)
+    sport_filter = f1.multiselect(t('sport_filter'), unique_options(normalized, 'sport'))
+    market_filter = f2.multiselect(t('market_filter'), unique_options(normalized, 'market_type'))
+    status_values = sorted({safe_text(value) for value in status_series(normalized).tolist() if safe_text(value)})
+    result_filter = f3.multiselect('Result status' if LANG == 'en' else 'Estado resultado', status_values)
+    source_filter = f4.multiselect(t('source'), unique_options(normalized, 'source_file'))
+
+filtered = normalized.copy()
+filtered = filter_by_multiselect(filtered, 'sport', sport_filter)
+filtered = filter_by_multiselect(filtered, 'market_type', market_filter)
+filtered = filter_by_multiselect(filtered, 'source_file', source_filter)
+if result_filter and not filtered.empty:
+    statuses = status_series(filtered)
+    filtered = filtered[statuses.isin(result_filter)].copy()
+
 report_rows = prepare_report_frame(
-    normalized,
+    filtered,
     min_probability=float(min_probability),
     official_only=bool(official_only),
     pending_only=bool(pending_only),
@@ -230,20 +295,25 @@ cards = consumer_cards(report_rows, brand)
 st.session_state['consumer_report_latest_cards'] = cards.to_dict('records') if not cards.empty else []
 
 proof_rows = int(cards.get('proof_id', pd.Series(dtype=str)).map(safe_text).ne('').sum()) if not cards.empty and 'proof_id' in cards.columns else 0
-m1, m2, m3, m4 = st.columns(4)
+quality = report_quality_summary(cards)
+
+m1, m2, m3, m4, m5 = st.columns(5)
 m1.metric(t('cards'), int(len(cards)))
 m2.metric(t('avg_prob'), probability_metric(cards))
 m3.metric(t('proof_rows'), proof_rows)
-m4.metric(t('workspace'), workspace_id)
+m4.metric(t('publish_ready'), quality['publish_ready'])
+m5.metric(t('warnings'), quality['warnings'])
 
 markdown_report = render_magazine_markdown(cards, brand)
 html_cards = render_consumer_cards_html(cards, brand)
 html_report = render_magazine_html(cards, brand)
+short_copy = render_short_copy(cards, brand)
 json_feed = cards_to_json(cards, brand)
+app_feed = cards_to_app_feed(cards, brand)
 csv_payload = cards.to_csv(index=False) if not cards.empty else ''
 
 safe_workspace = ''.join(ch if ch.isalnum() or ch in {'_', '-'} else '_' for ch in workspace_id)
-tabs = st.tabs([t('cards_tab'), t('magazine_tab'), t('feed_tab'), t('settings_tab'), t('diagnostics_tab')])
+tabs = st.tabs([t('cards_tab'), t('magazine_tab'), t('copy_tab'), t('feed_tab'), t('settings_tab'), t('diagnostics_tab')])
 
 with tabs[0]:
     st.markdown(html_cards, unsafe_allow_html=True)
@@ -259,19 +329,34 @@ with tabs[1]:
         download_link(t('download_html'), html_report, f'magazine_report_{safe_workspace}.html', 'text/html')
 
 with tabs[2]:
+    st.text_area(t('short_copy'), value=short_copy, height=360)
+    download_link(t('download_copy'), short_copy, f'report_copy_{safe_workspace}.txt', 'text/plain')
+
+with tabs[3]:
     st.dataframe(cards, use_container_width=True, hide_index=True)
-    st.text_area(t('json_feed'), value=json_feed, height=360)
-    c1, c2 = st.columns(2)
+    st.text_area(t('json_feed'), value=json_feed, height=260)
+    st.text_area(t('app_feed'), value=app_feed, height=260)
+    c1, c2, c3 = st.columns(3)
     with c1:
         download_link(t('download_cards_csv'), csv_payload, f'consumer_cards_{safe_workspace}.csv', 'text/csv')
     with c2:
         download_link(t('download_json'), json_feed, f'consumer_feed_{safe_workspace}.json', 'application/json')
+    with c3:
+        download_link(t('download_app_json'), app_feed, f'app_feed_{safe_workspace}.json', 'application/json')
 
-with tabs[3]:
+with tabs[4]:
     st.json(brand_payload(brand))
     st.caption(t('settings_json'))
 
-with tabs[4]:
+with tabs[5]:
+    st.json(quality)
+    st.caption(t('quality_summary'))
     bullet_cols = [col for col in cards.columns if col.startswith('bullet_')]
-    cols = [col for col in ['event', 'prediction', 'market', 'confidence', 'risk', 'proof_id'] + bullet_cols if col in cards.columns]
+    cols = [
+        col for col in [
+            'event', 'sport', 'market', 'prediction', 'decimal_price', 'probability_label',
+            'confidence', 'risk', 'publish_status', 'proof_id', 'quality_flags',
+        ] + bullet_cols if col in cards.columns
+    ]
+    st.caption(t('preview_cols'))
     st.dataframe(cards[cols] if cols else cards, use_container_width=True, hide_index=True)
