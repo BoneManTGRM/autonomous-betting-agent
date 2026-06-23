@@ -46,18 +46,48 @@ def normalize_language(value: Any) -> str:
 def labels(language: str) -> dict[str, str]:
     if normalize_language(language) == 'es':
         return {
-            'report': 'Reporte de Tendencias', 'cards': 'Tarjetas para consumidores',
-            'tendency': 'Tendencia', 'market': 'Mercado', 'odds': 'Cuota',
-            'confidence': 'Confianza', 'risk': 'Riesgo', 'proof': 'Proof ID',
-            'workspace': 'Workspace', 'no_rows': 'No hay picks disponibles.',
+            'report': 'Reporte de Tendencias',
+            'cards': 'Tarjetas para consumidores',
+            'tendency': 'Tendencia',
+            'market': 'Mercado',
+            'odds': 'Cuota',
+            'confidence': 'Confianza',
+            'risk': 'Riesgo',
+            'proof': 'Proof ID',
+            'workspace': 'Workspace',
+            'no_rows': 'No hay picks disponibles.',
             'disclaimer': 'Contenido informativo. No garantiza resultados.',
+            'probability': 'Probabilidad',
+            'status': 'Estado',
+            'source': 'Fuente',
+            'summary': 'Resumen',
+            'official': 'Oficial',
+            'research': 'Investigación',
+            'unverified': 'Sin prueba',
+            'quality': 'Calidad',
+            'generated': 'Generado',
         }
     return {
-        'report': 'Trend Report', 'cards': 'Consumer Cards', 'tendency': 'Pick',
-        'market': 'Market', 'odds': 'Odds', 'confidence': 'Confidence',
-        'risk': 'Risk', 'proof': 'Proof ID', 'workspace': 'Workspace',
+        'report': 'Trend Report',
+        'cards': 'Consumer Cards',
+        'tendency': 'Pick',
+        'market': 'Market',
+        'odds': 'Odds',
+        'confidence': 'Confidence',
+        'risk': 'Risk',
+        'proof': 'Proof ID',
+        'workspace': 'Workspace',
         'no_rows': 'No picks available.',
         'disclaimer': 'Informational content only. Results are not guaranteed.',
+        'probability': 'Probability',
+        'status': 'Status',
+        'source': 'Source',
+        'summary': 'Summary',
+        'official': 'Official',
+        'research': 'Research',
+        'unverified': 'Unverified',
+        'quality': 'Quality',
+        'generated': 'Generated',
     }
 
 
@@ -92,15 +122,24 @@ def _source_text(row: Mapping[str, Any]) -> str:
     return safe_text(row.get('bookmaker')) or safe_text(row.get('odds_source')) or safe_text(row.get('source_file'))
 
 
+def _truthy(value: Any) -> bool:
+    return safe_text(value).lower() in {'true', '1', 'yes', 'y', 'pass', 'passed'}
+
+
+def _clean_list_text(values: list[str]) -> str:
+    return '; '.join(item for item in values if safe_text(item))
+
+
 def market_label(row: Mapping[str, Any], language: str = 'en') -> str:
     lang = normalize_language(language)
     raw = safe_text(row.get('market_type') or row.get('market')).lower()
     line = safe_text(row.get('line_point') or row.get('point') or row.get('handicap'))
+    prediction = safe_text(row.get('prediction')).lower()
     if raw in {'h2h', 'moneyline', 'ml', 'winner', 'ganador'}:
         label = 'Ganador' if lang == 'es' else 'Moneyline'
     elif 'spread' in raw or 'handicap' in raw or 'hándicap' in raw:
         label = 'Hándicap' if lang == 'es' else 'Spread'
-    elif 'total' in raw or 'over' in raw or 'under' in raw:
+    elif 'total' in raw or 'over' in raw or 'under' in raw or prediction.startswith(('over ', 'under ')):
         label = 'Total'
     elif 'btts' in raw or 'ambos' in raw:
         label = 'Ambos anotan' if lang == 'es' else 'Both teams to score'
@@ -117,8 +156,15 @@ def confidence_label(row: Mapping[str, Any], language: str = 'en') -> str:
     if explicit:
         if lang == 'es':
             lookup = {
-                'premium': 'Alta', 'qualified': 'Calificada', 'watch': 'En revisión',
-                'research/test': 'Investigación', 'strict ultra 80': 'Alta estricta',
+                'premium': 'Alta',
+                'qualified': 'Calificada',
+                'watch': 'En revisión',
+                'watch only': 'En revisión',
+                'research/test': 'Investigación',
+                'strict ultra 80': 'Alta estricta',
+                'high': 'Alta',
+                'medium': 'Media',
+                'low': 'Baja',
             }
             return lookup.get(explicit.lower(), explicit)
         return explicit
@@ -147,6 +193,42 @@ def risk_label(row: Mapping[str, Any], language: str = 'en') -> str:
     if range_risk > 0.25 or (price is not None and price >= 2.25) or (probability is not None and probability < 0.60):
         return 'Medio' if lang == 'es' else 'Medium'
     return 'Bajo' if lang == 'es' else 'Low'
+
+
+def publish_status(row: Mapping[str, Any], language: str = 'en') -> str:
+    lang = normalize_language(language)
+    ledger = safe_text(row.get('ledger_type')).lower()
+    official = _truthy(row.get('official_ev_pick')) or _truthy(row.get('official_lock_ready')) or 'official' in ledger
+    research = ledger.startswith('research') or safe_text(row.get('official_ev_pick')).lower() in {'false', '0', 'no'}
+    proof_id = safe_text(row.get('proof_id'))
+    if official and proof_id:
+        return 'Oficial con prueba' if lang == 'es' else 'Official proof'
+    if official:
+        return 'Oficial sin proof ID' if lang == 'es' else 'Official, missing proof ID'
+    if research:
+        return 'Investigación / prueba' if lang == 'es' else 'Research / test'
+    if proof_id:
+        return 'Bloqueado' if lang == 'es' else 'Locked'
+    return 'Sin prueba' if lang == 'es' else 'Unverified'
+
+
+def quality_flags(row: Mapping[str, Any], language: str = 'en') -> list[str]:
+    lang = normalize_language(language)
+    flags: list[str] = []
+    if not safe_text(row.get('event')):
+        flags.append('Falta evento' if lang == 'es' else 'Missing event')
+    if not safe_text(row.get('prediction')):
+        flags.append('Falta pick' if lang == 'es' else 'Missing pick')
+    if probability_value(row, 'model_probability') is None:
+        flags.append('Falta probabilidad' if lang == 'es' else 'Missing probability')
+    price = _first_float(row, ['decimal_price', 'average_price', 'best_price'])
+    if price is None or price <= 1.0:
+        flags.append('Falta cuota válida' if lang == 'es' else 'Missing valid odds')
+    if not safe_text(row.get('proof_id')):
+        flags.append('Sin proof ID' if lang == 'es' else 'No proof ID')
+    if safe_text(row.get('lock_blockers')):
+        flags.append(('Bloqueadores: ' if lang == 'es' else 'Blockers: ') + safe_text(row.get('lock_blockers')))
+    return flags
 
 
 def _add_unique(items: list[str], value: str, limit: int) -> None:
@@ -226,7 +308,14 @@ def _sort_frame(frame: pd.DataFrame) -> pd.DataFrame:
     return out.sort_values('_consumer_sort_score', ascending=False).drop(columns=['_consumer_sort_score'], errors='ignore')
 
 
-def prepare_report_frame(frame: pd.DataFrame | list[dict[str, Any]], *, min_probability: float = 0.0, official_only: bool = False, pending_only: bool = False, max_rows: int = 12) -> pd.DataFrame:
+def prepare_report_frame(
+    frame: pd.DataFrame | list[dict[str, Any]],
+    *,
+    min_probability: float = 0.0,
+    official_only: bool = False,
+    pending_only: bool = False,
+    max_rows: int = 12,
+) -> pd.DataFrame:
     raw = pd.DataFrame(frame) if isinstance(frame, list) else frame
     out = normalize_frame(raw) if raw is not None and not raw.empty else pd.DataFrame()
     if out.empty:
@@ -254,8 +343,11 @@ def consumer_cards(frame: pd.DataFrame | list[dict[str, Any]], brand: BrandSetti
     if normalized.empty:
         return pd.DataFrame()
     rows: list[dict[str, Any]] = []
+    generated = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
     for item in normalized.to_dict('records'):
         bullets = explain_pick(item, language=brand.language, max_bullets=max_bullets)
+        probability = probability_value(item, 'model_probability')
+        flags = quality_flags(item, brand.language)
         card = {
             'workspace_id': brand.workspace_id,
             'brand_name': brand.brand_name,
@@ -265,13 +357,21 @@ def consumer_cards(frame: pd.DataFrame | list[dict[str, Any]], brand: BrandSetti
             'prediction': safe_text(item.get('prediction')),
             'tendency': safe_text(item.get('prediction')),
             'decimal_price': _decimal(item.get('decimal_price')),
+            'odds_label': _decimal(item.get('decimal_price')) or '-',
             'confidence': confidence_label(item, brand.language),
             'risk': risk_label(item, brand.language),
-            'model_probability': probability_value(item, 'model_probability'),
+            'publish_status': publish_status(item, brand.language),
+            'model_probability': probability,
+            'probability_label': _pct(probability),
             'proof_id': safe_text(item.get('proof_id')),
             'proof_status': safe_text(item.get('proof_status')),
             'result_status': result_status(item),
+            'source': _source_text(item),
+            'quality_flags': _clean_list_text(flags),
+            'publish_ready': not flags or flags == ['Sin proof ID'] or flags == ['No proof ID'],
+            'short_summary': bullets[0] if bullets else '',
             'report_language': normalize_language(brand.language),
+            'generated_at_utc': generated,
         }
         for index in range(max_bullets):
             card[f'bullet_{index + 1}'] = bullets[index] if index < len(bullets) else ''
@@ -286,11 +386,85 @@ def brand_payload(brand: BrandSettings) -> dict[str, str]:
 def cards_to_json(cards: pd.DataFrame, brand: BrandSettings | None = None) -> str:
     brand = (brand or BrandSettings()).normalized()
     payload = {
+        'version': 'consumer_report_v2',
         'brand': brand_payload(brand),
         'generated_at_utc': datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z'),
         'cards': cards.fillna('').to_dict('records') if cards is not None and not cards.empty else [],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2, default=str)
+
+
+def cards_to_app_feed(cards: pd.DataFrame, brand: BrandSettings | None = None) -> str:
+    brand = (brand or BrandSettings()).normalized()
+    items: list[dict[str, Any]] = []
+    if cards is not None and not cards.empty:
+        for _, row in cards.fillna('').iterrows():
+            items.append({
+                'id': safe_text(row.get('proof_id')) or f"{safe_text(row.get('event'))}:{safe_text(row.get('market'))}:{safe_text(row.get('prediction'))}",
+                'workspace_id': safe_text(row.get('workspace_id')),
+                'sport': safe_text(row.get('sport')),
+                'event': safe_text(row.get('event')),
+                'market': safe_text(row.get('market')),
+                'pick': safe_text(row.get('prediction') or row.get('tendency')),
+                'odds': safe_text(row.get('decimal_price')),
+                'confidence': safe_text(row.get('confidence')),
+                'risk': safe_text(row.get('risk')),
+                'status': safe_text(row.get('publish_status')),
+                'proof_id': safe_text(row.get('proof_id')),
+                'probability': row.get('model_probability'),
+                'summary': safe_text(row.get('short_summary')),
+                'bullets': [safe_text(row.get(f'bullet_{index}')) for index in range(1, 5) if safe_text(row.get(f'bullet_{index}'))],
+            })
+    payload = {
+        'version': 'app_feed_v1',
+        'brand': brand_payload(brand),
+        'generated_at_utc': datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z'),
+        'items': items,
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2, default=str)
+
+
+def report_quality_summary(cards: pd.DataFrame) -> dict[str, Any]:
+    if cards is None or cards.empty:
+        return {'cards': 0, 'publish_ready': 0, 'with_proof': 0, 'warnings': 0}
+    flags = cards.get('quality_flags', pd.Series('', index=cards.index)).fillna('').astype(str)
+    ready = cards.get('publish_ready', pd.Series(False, index=cards.index)).astype(str).str.lower().isin({'true', '1', 'yes'})
+    proof = cards.get('proof_id', pd.Series('', index=cards.index)).fillna('').astype(str).str.strip().ne('')
+    return {
+        'cards': int(len(cards)),
+        'publish_ready': int(ready.sum()),
+        'with_proof': int(proof.sum()),
+        'warnings': int(flags.str.strip().ne('').sum()),
+    }
+
+
+def render_short_copy(cards: pd.DataFrame, brand: BrandSettings | None = None, *, max_picks: int = 8) -> str:
+    brand = (brand or BrandSettings()).normalized()
+    lab = labels(brand.language)
+    if cards is None or cards.empty:
+        return lab['no_rows']
+    title = brand.report_title or lab['report']
+    lines = [title, f'{brand.brand_name} — {brand.tagline}', '']
+    view = cards.fillna('').head(max_picks)
+    for _, row in view.iterrows():
+        pick = safe_text(row.get('tendency') or row.get('prediction'))
+        event = safe_text(row.get('event'))
+        market = safe_text(row.get('market'))
+        odds = safe_text(row.get('decimal_price')) or '-'
+        confidence = safe_text(row.get('confidence'))
+        risk = safe_text(row.get('risk'))
+        proof = safe_text(row.get('proof_id'))
+        lines.append(f'{event}')
+        lines.append(f"{lab['tendency']}: {pick} | {lab['market']}: {market} | {lab['odds']}: {odds}")
+        lines.append(f"{lab['confidence']}: {confidence} | {lab['risk']}: {risk}" + (f" | {lab['proof']}: {proof}" if proof else ''))
+        summary = safe_text(row.get('short_summary'))
+        if summary:
+            lines.append(summary)
+        lines.append('')
+    disclaimer = brand.disclaimer or lab['disclaimer']
+    if disclaimer:
+        lines.append(disclaimer)
+    return '\n'.join(lines).strip()
 
 
 def render_magazine_markdown(cards: pd.DataFrame, brand: BrandSettings | None = None) -> str:
@@ -299,10 +473,23 @@ def render_magazine_markdown(cards: pd.DataFrame, brand: BrandSettings | None = 
     if cards is None or cards.empty:
         return lab['no_rows']
     title = brand.report_title or lab['report']
-    lines = [f'# {title}', f'**{brand.brand_name}** — {brand.tagline}', f"**{lab['workspace']}:** {brand.workspace_id}", '']
+    lines = [
+        f'# {title}',
+        f'**{brand.brand_name}** — {brand.tagline}',
+        f"**{lab['workspace']}:** {brand.workspace_id}",
+        '',
+    ]
     for _, row in cards.fillna('').iterrows():
         heading = f"{safe_text(row.get('sport'))}: {safe_text(row.get('event'))}" if safe_text(row.get('sport')) else safe_text(row.get('event'))
-        lines += [f'## {heading}', f"**{lab['tendency']}:** {safe_text(row.get('tendency') or row.get('prediction'))}", f"**{lab['market']}:** {safe_text(row.get('market'))} | **{lab['odds']}:** {safe_text(row.get('decimal_price')) or '-'} | **{lab['confidence']}:** {safe_text(row.get('confidence'))} | **{lab['risk']}:** {safe_text(row.get('risk'))}"]
+        lines += [
+            f'## {heading}',
+            f"**{lab['tendency']}:** {safe_text(row.get('tendency') or row.get('prediction'))}",
+            f"**{lab['market']}:** {safe_text(row.get('market'))} | **{lab['odds']}:** {safe_text(row.get('decimal_price')) or '-'} | **{lab['confidence']}:** {safe_text(row.get('confidence'))} | **{lab['risk']}:** {safe_text(row.get('risk'))}",
+        ]
+        probability = safe_text(row.get('probability_label'))
+        status = safe_text(row.get('publish_status'))
+        if probability or status:
+            lines.append(f"**{lab['probability']}:** {probability or '-'} | **{lab['status']}:** {status or '-'}")
         for index in range(1, 5):
             bullet = safe_text(row.get(f'bullet_{index}'))
             if bullet:
@@ -310,6 +497,9 @@ def render_magazine_markdown(cards: pd.DataFrame, brand: BrandSettings | None = 
         proof_id = safe_text(row.get('proof_id'))
         if proof_id:
             lines.append(f"**{lab['proof']}:** {proof_id}")
+        quality = safe_text(row.get('quality_flags'))
+        if quality:
+            lines.append(f"**{lab['quality']}:** {quality}")
         lines.append('')
     disclaimer = brand.disclaimer or lab['disclaimer']
     if disclaimer:
@@ -329,7 +519,7 @@ def render_consumer_cards_html(cards: pd.DataFrame, brand: BrandSettings | None 
         return f'<p>{html.escape(lab["no_rows"])}</p>'
     title = brand.report_title or lab['cards']
     parts = [
-        '<style>.aba-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin:1rem 0}.aba-card{border:1px solid rgba(125,125,125,.35);border-radius:18px;padding:1rem;background:rgba(255,255,255,.045)}.aba-pill{display:inline-block;border:1px solid rgba(125,125,125,.45);border-radius:999px;padding:.18rem .55rem;margin:.1rem .2rem .1rem 0;font-size:.78rem}.aba-card .pick{font-size:1.15rem;font-weight:800;margin:.45rem 0}</style>',
+        '<style>.aba-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin:1rem 0}.aba-card{border:1px solid rgba(125,125,125,.35);border-radius:18px;padding:1rem;background:rgba(255,255,255,.045)}.aba-card h3{margin:.35rem 0 .55rem 0}.aba-pill{display:inline-block;border:1px solid rgba(125,125,125,.45);border-radius:999px;padding:.18rem .55rem;margin:.1rem .2rem .1rem 0;font-size:.78rem}.aba-card .pick{font-size:1.15rem;font-weight:800;margin:.45rem 0}.aba-muted{opacity:.74;font-size:.9rem}.aba-warning{border-color:rgba(255,180,80,.7)}</style>',
         f'<h2>{html.escape(title)}</h2>',
         f'<p><strong>{html.escape(brand.brand_name)}</strong> — {html.escape(brand.tagline)}</p>',
         '<div class="aba-card-grid">',
@@ -337,15 +527,23 @@ def render_consumer_cards_html(cards: pd.DataFrame, brand: BrandSettings | None 
     for _, row in cards.fillna('').iterrows():
         proof_id = safe_text(row.get('proof_id'))
         proof = f'<span class="aba-pill">{html.escape(lab["proof"])}: {html.escape(proof_id)}</span>' if proof_id else ''
+        quality = safe_text(row.get('quality_flags'))
+        quality_html = f'<p class="aba-muted"><strong>{html.escape(lab["quality"])}:</strong> {html.escape(quality)}</p>' if quality else ''
+        card_class = 'aba-card aba-warning' if quality else 'aba-card'
         parts += [
-            '<article class="aba-card">',
-            f'<div>{html.escape(safe_text(row.get("sport")))} · {html.escape(safe_text(row.get("market")))}</div>',
+            f'<article class="{card_class}">',
+            f'<div class="aba-muted">{html.escape(safe_text(row.get("sport")))} · {html.escape(safe_text(row.get("market")))}</div>',
             f'<h3>{html.escape(safe_text(row.get("event")))}</h3>',
             f'<div class="pick">{html.escape(lab["tendency"])}: {html.escape(safe_text(row.get("tendency") or row.get("prediction")))}</div>',
             f'<span class="aba-pill">{html.escape(lab["odds"])}: {html.escape(safe_text(row.get("decimal_price")) or "-")}</span>',
+            f'<span class="aba-pill">{html.escape(lab["probability"])}: {html.escape(safe_text(row.get("probability_label")) or "-")}</span>',
             f'<span class="aba-pill">{html.escape(lab["confidence"])}: {html.escape(safe_text(row.get("confidence")))}</span>',
             f'<span class="aba-pill">{html.escape(lab["risk"])}: {html.escape(safe_text(row.get("risk")))}</span>',
-            proof, _card_bullets_html(row), '</article>',
+            f'<span class="aba-pill">{html.escape(lab["status"])}: {html.escape(safe_text(row.get("publish_status")))}</span>',
+            proof,
+            _card_bullets_html(row),
+            quality_html,
+            '</article>',
         ]
     parts.append('</div>')
     disclaimer = brand.disclaimer or lab['disclaimer']
@@ -361,12 +559,31 @@ def render_magazine_html(cards: pd.DataFrame, brand: BrandSettings | None = None
     if cards is None or cards.empty:
         return f'<p>{html.escape(lab["no_rows"])}</p>'
     logo = f'<img src="{html.escape(brand.logo_url)}" alt="logo" style="max-height:54px">' if brand.logo_url else ''
-    parts = ['<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Georgia,serif;margin:0;background:#f3eadc;color:#1f1a14}.page{min-height:920px;padding:48px 58px;border-bottom:6px solid #1f1a14;page-break-after:always;box-sizing:border-box}.brand{display:flex;justify-content:space-between;align-items:center}.pill{display:inline-block;border:1px solid #1f1a14;border-radius:999px;padding:.28rem .7rem;margin:.15rem .25rem .15rem 0}.pick{font-size:2rem;font-weight:800;margin:1.8rem 0 .6rem 0}li{margin:.45rem 0;font-size:1.08rem;line-height:1.35}</style></head><body>', '<section class="page"><div class="brand"><div>', f'<h1>{html.escape(title)}</h1><p><strong>{html.escape(brand.brand_name)}</strong> — {html.escape(brand.tagline)}</p><p>{html.escape(lab["workspace"])}: {html.escape(brand.workspace_id)}</p></div>{logo}</div></section>']
+    parts = [
+        '<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Georgia,serif;margin:0;background:#f3eadc;color:#1f1a14}.page{min-height:920px;padding:48px 58px;border-bottom:6px solid #1f1a14;page-break-after:always;box-sizing:border-box}.brand{display:flex;justify-content:space-between;align-items:center}.pill{display:inline-block;border:1px solid #1f1a14;border-radius:999px;padding:.28rem .7rem;margin:.15rem .25rem .15rem 0}.pick{font-size:2rem;font-weight:800;margin:1.8rem 0 .6rem 0}li{margin:.45rem 0;font-size:1.08rem;line-height:1.35}.muted{opacity:.72}</style></head><body>',
+        '<section class="page"><div class="brand"><div>',
+        f'<h1>{html.escape(title)}</h1><p><strong>{html.escape(brand.brand_name)}</strong> — {html.escape(brand.tagline)}</p><p>{html.escape(lab["workspace"])}: {html.escape(brand.workspace_id)}</p>',
+        f'</div>{logo}</div></section>',
+    ]
     for _, row in cards.fillna('').iterrows():
-        parts += ['<section class="page">', f'<h2>{html.escape(safe_text(row.get("event")))}</h2>', f'<span class="pill">{html.escape(lab["market"])}: {html.escape(safe_text(row.get("market")))}</span>', f'<span class="pill">{html.escape(lab["confidence"])}: {html.escape(safe_text(row.get("confidence")))}</span>', f'<span class="pill">{html.escape(lab["risk"])}: {html.escape(safe_text(row.get("risk")))}</span>', f'<div class="pick">{html.escape(lab["tendency"])}<br>{html.escape(safe_text(row.get("tendency") or row.get("prediction")))}</div>', f'<p><strong>{html.escape(lab["odds"])}:</strong> {html.escape(safe_text(row.get("decimal_price")) or "-")}</p>', _card_bullets_html(row)]
+        parts += [
+            '<section class="page">',
+            f'<p class="muted">{html.escape(safe_text(row.get("sport")))}</p>',
+            f'<h2>{html.escape(safe_text(row.get("event")))}</h2>',
+            f'<span class="pill">{html.escape(lab["market"])}: {html.escape(safe_text(row.get("market")))}</span>',
+            f'<span class="pill">{html.escape(lab["confidence"])}: {html.escape(safe_text(row.get("confidence")))}</span>',
+            f'<span class="pill">{html.escape(lab["risk"])}: {html.escape(safe_text(row.get("risk")))}</span>',
+            f'<span class="pill">{html.escape(lab["probability"])}: {html.escape(safe_text(row.get("probability_label")) or "-")}</span>',
+            f'<div class="pick">{html.escape(lab["tendency"])}<br>{html.escape(safe_text(row.get("tendency") or row.get("prediction")))}</div>',
+            f'<p><strong>{html.escape(lab["odds"])}:</strong> {html.escape(safe_text(row.get("decimal_price")) or "-")}</p>',
+            _card_bullets_html(row),
+        ]
         proof_id = safe_text(row.get('proof_id'))
         if proof_id:
             parts.append(f'<p><strong>{html.escape(lab["proof"])}:</strong> {html.escape(proof_id)}</p>')
+        status = safe_text(row.get('publish_status'))
+        if status:
+            parts.append(f'<p class="muted"><strong>{html.escape(lab["status"])}:</strong> {html.escape(status)}</p>')
         parts.append('</section>')
     parts.append(f'<section class="page"><h2>{html.escape(brand.brand_name)}</h2><p>{html.escape(brand.disclaimer or lab["disclaimer"])}</p></section></body></html>')
     return '\n'.join(parts)
