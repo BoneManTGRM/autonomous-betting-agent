@@ -26,6 +26,12 @@ def _lane_count(cards: pd.DataFrame, values: set[str]) -> int:
     return int(cards['report_lane_v2'].isin(values).sum())
 
 
+def _data_issue_mask(cards: pd.DataFrame) -> pd.Series:
+    if cards is None or cards.empty or 'data_issue_reason' not in cards.columns:
+        return pd.Series(False, index=cards.index if cards is not None else None)
+    return cards['data_issue_reason'].map(lambda x: bool(safe_text(x)))
+
+
 def render_status_dashboard(cards: pd.DataFrame, *, language: str = 'en') -> str:
     cards = apply_learning_layer(cards)
     es = language == 'es'
@@ -33,9 +39,10 @@ def render_status_dashboard(cards: pd.DataFrame, *, language: str = 'en') -> str
     official = _bool_count(cards, 'official_publish_ready')
     report_ready = _bool_count(cards, 'client_report_ready')
     learning_ready = _bool_count(cards, 'learning_ready')
+    issue_mask = _data_issue_mask(cards)
     price_watch = _lane_count(cards, {'strong_prediction_price_watch', 'learning_candidate', 'research_play'})
-    graded_winners = _lane_count(cards, {'graded_winner'})
-    data_issues = int(cards['data_issue_reason'].map(lambda x: bool(safe_text(x))).sum()) if cards is not None and not cards.empty and 'data_issue_reason' in cards.columns else 0
+    graded_winners = int((cards['report_lane_v2'].eq('graded_winner') & ~issue_mask).sum()) if cards is not None and not cards.empty and 'report_lane_v2' in cards.columns else 0
+    data_issues = int(issue_mask.sum()) if cards is not None and not cards.empty else 0
     research = max(report_ready - official, 0)
     title = 'Sistema de aprendizaje activo' if es else 'Learning-aware report gate'
     if official == 0 and report_ready > 0:
@@ -77,14 +84,15 @@ def render_status_dashboard(cards: pd.DataFrame, *, language: str = 'en') -> str
 def _section_rows(cards: pd.DataFrame, section: str) -> pd.DataFrame:
     if cards.empty or 'report_lane_v2' not in cards.columns:
         return pd.DataFrame()
+    issue_mask = _data_issue_mask(cards)
     if section == 'official':
         return cards[cards['official_publish_ready'].astype(bool)].copy()
     if section == 'price_watch':
         return cards[cards['report_lane_v2'].isin({'strong_prediction_price_watch', 'learning_candidate', 'research_play'})].copy()
     if section == 'graded':
-        return cards[cards['report_lane_v2'].isin({'graded_winner', 'graded_loss'}) & ~cards['data_issue_reason'].map(lambda x: bool(safe_text(x)))].copy()
+        return cards[cards['report_lane_v2'].isin({'graded_winner', 'graded_loss'}) & ~issue_mask].copy()
     if section == 'blocked':
-        return cards[cards['data_issue_reason'].map(lambda x: bool(safe_text(x)))].copy()
+        return cards[issue_mask].copy()
     return pd.DataFrame()
 
 
