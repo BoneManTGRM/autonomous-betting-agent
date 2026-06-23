@@ -8,6 +8,7 @@ from typing import Any
 import pandas as pd
 
 from autonomous_betting_agent.app_feed_delivery import build_app_feed
+from autonomous_betting_agent.report_background_image_service import PNG_HEADER as BACKGROUND_PNG_HEADER, render_custom_background_card_png, render_custom_background_deck_png, render_custom_background_summary_png
 from autonomous_betting_agent.report_export_service import build_report_export_bundle
 from autonomous_betting_agent.report_feed_service import build_report_feed
 from autonomous_betting_agent.report_image_export_service import PNG_HEADER, render_card_deck_png, render_card_png, render_magazine_summary_png
@@ -60,6 +61,7 @@ def _write_diagnostics(name: str, payload: dict[str, Any]) -> None:
 def check_static_page_contract() -> None:
     page = _read("pages/report_studio.py")
     image_service = _read("autonomous_betting_agent/report_image_export_service.py")
+    background_service = _read("autonomous_betting_agent/report_background_image_service.py")
     magazine_pdf_service = _read("autonomous_betting_agent/report_magazine_pdf_service.py")
     required_tokens = [
         "build_report_studio_state",
@@ -73,6 +75,14 @@ def check_static_page_contract() -> None:
         "render_magazine_summary_png",
         "card_image_filename",
         "render_vintage_magazine_pdf",
+        "render_custom_background_summary_png",
+        "render_custom_background_card_png",
+        "render_custom_background_deck_png",
+        "report_studio_profile_background_upload",
+        "report_studio_image_background_upload",
+        "report_background_bytes",
+        "magazine_tab_png = render_custom_background_summary_png",
+        "background_bytes=report_background_bytes",
         "magazine_pdf",
         "Images",
         "Learning Audit",
@@ -95,6 +105,7 @@ def check_static_page_contract() -> None:
     ]
     token_presence = {token: token in page for token in required_tokens}
     image_token_presence = {token: token in image_service for token in ("render_card_png", "render_card_deck_png", "render_magazine_summary_png", "card_image_filename")}
+    background_token_presence = {token: token in background_service for token in ("render_custom_background_summary_png", "render_custom_background_card_png", "render_custom_background_deck_png", "ImageEnhance.Brightness", "draw.rectangle")}
     magazine_pdf_token_presence = {token: token in magazine_pdf_service for token in ("render_vintage_magazine_pdf", "_cover_page", "_divider_page", "_matchup_page")}
     download_button_count = page.count("download_button")
     download_key_count = page.count("key='report_studio_") + page.count("key=f'report_studio_") + page.count('key="report_studio_') + page.count('key=f"report_studio_')
@@ -102,6 +113,7 @@ def check_static_page_contract() -> None:
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "required_tokens": token_presence,
         "image_service_tokens": image_token_presence,
+        "background_service_tokens": background_token_presence,
         "magazine_pdf_service_tokens": magazine_pdf_token_presence,
         "download_button_count": download_button_count,
         "download_key_count": download_key_count,
@@ -110,6 +122,8 @@ def check_static_page_contract() -> None:
         assert present, f"Report Studio missing required token: {token}"
     for token, present in image_token_presence.items():
         assert present, f"image export service missing {token}"
+    for token, present in background_token_presence.items():
+        assert present, f"background image export service missing {token}"
     for token, present in magazine_pdf_token_presence.items():
         assert present, f"magazine PDF service missing {token}"
     assert download_key_count >= download_button_count, f"Every Report Studio download button needs a stable unique key: buttons={download_button_count}, keys={download_key_count}"
@@ -150,6 +164,9 @@ def check_functional_contract() -> None:
         "single_card_png": render_card_png(first_card, brand),
         "deck_png": render_card_deck_png(state.cards, brand),
         "magazine_summary_png": render_magazine_summary_png(state.cards, brand),
+        "custom_background_card_png": render_custom_background_card_png(first_card, brand, background_bytes=None),
+        "custom_background_deck_png": render_custom_background_deck_png(state.cards, brand, background_bytes=None),
+        "custom_background_summary_png": render_custom_background_summary_png(state.cards, brand, background_bytes=None),
     }
 
     _write_diagnostics("report_studio_functional_contract.json", {
@@ -169,7 +186,7 @@ def check_functional_contract() -> None:
         "legacy_groups": sorted(legacy_feed.get("groups", {}).keys()),
         "export_contains_no_play": {"html": "No Play" in bundle.html, "markdown": "No Play" in bundle.markdown, "whatsapp": "No Play" in bundle.whatsapp},
         "image_payload_sizes": {key: len(value) for key, value in image_payloads.items()},
-        "image_headers_ok": {key: value.startswith(PNG_HEADER) for key, value in image_payloads.items()},
+        "image_headers_ok": {key: value.startswith(PNG_HEADER) or value.startswith(BACKGROUND_PNG_HEADER) for key, value in image_payloads.items()},
         "magazine_pdf_size": len(magazine_pdf),
         "magazine_pdf_header_ok": magazine_pdf.startswith(PDF_HEADER),
     })
@@ -195,7 +212,7 @@ def check_functional_contract() -> None:
     assert magazine_pdf.startswith(PDF_HEADER), "magazine PDF did not start with PDF header"
     assert len(magazine_pdf) > 20000, f"magazine PDF was too small: {len(magazine_pdf)} bytes"
     for name, payload in image_payloads.items():
-        assert payload.startswith(PNG_HEADER), f"{name} did not start with PNG header"
+        assert payload.startswith(PNG_HEADER) or payload.startswith(BACKGROUND_PNG_HEADER), f"{name} did not start with PNG header"
         assert len(payload) > 5000, f"{name} was too small: {len(payload)} bytes"
 
 
