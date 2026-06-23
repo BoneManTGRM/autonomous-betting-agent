@@ -113,8 +113,24 @@ def _crop_background(background_bytes: bytes | None, height: int) -> Image.Image
         return Image.new('RGB', (W, height), BG)
 
 
-def render_mobile_png(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any] | None = None, *, background_bytes: bytes | None = None, top_n: int = 3) -> bytes:
-    frame = pd.DataFrame(cards).head(min(int(top_n or 3), 3))
+def _png_to_image(png_bytes: bytes) -> Image.Image:
+    return Image.open(BytesIO(png_bytes)).convert('RGB')
+
+
+def render_mobile_png(
+    cards: pd.DataFrame,
+    brand: MagazineBrand | Mapping[str, Any] | None = None,
+    *,
+    background_bytes: bytes | None = None,
+    top_n: int = 3,
+    start_index: int = 0,
+    page_number: int | None = None,
+    total_pages: int | None = None,
+) -> bytes:
+    all_rows = pd.DataFrame(cards)
+    start = max(0, int(start_index or 0))
+    count = max(1, min(int(top_n or 3), 3))
+    frame = all_rows.iloc[start:start + count].copy()
     if frame.empty:
         frame = pd.DataFrame([{'event': 'No rows available', 'prediction': 'Research / Learning'}])
     card_h = 305
@@ -131,14 +147,17 @@ def render_mobile_png(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, A
     name = brand_value(brand, 'brand_name', 'ABA Signal Pro')
     draw.text((82, 70), name.upper()[:30], font=bold(44), fill=GOLD)
     draw.text((82, 130), title[:32], font=bold(54), fill=WHITE)
-    draw.text((82, 196), 'Mobile readable report - 3 cards per image', font=font(30), fill=SOFT)
+    page_note = ''
+    if page_number is not None and total_pages is not None:
+        page_note = f' - Page {page_number} of {total_pages}'
+    draw.text((82, 196), f'Mobile readable report - 3 cards per image{page_note}', font=font(30), fill=SOFT)
 
     y = header_h
-    for idx, (_, row) in enumerate(frame.iterrows(), start=1):
+    for row_number, (_, row) in enumerate(frame.iterrows(), start=start + 1):
         event, pick, status, detail = card_text(row.to_dict())
         panel(img, (58, y, W - 58, y + card_h), alpha=132)
         draw = ImageDraw.Draw(img)
-        write_wrap(draw, 96, y + 24, f'{idx}. {event}', bold(42), 38, 2, WHITE, gap=5)
+        write_wrap(draw, 96, y + 24, f'{row_number}. {event}', bold(42), 38, 2, WHITE, gap=5)
         draw.text((96, y + 116), 'PICK', font=bold(30), fill=SOFT)
         write_wrap(draw, 188, y + 106, pick, bold(48), 29, 2, GOLD, gap=4)
         draw.text((96, y + 206), status[:32], font=bold(34), fill=GREEN)
@@ -147,4 +166,43 @@ def render_mobile_png(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, A
 
     out = BytesIO()
     img.save(out, format='PNG', optimize=False)
+    return out.getvalue()
+
+
+def render_mobile_deck_png(
+    cards: pd.DataFrame,
+    brand: MagazineBrand | Mapping[str, Any] | None = None,
+    *,
+    background_bytes: bytes | None = None,
+    cards_per_page: int = 3,
+    max_cards: int | None = None,
+) -> bytes:
+    frame = pd.DataFrame(cards).copy()
+    if max_cards is not None and int(max_cards) > 0:
+        frame = frame.head(int(max_cards))
+    if frame.empty:
+        frame = pd.DataFrame([{'event': 'No rows available', 'prediction': 'Research / Learning'}])
+    per_page = max(1, min(int(cards_per_page or 3), 3))
+    total_pages = max(1, (len(frame) + per_page - 1) // per_page)
+    pages = []
+    for page_idx in range(total_pages):
+        start = page_idx * per_page
+        page_bytes = render_mobile_png(
+            frame,
+            brand,
+            background_bytes=background_bytes,
+            top_n=per_page,
+            start_index=start,
+            page_number=page_idx + 1,
+            total_pages=total_pages,
+        )
+        pages.append(_png_to_image(page_bytes))
+    total_height = sum(page.height for page in pages)
+    deck = Image.new('RGB', (W, total_height), BG)
+    y = 0
+    for page in pages:
+        deck.paste(page, (0, y))
+        y += page.height
+    out = BytesIO()
+    deck.save(out, format='PNG', optimize=False)
     return out.getvalue()
