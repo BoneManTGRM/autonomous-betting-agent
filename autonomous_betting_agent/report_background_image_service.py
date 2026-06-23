@@ -12,7 +12,7 @@ from .report_learning_layer_compat import apply_learning_layer_compat
 from .report_product_layer import MagazineBrand, safe_float, safe_text
 
 PNG_HEADER = b"\x89PNG\r\n\x1a\n"
-PNG_RENDERER_VERSION = "client-ready-png-v3"
+PNG_RENDERER_VERSION = "client-ready-png-v4-large-text"
 PAGE_W = 1080
 PAGE_H = 1350
 INK = (255, 255, 255)
@@ -71,7 +71,7 @@ def _background(background_bytes: bytes | None) -> Image.Image:
     canvas = resized.crop((left, top, left + PAGE_W, top + PAGE_H))
     if has_custom:
         canvas = ImageEnhance.Color(canvas).enhance(1.08)
-        canvas = ImageEnhance.Brightness(canvas).enhance(1.03)
+        canvas = ImageEnhance.Brightness(canvas).enhance(1.04)
         return canvas.convert("RGB")
     canvas = ImageEnhance.Color(canvas).enhance(0.82)
     canvas = ImageEnhance.Brightness(canvas).enhance(0.82)
@@ -104,12 +104,10 @@ def _wrapped(draw: ImageDraw.ImageDraw, x: int, y: int, text: Any, font, *, widt
     return y
 
 
-def _panel(image: Image.Image, box: tuple[int, int, int, int], *, radius: int = 28, alpha: int = 150, outline_alpha: int = 185, width: int = 2) -> None:
+def _panel(image: Image.Image, box: tuple[int, int, int, int], *, radius: int = 28, alpha: int = 145, outline_alpha: int = 185, width: int = 2) -> None:
     overlay = Image.new("RGBA", (PAGE_W, PAGE_H), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay, "RGBA")
-    fill = (*PANEL_RGB, alpha)
-    outline = (*BORDER, outline_alpha)
-    draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
+    draw.rounded_rectangle(box, radius=radius, fill=(*PANEL_RGB, alpha), outline=(*BORDER, outline_alpha), width=width)
     image.paste(Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB"))
 
 
@@ -155,33 +153,30 @@ def _reason(row: Mapping[str, Any]) -> str:
         text = safe_text(row.get(field))
         if text and "unavailable" not in text.lower():
             return text
-    return "Price, model, and proof gates reviewed. This stays research unless it passes official +EV rules."
+    return "Price, model, and proof gates reviewed. Research only unless it passes official +EV rules."
 
 
 def _metrics(row: Mapping[str, Any]) -> list[str]:
     parts: list[str] = []
     sport = _first(row, ("public_sport", "sport", "league"))
     if sport:
-        parts.append(sport[:18])
+        parts.append(sport[:16])
     confidence = _first(row, ("confidence_tier", "confidence", "model_lean_label"))
     if confidence:
-        parts.append(f"Conf: {confidence[:14]}")
+        parts.append(f"Conf {confidence[:12]}")
     price = _price(row.get("decimal_price") or row.get("best_price") or row.get("odds_decimal"))
     if price != "N/A":
-        parts.append(f"Price: {price}")
+        parts.append(f"Price {price}")
     model = _pct(row.get("model_probability") or row.get("learned_model_probability"))
     if model != "N/A":
-        parts.append(f"Model: {model}")
-    market = _pct(row.get("market_probability"))
-    if market != "N/A":
-        parts.append(f"Market: {market}")
+        parts.append(f"Model {model}")
     edge = _pct(row.get("model_market_edge"), signed=True)
     if edge != "N/A":
-        parts.append(f"Edge: {edge}")
+        parts.append(f"Edge {edge}")
     ev = _pct(row.get("expected_value_per_unit"), signed=True)
     if ev != "N/A":
-        parts.append(f"EV: {ev}")
-    return parts[:5]
+        parts.append(f"EV {ev}")
+    return parts[:4]
 
 
 def _summary_counts(cards: pd.DataFrame) -> tuple[int, int, int, int]:
@@ -204,35 +199,35 @@ def render_custom_background_card_png(row: Mapping[str, Any], brand: MagazineBra
     title = safe_text(row.get("event") or row.get("matchup")) or "Matchup"
     sport = _first(row, ("sport", "public_sport", "league")) or "Sports"
     action = _action(row)
-    _panel(image, (54, 54, PAGE_W - 54, PAGE_H - 54), radius=38, alpha=105 if has_custom else 170, outline_alpha=195, width=3)
+    _panel(image, (48, 48, PAGE_W - 48, PAGE_H - 48), radius=40, alpha=95 if has_custom else 170, outline_alpha=195, width=3)
     draw = ImageDraw.Draw(image)
-    draw.text((90, 88), brand_name.upper(), font=_bold(44), fill=GOLD)
-    draw.text((90, 150), sport.upper(), font=_font(35), fill=MUTED)
-    draw.text((PAGE_W - 250, 90), PNG_RENDERER_VERSION, font=_font(22), fill=MUTED)
-    y = 235
-    for line in wrap(title, width=18)[:3]:
-        y = _center(draw, y, line, _bold(86), fill=INK) + 12
-    _panel(image, (110, y + 12, PAGE_W - 110, y + 116), radius=34, alpha=175, outline_alpha=195, width=2)
+    draw.text((86, 82), brand_name.upper(), font=_bold(52), fill=GOLD)
+    draw.text((86, 152), sport.upper(), font=_font(40), fill=MUTED)
+    draw.text((PAGE_W - 360, 96), PNG_RENDERER_VERSION, font=_font(24), fill=MUTED)
+    y = 236
+    for line in wrap(title, width=16)[:3]:
+        y = _center(draw, y, line, _bold(104), fill=INK) + 14
+    _panel(image, (96, y + 10, PAGE_W - 96, y + 128), radius=36, alpha=175, outline_alpha=195, width=2)
     draw = ImageDraw.Draw(image)
-    _center(draw, y + 38, action[:30], _bold(46), fill=GOLD)
-    y += 158
+    _center(draw, y + 38, action[:28], _bold(58), fill=GOLD)
+    y += 168
     metric_line = "  •  ".join(_metrics(row)) or "Research / Learning"
-    _panel(image, (94, y, PAGE_W - 94, y + 110), radius=30, alpha=150, outline_alpha=155, width=2)
+    _panel(image, (82, y, PAGE_W - 82, y + 124), radius=32, alpha=155, outline_alpha=165, width=2)
     draw = ImageDraw.Draw(image)
-    _wrapped(draw, 126, y + 24, metric_line, _bold(34), width=48, fill=GREEN, max_lines=2, line_gap=8)
-    y += 145
-    _panel(image, (94, y, PAGE_W - 94, 960), radius=30, alpha=145, outline_alpha=140, width=2)
+    _wrapped(draw, 116, y + 28, metric_line, _bold(43), width=38, fill=GREEN, max_lines=2, line_gap=8)
+    y += 152
+    _panel(image, (82, y, PAGE_W - 82, 986), radius=32, alpha=150, outline_alpha=150, width=2)
     draw = ImageDraw.Draw(image)
-    draw.text((126, y + 26), "WHY IT MATTERS", font=_bold(38), fill=GOLD)
-    _wrapped(draw, 126, y + 86, _reason(row), _font(43), width=34, fill=INK, max_lines=4, line_gap=14)
-    _panel(image, (190, 1040, PAGE_W - 190, 1195), radius=38, alpha=165, outline_alpha=190, width=2)
+    draw.text((116, y + 28), "WHY IT MATTERS", font=_bold(48), fill=GOLD)
+    _wrapped(draw, 116, y + 100, _reason(row), _font(52), width=28, fill=INK, max_lines=3, line_gap=15)
+    _panel(image, (166, 1030, PAGE_W - 166, 1210), radius=42, alpha=170, outline_alpha=195, width=2)
     draw = ImageDraw.Draw(image)
-    _center(draw, 1064, "TENDENCY", _bold(48), fill=GOLD)
-    _center(draw, 1134, _trend(row)[:28], _bold(56), fill=INK)
+    _center(draw, 1056, "TENDENCY", _bold(58), fill=GOLD)
+    _center(draw, 1138, _trend(row)[:25], _bold(68), fill=INK)
     return _png(image)
 
 
-def render_custom_background_summary_png(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any] | None = None, *, background_bytes: bytes | None = None, top_n: int = 4) -> bytes:
+def render_custom_background_summary_png(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any] | None = None, *, background_bytes: bytes | None = None, top_n: int = 3) -> bytes:
     frame = apply_learning_layer_compat(pd.DataFrame(cards).copy()).head(top_n)
     if frame.empty:
         frame = pd.DataFrame([{"event": "No cards available", "prediction": "Research / Learning"}])
@@ -246,44 +241,43 @@ def render_custom_background_summary_png(cards: pd.DataFrame, brand: MagazineBra
     disclaimer = _brand_value(brand, "disclaimer", "Informational content only. Results are not guaranteed.")
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    _panel(image, (52, 50, PAGE_W - 52, 262), radius=36, alpha=130 if has_custom else 180, outline_alpha=190, width=3)
+    _panel(image, (48, 48, PAGE_W - 48, 308), radius=38, alpha=125 if has_custom else 185, outline_alpha=195, width=3)
     draw = ImageDraw.Draw(image)
-    _center(draw, 78, brand_name.upper(), _bold(54), fill=GOLD)
-    _center(draw, 150, title, _bold(72), fill=INK)
-    _center(draw, 224, f"{today}  •  {workspace}", _font(31), fill=MUTED)
-    draw.text((PAGE_W - 320, 226), PNG_RENDERER_VERSION, font=_font(22), fill=MUTED)
+    _center(draw, 74, brand_name.upper(), _bold(68), fill=GOLD)
+    _center(draw, 162, title, _bold(96), fill=INK)
+    _center(draw, 254, f"{today}  •  {workspace}  •  {PNG_RENDERER_VERSION}", _font(37), fill=MUTED)
 
     total, official, research, issues = _summary_counts(pd.DataFrame(cards))
-    _panel(image, (66, 286, PAGE_W - 66, 372), radius=28, alpha=145, outline_alpha=165, width=2)
+    _panel(image, (58, 342, PAGE_W - 58, 446), radius=30, alpha=150, outline_alpha=170, width=2)
     draw = ImageDraw.Draw(image)
-    summary = f"Cards {total}   |   Official {official}   |   Research/Watch {research}   |   Data issues {issues}"
-    _center(draw, 314, summary, _bold(34), fill=GREEN)
+    summary = f"Cards {total}   |   Official {official}   |   Research {research}   |   Issues {issues}"
+    _center(draw, 374, summary, _bold(45), fill=GREEN)
 
-    draw.text((72, 404), "TOP REPORT CARDS", font=_bold(54), fill=GOLD)
-    y = 478
-    card_h = 182
+    draw.text((66, 482), "TOP 3 REPORT CARDS", font=_bold(64), fill=GOLD)
+    y = 566
+    card_h = 220
     for idx, (_, row) in enumerate(frame.iterrows(), start=1):
         item = row.to_dict()
         event = safe_text(item.get("event")) or "Matchup"
         pick = _trend(item)
         action = _action(item)
-        metrics = "  •  ".join(_metrics(item)[:4])
+        metrics = "  •  ".join(_metrics(item)[:3])
         reason = _reason(item)
-        _panel(image, (66, y, PAGE_W - 66, y + card_h), radius=30, alpha=150, outline_alpha=190, width=3)
+        _panel(image, (58, y, PAGE_W - 58, y + card_h), radius=32, alpha=155, outline_alpha=200, width=3)
         draw = ImageDraw.Draw(image)
-        draw.text((106, y + 20), f"{idx}. {event[:34]}", font=_bold(42), fill=INK)
-        draw.text((106, y + 72), pick[:36], font=_bold(37), fill=MUTED)
-        draw.text((PAGE_W - 430, y + 24), action[:24], font=_bold(32), fill=GOLD)
+        draw.text((96, y + 20), f"{idx}. {event[:29]}", font=_bold(56), fill=INK)
+        draw.text((96, y + 88), pick[:30], font=_bold(50), fill=MUTED)
+        draw.text((PAGE_W - 430, y + 30), action[:22], font=_bold(40), fill=GOLD)
         if metrics:
-            draw.text((106, y + 116), metrics[:58], font=_bold(27), fill=GREEN)
-        _wrapped(draw, 106, y + 148, reason, _font(25), width=70, fill=MUTED, max_lines=1, line_gap=4)
-        y += card_h + 22
-        if y > 1240:
+            draw.text((96, y + 145), metrics[:45], font=_bold(35), fill=GREEN)
+        _wrapped(draw, 96, y + 182, reason, _font(32), width=56, fill=MUTED, max_lines=1, line_gap=4)
+        y += card_h + 32
+        if y > 1255:
             break
 
-    _panel(image, (66, 1264, PAGE_W - 66, 1314), radius=22, alpha=130, outline_alpha=130, width=1)
+    _panel(image, (58, 1280, PAGE_W - 58, 1324), radius=20, alpha=135, outline_alpha=130, width=1)
     draw = ImageDraw.Draw(image)
-    _center(draw, 1278, disclaimer[:94], _font(24), fill=MUTED)
+    _center(draw, 1292, disclaimer[:78], _font(26), fill=MUTED)
     return _png(image)
 
 
