@@ -6,7 +6,7 @@ from typing import Any
 import pandas as pd
 
 from .event_exposure import exposure_metrics
-from .odds_lock_tools import client_view, daily_report, lock_rows, lock_status, proof_hash, summarize_locked_picks, update_profit_columns
+from .odds_lock_tools import client_view, daily_report, lock_rows, lock_status, profit_units as compute_profit_units, proof_hash, summarize_locked_picks, update_profit_columns
 from .pick_hold_store import load_held_rows, save_held_rows
 from .row_normalizer import normalize_frame, result_status, safe_text
 
@@ -179,9 +179,14 @@ def apply_result_updates(ledger, results):
                 item['winner'] = safe_text(match.get('winner') or match.get('actual_winner') or match.get('final_winner') or item.get('winner'))
                 item['final_score'] = safe_text(match.get('final_score') or match.get('score') or item.get('final_score'))
                 item['graded_at_utc'] = pd.Timestamp.utcnow().isoformat()
+                item['profit_units'] = compute_profit_units(item)
                 updated += 1
         rows.append(item)
-    return filter_locked_proof_rows(pd.DataFrame(rows)), {'updated_rows': updated, 'matched_by_proof_id': pm, 'matched_by_event_pick': km, 'unmatched_results': max(0, len(result_frame) - len(matched))}
+    out = filter_locked_proof_rows(pd.DataFrame(rows))
+    if not out.empty:
+        out['profit_units'] = out.apply(lambda r: compute_profit_units(r), axis=1)
+        out = add_clv_columns(out)
+    return out, {'updated_rows': updated, 'matched_by_proof_id': pm, 'matched_by_event_pick': km, 'unmatched_results': max(0, len(result_frame) - len(matched))}
 
 
 def proof_audit_frame(frame):
