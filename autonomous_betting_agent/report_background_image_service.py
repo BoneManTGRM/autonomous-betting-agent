@@ -165,3 +165,17 @@ def render_custom_background_summary_png(cards: pd.DataFrame, brand: MagazineBra
         if y > 1180:
             break
     return _png(image)
+
+
+def render_custom_background_deck_png(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any] | None = None, *, background_bytes: bytes | None = None, max_cards: int = 8) -> bytes:
+    frame = apply_learning_layer_compat(pd.DataFrame(cards).copy()).head(max_cards)
+    if frame.empty:
+        frame = pd.DataFrame([{"event": "No cards available", "prediction": "Research / Learning"}])
+    pages = []
+    for idx, (_, row) in enumerate(frame.iterrows()):
+        page_bytes = render_custom_background_card_png(row.to_dict(), brand, background_bytes=background_bytes, index=idx)
+        pages.append(Image.open(BytesIO(page_bytes)).convert("RGB"))
+    deck = Image.new("RGB", (PAGE_W, PAGE_H * len(pages)), (20, 24, 34))
+    for idx, page in enumerate(pages):
+        deck.paste(page, (0, idx * PAGE_H))
+    return _png(deck)
