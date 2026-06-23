@@ -11,6 +11,7 @@ from autonomous_betting_agent.app_feed_delivery import build_app_feed
 from autonomous_betting_agent.report_export_service import build_report_export_bundle
 from autonomous_betting_agent.report_feed_service import build_report_feed
 from autonomous_betting_agent.report_image_export_service import PNG_HEADER, render_card_deck_png, render_card_png, render_magazine_summary_png
+from autonomous_betting_agent.report_magazine_pdf_service import PDF_HEADER, render_vintage_magazine_pdf
 from autonomous_betting_agent.report_product_layer import MagazineBrand
 from autonomous_betting_agent.report_studio_service import ReportStudioFilters, build_report_studio_state, report_studio_summary
 from autonomous_betting_agent.report_studio_ui import render_premium_card_deck, render_status_dashboard
@@ -59,6 +60,7 @@ def _write_diagnostics(name: str, payload: dict[str, Any]) -> None:
 def check_static_page_contract() -> None:
     page = _read("pages/report_studio.py")
     image_service = _read("autonomous_betting_agent/report_image_export_service.py")
+    magazine_pdf_service = _read("autonomous_betting_agent/report_magazine_pdf_service.py")
     required_tokens = [
         "build_report_studio_state",
         "render_status_dashboard",
@@ -70,6 +72,8 @@ def check_static_page_contract() -> None:
         "render_card_deck_png",
         "render_magazine_summary_png",
         "card_image_filename",
+        "render_vintage_magazine_pdf",
+        "magazine_pdf",
         "Images",
         "Learning Audit",
         "Diagnostics",
@@ -77,25 +81,28 @@ def check_static_page_contract() -> None:
         "client_report_ready",
         "learning_ready",
         "report_studio_copy_tab_download",
-        "report_studio_magazine_tab_png",
         "report_studio_export_whatsapp",
         "report_studio_export_pdf",
+        "report_studio_export_magazine_pdf",
         "report_studio_export_html",
         "report_studio_export_md",
         "report_studio_export_json",
         "report_studio_export_csv",
+        "report_studio_magazine_pdf",
         "report_studio_image_deck_png",
         "report_studio_image_magazine_png",
         "report_studio_image_card_",
     ]
     token_presence = {token: token in page for token in required_tokens}
     image_token_presence = {token: token in image_service for token in ("render_card_png", "render_card_deck_png", "render_magazine_summary_png", "card_image_filename")}
+    magazine_pdf_token_presence = {token: token in magazine_pdf_service for token in ("render_vintage_magazine_pdf", "_cover_page", "_divider_page", "_matchup_page")}
     download_button_count = page.count("download_button")
     download_key_count = page.count("key='report_studio_") + page.count("key=f'report_studio_") + page.count('key="report_studio_') + page.count('key=f"report_studio_')
     _write_diagnostics("report_studio_static_contract.json", {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "required_tokens": token_presence,
         "image_service_tokens": image_token_presence,
+        "magazine_pdf_service_tokens": magazine_pdf_token_presence,
         "download_button_count": download_button_count,
         "download_key_count": download_key_count,
     })
@@ -103,6 +110,8 @@ def check_static_page_contract() -> None:
         assert present, f"Report Studio missing required token: {token}"
     for token, present in image_token_presence.items():
         assert present, f"image export service missing {token}"
+    for token, present in magazine_pdf_token_presence.items():
+        assert present, f"magazine PDF service missing {token}"
     assert download_key_count >= download_button_count, f"Every Report Studio download button needs a stable unique key: buttons={download_button_count}, keys={download_key_count}"
 
 
@@ -135,6 +144,7 @@ def check_functional_contract() -> None:
     unified_feed = build_report_feed(state.cards, brand)
     legacy_feed = build_app_feed(state.cards, brand)
     bundle = build_report_export_bundle(state.cards, brand)
+    magazine_pdf = render_vintage_magazine_pdf(state.cards, brand)
     first_card = state.cards.iloc[0].to_dict()
     image_payloads = {
         "single_card_png": render_card_png(first_card, brand),
@@ -152,27 +162,16 @@ def check_functional_contract() -> None:
         "data_issue_counts": state.cards.get("data_issue_reason", pd.Series(dtype=str)).value_counts(dropna=False).to_dict(),
         "audit_keys": sorted(state.audit.keys()),
         "negative_edge_winners_rows": int(len(state.audit.get("negative_edge_winners", pd.DataFrame()))),
-        "dashboard_contains": {
-            "Official +EV Plays": "Official +EV Plays" in dashboard,
-            "Research / Learning": "Research / Learning" in dashboard,
-        },
-        "premium_contains": {
-            "Price Watch / Research": "Price Watch / Research" in premium,
-            "No Play": "No Play" in premium,
-        },
-        "feed_versions": {
-            "unified": unified_feed.get("schema_version"),
-            "legacy": legacy_feed.get("schema_version"),
-        },
+        "dashboard_contains": {"Official +EV Plays": "Official +EV Plays" in dashboard, "Research / Learning": "Research / Learning" in dashboard},
+        "premium_contains": {"Price Watch / Research": "Price Watch / Research" in premium, "No Play": "No Play" in premium},
+        "feed_versions": {"unified": unified_feed.get("schema_version"), "legacy": legacy_feed.get("schema_version")},
         "feed_counts": unified_feed.get("counts", {}),
         "legacy_groups": sorted(legacy_feed.get("groups", {}).keys()),
-        "export_contains_no_play": {
-            "html": "No Play" in bundle.html,
-            "markdown": "No Play" in bundle.markdown,
-            "whatsapp": "No Play" in bundle.whatsapp,
-        },
+        "export_contains_no_play": {"html": "No Play" in bundle.html, "markdown": "No Play" in bundle.markdown, "whatsapp": "No Play" in bundle.whatsapp},
         "image_payload_sizes": {key: len(value) for key, value in image_payloads.items()},
         "image_headers_ok": {key: value.startswith(PNG_HEADER) for key, value in image_payloads.items()},
+        "magazine_pdf_size": len(magazine_pdf),
+        "magazine_pdf_header_ok": magazine_pdf.startswith(PDF_HEADER),
     })
 
     assert summary["cards"] == 6, f"cards expected 6, got {summary['cards']}"
@@ -182,21 +181,19 @@ def check_functional_contract() -> None:
     assert summary["data_issues"] == 2, f"data_issues expected 2, got {summary['data_issues']}"
     assert "by_edge_bucket" in state.audit, f"audit missing by_edge_bucket; keys={sorted(state.audit.keys())}"
     assert not state.audit["negative_edge_winners"].empty, "negative_edge_winners should not be empty"
-
     assert "Official +EV Plays" in dashboard
     assert "Research / Learning" in dashboard
     assert "Price Watch / Research" in premium
     assert "No Play" not in premium
-
     assert unified_feed["schema_version"] == "aba-report-feed-v2"
     assert legacy_feed["schema_version"] == "aba-report-feed-v1"
     assert unified_feed["counts"]["data_issues"] == 2
     assert "no_play" in legacy_feed["groups"]
-
     assert bundle.pdf_bytes.startswith(b"%PDF")
     for name, text in {"html": bundle.html, "markdown": bundle.markdown, "whatsapp": bundle.whatsapp}.items():
         assert "No Play" not in text, f"legacy No Play label still present in {name} export"
-
+    assert magazine_pdf.startswith(PDF_HEADER), "magazine PDF did not start with PDF header"
+    assert len(magazine_pdf) > 20000, f"magazine PDF was too small: {len(magazine_pdf)} bytes"
     for name, payload in image_payloads.items():
         assert payload.startswith(PNG_HEADER), f"{name} did not start with PNG header"
         assert len(payload) > 5000, f"{name} was too small: {len(payload)} bytes"
