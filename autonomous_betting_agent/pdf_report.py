@@ -54,8 +54,8 @@ def _pdf_lines(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any], *,
     technical = mode in {'analyst', 'proof'} or 'analyst' in safe_text(mode).lower()
 
     section_names = (
-        {'best_plays': 'Mejores jugadas', 'watchlist': 'Lista de seguimiento', 'no_play': 'No jugar / removidas'}
-        if es else {'best_plays': 'Today\'s Best Plays', 'watchlist': 'Watchlist / Leans', 'no_play': 'No Play / Removed'}
+        {'best_plays': 'Mejores jugadas', 'watchlist': 'Price Watch', 'no_play': 'Investigación / aprendizaje'}
+        if es else {'best_plays': 'Today\'s Official +EV', 'watchlist': 'Price Watch', 'no_play': 'Research / Learning'}
     )
     labels = {'pick': 'Selección', 'action': 'Acción', 'confidence': 'Confianza', 'risk': 'Riesgo', 'market': 'Mercado'} if es else {'pick': 'Pick', 'action': 'Action', 'confidence': 'Confidence', 'risk': 'Risk', 'market': 'Market'}
     lines = [title, f'{brand_name} - {tagline}', f'Workspace: {workspace}', f'Generated: {generated}', '']
@@ -64,14 +64,14 @@ def _pdf_lines(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any], *,
         section = groups.get(key, pd.DataFrame())
         lines += [section_names[key], '-' * len(section_names[key])]
         if section.empty:
-            lines.append('No approved plays in this section.' if not es else 'No hay jugadas aprobadas en esta sección.')
+            lines.append('No cards in this section.' if not es else 'Sin tarjetas en esta sección.')
         for _, row in section.iterrows():
             rowd = row.to_dict()
             header = safe_text(rowd.get('event')) or 'Matchup'
             lines.append(header)
             details = [
                 f"{labels['pick']}: {safe_text(rowd.get('public_pick') or rowd.get('prediction'))}",
-                f"{labels['action']}: {safe_text(rowd.get('recommended_action'))}",
+                f"{labels['action']}: {safe_text(rowd.get('consumer_action') or rowd.get('recommended_action'))}",
                 f"{labels['confidence']}: {safe_text(rowd.get('confidence_tier'))} | {labels['risk']}: {safe_text(rowd.get('risk_tier'))}",
                 f"{labels['market']}: {safe_text(rowd.get('market_read'))}",
                 safe_text(rowd.get('why_it_matters')),
