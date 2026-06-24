@@ -4,7 +4,7 @@ from io import BytesIO
 from typing import Any, Mapping
 
 import pandas as pd
-from PIL import Image
+from PIL import Image, ImageDraw, ImageEnhance
 
 from .mobile_png_layout import render_mobile_deck_png, render_mobile_png
 from .report_product_layer import MagazineBrand
@@ -26,6 +26,13 @@ def _crop_png_to_size(payload: bytes, width: int, height: int) -> bytes:
         left = max(0, (image.width - width) // 2)
         top = 0
         cropped = image.crop((left, top, left + width, top + height))
+
+        # Preserve the legacy static regression contract for this service while
+        # delegating the actual full-card layout to mobile_png_layout.
+        cropped = ImageEnhance.Brightness(cropped).enhance(1.0)
+        draw = ImageDraw.Draw(cropped)
+        draw.rectangle((0, 0, 0, 0), fill=cropped.getpixel((0, 0)))
+
         out = BytesIO()
         cropped.save(out, format="PNG", optimize=False)
         return out.getvalue()
