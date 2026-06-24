@@ -51,3 +51,37 @@ def can_view_private(role: str) -> bool:
 
 def can_view_client_reports(role: str) -> bool:
     return role in {"admin", "client"}
+
+
+def require_streamlit_access(st: Any, *, allow_roles: set[str] | None = None) -> LocalAccessSession:
+    """Render a tiny optional access gate for Streamlit pages.
+
+    When `ABA_REQUIRE_LOGIN` is not enabled, this returns an admin local session
+    and does not interrupt the existing no-password workflow.
+    """
+    if not local_access_required():
+        return LocalAccessSession()
+
+    allow_roles = allow_roles or {"admin", "client", "demo"}
+    session_key = "aba_local_access_session"
+    current = st.session_state.get(session_key)
+    if isinstance(current, dict):
+        session = LocalAccessSession(**current)
+        if session.active and session.role in allow_roles:
+            with st.sidebar:
+                st.caption(f"Local access: {session.role}")
+                if st.button("Log out", key="aba_local_logout"):
+                    st.session_state.pop(session_key, None)
+                    st.rerun()
+            return session
+
+    st.info("Local access is enabled. Enter local credentials from Streamlit secrets or environment variables.")
+    name = st.text_input("Name", key="aba_local_access_name")
+    passcode = st.text_input("Access code", type="password", key="aba_local_access_code")
+    if st.button("Enter", key="aba_local_access_enter"):
+        session = check_local_access(name, passcode, getattr(st, "secrets", {}))
+        if session.active and session.role in allow_roles:
+            st.session_state[session_key] = {"name": session.name, "role": session.role, "active": session.active}
+            st.rerun()
+        st.error("Access not allowed for this page.")
+    st.stop()
