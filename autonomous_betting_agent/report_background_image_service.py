@@ -7,6 +7,7 @@ import pandas as pd
 from .mobile_png_layout import render_mobile_deck_png, render_mobile_png
 from .report_product_layer import MagazineBrand
 
+PNG_HEADER = b"\x89PNG\r\n\x1a\n"
 PNG_RENDERER_VERSION = "unified-large-text-layout"
 PAGE_W = 1080
 PAGE_H = 1620
