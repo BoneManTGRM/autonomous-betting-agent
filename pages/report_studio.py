@@ -7,6 +7,14 @@ import streamlit as st
 
 from autonomous_betting_agent.app_feed_delivery import save_app_feed
 from autonomous_betting_agent.commercial_platform_tools import load_persistent_ledger, normalize_workspace_id
+from autonomous_betting_agent.magazine_book_export import (
+    pick_full_page_filename,
+    render_full_magazine_book_pdf,
+    render_full_magazine_book_png,
+    render_full_magazine_zip,
+    render_full_pick_magazine_page_png,
+    sanitize_image_filename,
+)
 from autonomous_betting_agent.pick_hold_store import load_first_available
 from autonomous_betting_agent.report_background_image_service import render_custom_background_card_png, render_custom_background_deck_png, render_custom_background_summary_png
 from autonomous_betting_agent.report_feed_service import save_report_feed
@@ -146,6 +154,10 @@ with st.expander(t('profile'), expanded=True):
     brand_name = b1.text_input(t('brand_name'), value=loaded.brand_name)
     tagline = b2.text_input(t('tagline'), value=loaded.tagline)
     report_title = b1.text_input(t('report_title'), value=loaded.report_title)
+    full_magazine_book_name = st.text_input(
+        "Full magazine book name",
+        "ABA Signal Pro — Full Pick Magazine"
+    )
     logo_url = b2.text_input(t('logo_url'), value=loaded.logo_url)
     background_profile_upload = st.file_uploader(t('background_upload'), type=['png', 'jpg', 'jpeg'], key='report_studio_profile_background_upload')
     profile_background_bytes = background_profile_upload.getvalue() if background_profile_upload is not None else None
@@ -254,6 +266,51 @@ with tabs[6]:
     c1, c2 = st.columns(2)
     c1.download_button(t('deck_png'), data=deck_png, file_name=f'card_deck_{safe_workspace}.png', mime='image/png', key='report_studio_image_deck_png')
     c2.download_button(t('magazine_png'), data=magazine_png, file_name=f'magazine_summary_{safe_workspace}.png', mime='image/png', key='report_studio_image_magazine_png')
+
+    cards_as_rows = [row.to_dict() for _, row in cards.iterrows()]
+
+    full_book_png = render_full_magazine_book_png(
+        cards_as_rows,
+        background_image=background_bytes,
+        report_name=full_magazine_book_name,
+    )
+
+    full_book_pdf = render_full_magazine_book_pdf(
+        cards_as_rows,
+        background_image=background_bytes,
+        report_name=full_magazine_book_name,
+    )
+
+    full_book_zip = render_full_magazine_zip(
+        cards_as_rows,
+        background_image=background_bytes,
+        report_name=full_magazine_book_name,
+    )
+
+    st.download_button(
+        "Download Full Magazine Book PNG",
+        data=full_book_png,
+        file_name=sanitize_image_filename(full_magazine_book_name, extension="png"),
+        mime="image/png",
+        key="report_studio_full_book_png",
+    )
+
+    st.download_button(
+        "Download Full Magazine Book PDF",
+        data=full_book_pdf,
+        file_name=sanitize_image_filename(full_magazine_book_name, extension="pdf"),
+        mime="application/pdf",
+        key="report_studio_full_book_pdf",
+    )
+
+    st.download_button(
+        "Download Full Magazine ZIP",
+        data=full_book_zip,
+        file_name=sanitize_image_filename(full_magazine_book_name, extension="zip"),
+        mime="application/zip",
+        key="report_studio_full_book_zip",
+    )
+
     st.markdown('---')
     for idx, (_, row) in enumerate(cards.head(50).iterrows()):
         rowd = row.to_dict()
@@ -263,6 +320,20 @@ with tabs[6]:
         left, right = st.columns([3, 1])
         left.markdown(f'**{idx + 1}. {event}**  \n{action}')
         right.download_button(t('card_png'), data=card_png, file_name=card_image_filename(rowd, workspace=safe_workspace, index=idx), mime='image/png', key=f'report_studio_image_card_{idx}')
+        full_page_png = render_full_pick_magazine_page_png(
+            rowd,
+            background_image=background_bytes,
+            report_name=full_magazine_book_name,
+            page_number=idx + 1,
+            total_pages=len(cards_as_rows),
+        )
+        right.download_button(
+            "Download Full Magazine Page",
+            data=full_page_png,
+            file_name=pick_full_page_filename(rowd, idx),
+            mime="image/png",
+            key=f"report_studio_image_full_page_{idx}",
+        )
 with tabs[7]:
     st.json(asdict(WhiteLabelProfile(profile_id=profile_id, workspace_id=workspace_id, brand_name=brand_name, logo_url=logo_url, tagline=tagline, language=LANG, report_title=report_title, disclaimer=disclaimer, preferred_report_mode=report_mode, preferred_sports=preferred_sports, risk_preference=risk_preference, show_technical_fields=technical, default_audience='analyst' if technical else 'consumer')))
 with tabs[8]:
