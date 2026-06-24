@@ -28,32 +28,40 @@ def row_probability(row: Mapping[str, Any]) -> float | None:
     return _float(row.get("learned_model_probability") or row.get("model_probability") or row.get("probability"))
 
 
+def normalize_probability(value: float | None) -> float | None:
+    if value is None:
+        return None
+    probability = value / 100.0 if value > 1 else value
+    if 0 <= probability <= 1:
+        return probability
+    return None
+
+
 def brier_score(rows: Iterable[Mapping[str, Any]]) -> float | None:
     errors: list[float] = []
     for row in rows:
-        probability = row_probability(row)
+        probability = normalize_probability(row_probability(row))
         result = _result_value(row)
         if probability is None or result is None:
             continue
-        if probability > 1:
-            probability = probability / 100.0
-        if 0 <= probability <= 1:
-            errors.append((probability - result) ** 2)
+        errors.append((probability - result) ** 2)
     return sum(errors) / len(errors) if errors else None
+
+
+def _bucket_index(probability: float, bucket_size: float) -> int:
+    bucket_count = max(1, round(1.0 / bucket_size))
+    index = int((probability * 100.0) // (bucket_size * 100.0))
+    return max(0, min(bucket_count - 1, index))
 
 
 def calibration_buckets(rows: Iterable[Mapping[str, Any]], bucket_size: float = 0.10) -> list[dict[str, Any]]:
     buckets: dict[int, list[tuple[float, float]]] = defaultdict(list)
     for row in rows:
-        probability = row_probability(row)
+        probability = normalize_probability(row_probability(row))
         result = _result_value(row)
         if probability is None or result is None:
             continue
-        if probability > 1:
-            probability = probability / 100.0
-        if not 0 <= probability <= 1:
-            continue
-        bucket = int(min(0.999, probability) / bucket_size)
+        bucket = _bucket_index(probability, bucket_size)
         buckets[bucket].append((probability, result))
 
     output: list[dict[str, Any]] = []
