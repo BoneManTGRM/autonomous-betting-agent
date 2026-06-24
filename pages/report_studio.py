@@ -254,7 +254,7 @@ with tabs[5]:
     st.download_button(t('csv'), data=bundle.csv_text, file_name=f'report_{safe_workspace}.csv', mime='text/csv', key='report_studio_export_csv')
 with tabs[6]:
     st.caption(t('images_note'))
-    st.info('Download the full magazine book for the complete report, or prepare a full magazine-style page for each individual game below.')
+    st.info('Download the full magazine book for the complete report, or download a full magazine-style page for each individual game below.')
     background_upload = st.file_uploader(t('background_upload'), type=['png', 'jpg', 'jpeg'], key='report_studio_image_background_upload')
     background_bytes = background_upload.getvalue() if background_upload is not None else report_background_bytes
     if background_bytes:
@@ -266,7 +266,7 @@ with tabs[6]:
     cards_as_rows = [row.to_dict() for _, row in cards.iterrows()]
 
     book_cache_key = 'report_studio_full_book_export_cache'
-    if st.button('Prepare Full Magazine Book', key='report_studio_prepare_full_book'):
+    if st.button('Download Full Magazine Book', key='report_studio_prepare_full_book'):
         with st.spinner('Building full magazine book...'):
             st.session_state[book_cache_key] = {
                 'png': render_full_magazine_book_png(cards_as_rows, background_image=background_bytes, report_name=full_magazine_book_name),
@@ -277,7 +277,7 @@ with tabs[6]:
     if full_book_cache:
         book1, book2, book3 = st.columns(3)
         book1.download_button(
-            "Download Full Magazine Book PNG",
+            "Save Full Magazine Book PNG",
             data=full_book_cache['png'],
             file_name=sanitize_image_filename(full_magazine_book_name, extension="png"),
             mime="image/png",
@@ -285,7 +285,7 @@ with tabs[6]:
         )
 
         book2.download_button(
-            "Download Full Magazine Book PDF",
+            "Save Full Magazine Book PDF",
             data=full_book_cache['pdf'],
             file_name=sanitize_image_filename(full_magazine_book_name, extension="pdf"),
             mime="application/pdf",
@@ -293,7 +293,7 @@ with tabs[6]:
         )
 
         book3.download_button(
-            "Download Full Magazine ZIP",
+            "Save Full Magazine ZIP",
             data=full_book_cache['zip'],
             file_name=sanitize_image_filename(full_magazine_book_name, extension="zip"),
             mime="application/zip",
@@ -309,7 +309,7 @@ with tabs[6]:
         page_cache_key = f'report_studio_full_page_cache_{idx}'
         left, right = st.columns([3, 1])
         left.markdown(f'**{idx + 1}. {event}**  \n{action}')
-        if right.button('Prepare Magazine Page', key=f'report_studio_prepare_full_page_{idx}'):
+        if right.button('Download Full Magazine Page', key=f'report_studio_prepare_full_page_{idx}'):
             with st.spinner(f'Building magazine page {idx + 1}...'):
                 st.session_state[page_cache_key] = render_full_pick_magazine_page_png(
                     rowd,
@@ -321,7 +321,7 @@ with tabs[6]:
         full_page_png = st.session_state.get(page_cache_key)
         if full_page_png:
             right.download_button(
-                "Download Full Magazine Page",
+                "Save Magazine Page PNG",
                 data=full_page_png,
                 file_name=pick_full_page_filename(rowd, idx),
                 mime="image/png",
