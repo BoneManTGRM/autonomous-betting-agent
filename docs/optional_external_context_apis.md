@@ -15,6 +15,35 @@ NEWSAPI_KEY = ""
 - `PERPLEXITY_API_KEY`: concise research summaries for match context, injury notes, lineup news, travel, weather, motivation, public narrative, and game-script support.
 - `NEWSAPI_KEY`: recent news search for injury, lineup, suspension, travel, coaching, motivation, and weather risk flags.
 
+## Recommended placement
+
+Keep the core predictor keys visible in the main API Sources block:
+
+- Odds API
+- SportsDataIO
+- WeatherAPI
+
+Place the three optional context keys in a collapsed sidebar/expander called `Optional context sources`:
+
+- API-Football
+- Perplexity
+- NewsAPI
+
+This keeps the predictor screen compact while making the optional context layer available for reports, cards, magazine output, and chain review.
+
+A reusable Streamlit helper is available in:
+
+```text
+autonomous_betting_agent/source_key_panel.py
+```
+
+Use:
+
+```python
+from autonomous_betting_agent.source_key_panel import render_optional_context_source_panel
+render_optional_context_source_panel(st, expanded=False)
+```
+
 ## Safety rules
 
 These APIs do not guarantee better results, higher win rate, ROI, profit, or winning picks. They are supporting signals only.
