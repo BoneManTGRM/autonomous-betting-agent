@@ -51,12 +51,7 @@ def _implied_from_price(frame: pd.DataFrame) -> pd.Series:
 
 
 def _recompute_learned_probability_edge(frame: pd.DataFrame) -> pd.DataFrame:
-    """Use learned/model probability as the model side and Odds API price as the market side.
-
-    The base predictor creates `model_probability` from market-implied odds when no independent model signal
-    has been applied. Adaptive learning later creates `learned_model_probability`, but older volume exports left
-    `model_market_edge` at 0.0. This repair recalculates all public edge/EV fields from the learned probability.
-    """
+    """Use learned/model probability as the model side and Odds API price as the market side."""
     if frame is None or frame.empty:
         return frame
     out = frame.copy()
@@ -139,7 +134,6 @@ def apply_volume_pattern_points(frame, *args, **kwargs):
     out['low_confidence_pattern_candidate'] = (prob.lt(0.58) & pattern_score.ge(65) & patterns.ge(2) & adjust.gt(0))
     out = add_profit_guard(out)
 
-    # Keep negative-EV rows out of play states. They can still be tracked as research/watch rows.
     out['agent_decision'] = 'watch_only'
     out.loc[out.get('profit_volume_safe', pd.Series(False, index=out.index)).astype(bool) & pattern_score.ge(55), 'agent_decision'] = 'research_watch'
     out.loc[out.get('profit_balanced_ok', pd.Series(False, index=out.index)).astype(bool) & pattern_score.ge(65) & edge.ge(0.0) & ev.ge(0.0), 'agent_decision'] = 'play_small'
@@ -152,11 +146,6 @@ def apply_volume_pattern_points(frame, *args, **kwargs):
 
 
 def publish_predictor_handoff_to_dashboard(handoff: pd.DataFrame | list[dict], workspace_id: str) -> dict:
-    """Single pipeline: Predictor output -> proof locks -> dashboard active list.
-
-    This removes the manual gap that kept the dashboard blank or stale. It only publishes rows that are still
-    future lockable, creates proof_id/locked_at_utc, and syncs the active dashboard stores.
-    """
     frame = pd.DataFrame(handoff) if isinstance(handoff, list) else handoff
     if frame is None or frame.empty:
         return {'status': 'empty_handoff', 'input_rows': 0, 'locked_rows': 0}
@@ -274,7 +263,6 @@ def _replace_required(source: str, old: str, new: str, label: str) -> str:
 adaptive_learning.apply_adaptive_learning = apply_volume_pattern_points
 st.number_input = volume_number_input
 code = Path(__file__).with_name('pro_predictor.py').read_text(encoding='utf-8')
-code = _replace_required(code, "saved_weather = get_secret('WEATHERAPI_KEY', 'WEATHER_API_KEY')\napi1, api2, api3 = st.columns(3)\nodds_key = api1.text_input(t('odds_key'), type='password', placeholder='Loaded from secrets' if saved_odds else '').strip() or saved_odds\nsports_key = api2.text_input(t('sports_key'), type='password', placeholder='Loaded from secrets' if saved_sports else '').strip() or saved_sports\nweather_key = api3.text_input(t('weather_key'), type='password', placeholder='Loaded from secrets' if saved_weather else '').strip() or saved_weather\ns1, s2, s3 = st.columns(3)\ns1.metric('Odds API', t('enabled') if odds_key else t('missing'))\ns2.metric('SportsDataIO', t('enabled') if sports_key else t('missing'))\ns3.metric('WeatherAPI', t('enabled') if weather_key else t('missing'))", "saved_weather = get_secret('WEATHERAPI_KEY', 'WEATHER_API_KEY')\nsaved_api_football = get_secret('API_FOOTBALL_KEY')\nsaved_perplexity = get_secret('PERPLEXITY_API_KEY')\nsaved_newsapi = get_secret('NEWSAPI_KEY')\napi1, api2, api3 = st.columns(3)\nodds_key = api1.text_input(t('odds_key'), type='password', placeholder='Loaded from secrets' if saved_odds else '').strip() or saved_odds\nsports_key = api2.text_input(t('sports_key'), type='password', placeholder='Loaded from secrets' if saved_sports else '').strip() or saved_sports\nweather_key = api3.text_input(t('weather_key'), type='password', placeholder='Loaded from secrets' if saved_weather else '').strip() or saved_weather\napi4, api5, api6 = st.columns(3)\napi_football_key = api4.text_input('API-Football key', type='password', placeholder='Loaded from secrets' if saved_api_football else '').strip() or saved_api_football\nperplexity_key = api5.text_input('Perplexity API key', type='password', placeholder='Loaded from secrets' if saved_perplexity else '').strip() or saved_perplexity\nnewsapi_key = api6.text_input('NewsAPI key', type='password', placeholder='Loaded from secrets' if saved_newsapi else '').strip() or saved_newsapi\ns1, s2, s3 = st.columns(3)\ns1.metric('Odds API', t('enabled') if odds_key else t('missing'))\ns2.metric('SportsDataIO', t('enabled') if sports_key else t('missing'))\ns3.metric('WeatherAPI', t('enabled') if weather_key else t('missing'))\ns4, s5, s6 = st.columns(3)\ns4.metric('API-Football', t('enabled') if api_football_key else t('missing'))\ns5.metric('Perplexity', t('enabled') if perplexity_key else t('missing'))\ns6.metric('NewsAPI', t('enabled') if newsapi_key else t('missing'))", 'extended_api_sources')
 code = _replace_required(code, "latest_event_date = st.date_input(t('latest_date'), value=next_sunday())", "latest_event_date = st.date_input(t('latest_date'), value=date.today() + timedelta(days=14))", 'latest_event_date_14_day_default')
 code = _replace_required(code, "min_agent = h3.number_input(t('min_agent'), min_value=0.0, max_value=100.0, value=DEFAULTS['min_agent'], step=1.0)", "min_agent = h3.number_input(t('min_agent'), min_value=0.0, max_value=100.0, value=DEFAULTS['min_agent'], step=1.0)\n    pattern_mode = st.selectbox('Pattern Points mode', ['Research learning 55+', 'Strong test 65+', 'Official proof 75+', 'Elite proof 85+', 'Low-confidence pattern candidates'], index=0)\n    profit_mode = st.selectbox('Profit Protection mode', ['Research no profit guard', 'Volume-safe profit guard', 'Balanced ROI guard', 'Official ROI guard', 'Elite ROI guard'], index=1, help='Volume-safe only blocks obvious bad prices. Balanced and above are stricter for proof/ROI.')", 'pattern_mode_insert')
 code = _replace_required(code, "decisions = decisions[pd.to_numeric(decisions.get('agent_score'), errors='coerce').fillna(0) >= float(min_agent)]", "decisions = decisions[pd.to_numeric(decisions.get('agent_score'), errors='coerce').fillna(0) >= float(min_agent)]\n    decisions = filter_profit_guard(decisions, profit_mode)\n    pp = pd.to_numeric(decisions.get('pattern_points'), errors='coerce').fillna(0)\n    if pattern_mode.startswith('Research'):\n        decisions = decisions[pp >= 55]\n    elif pattern_mode.startswith('Strong'):\n        decisions = decisions[pp >= 65]\n    elif pattern_mode.startswith('Official'):\n        decisions = decisions[pp >= 75]\n    elif pattern_mode.startswith('Elite'):\n        decisions = decisions[pp >= 85]\n    else:\n        decisions = decisions[decisions.get('low_confidence_pattern_candidate', pd.Series(False, index=decisions.index)).astype(bool)]", 'pattern_mode_filter')
