@@ -55,10 +55,11 @@ def check_static_page_contract() -> None:
     ]
     required_renderer_tokens = [
         "WHY WE PICKED IT",
-        "TEAM ANALYSIS",
-        "PLAYER NOTES",
+        "TEAM SNAPSHOTS",
+        "PLAYER / INJURY NOTES",
         "PRO BETTOR EVIDENCE",
         "RISK DESK",
+        "MATCHUP NOTES",
         "CHAIN BETTING NOTES",
         "FINAL RECOMMENDATION",
         "TENDENCIA",
