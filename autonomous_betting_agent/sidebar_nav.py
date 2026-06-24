@@ -7,30 +7,17 @@ from typing import Any
 APP_TAGLINE = 'Powered by Reparodynamics'
 APP_TAGLINE_ES = 'Impulsado por Reparodynamics'
 GLOBAL_LANGUAGE_KEY = 'aba_global_language'
-LANGUAGE_KEYS = ['global_language','signal_board_language','pro_predictor_language','threshold_optimizer_language','what_are_the_odds_language','what_are_the_odds_pro_language','odds_lock_pro_language','report_studio_language','report_studio_local_export_language','consumer_report_studio_language','consumer_magazine_builder_language','public_proof_dashboard_language','proof_id_verification_language','local_calibration_dashboard_language','local_admin_workflow_guide_language','local_bankroll_risk_language','local_license_admin_language','buyer_demo_local_language','clv_sandbox_tester_language','storage_diagnostics_language','local_first_admin_language','learning_memory_language','learning_memory_safety_language','learning_impact_report_language','simulation_lab_language','proof_control_center_language','reset_storage_language']
+LANGUAGE_KEYS = ['global_language','signal_board_language','pro_predictor_language','odds_lock_pro_language','report_studio_language','proof_center_language','local_control_center_language','learning_memory_language','storage_diagnostics_language','reset_storage_language']
 TOOLS: tuple[tuple[str, str, str], ...] = (
     ('Signal Board', 'Panel de Señales', 'pages/signal_board.py'),
     ('Pro Predictor', 'Predictor Pro', 'pages/pro_predictor_volume.py'),
-    ('Simulation Lab', 'Laboratorio de Simulación', 'pages/simulation_lab.py'),
-    ('Threshold Optimizer', 'Optimizador de Umbral', 'pages/threshold_optimizer.py'),
-    ('What Are the Odds', 'Cuáles Son las Cuotas', 'pages/what_are_the_odds.py'),
     ('Odds Lock Pro', 'Bloqueo de Cuotas Pro', 'pages/odds_lock_pro.py'),
     ('Report Studio', 'Estudio de Reportes', 'pages/report_studio.py'),
-    ('Report Studio Local Export', 'Exportación Local de Reportes', 'pages/report_studio_local_export.py'),
-    ('Proof ID Verification', 'Verificación de ID de Prueba', 'pages/proof_id_verification.py'),
-    ('Proof Control Center', 'Centro de Control de Prueba', 'pages/proof_control_center.py'),
-    ('Public Proof Dashboard', 'Panel Público de Prueba', 'pages/public_proof_dashboard.py'),
-    ('Local First Admin', 'Admin Local First', 'pages/local_first_admin.py'),
-    ('Local Admin Workflow Guide', 'Guía de Flujo Admin Local', 'pages/local_admin_workflow_guide.py'),
-    ('Local Calibration Dashboard', 'Panel de Calibración Local', 'pages/local_calibration_dashboard.py'),
-    ('Local Bankroll Risk', 'Riesgo de Bankroll Local', 'pages/local_bankroll_risk.py'),
-    ('Local License Admin', 'Admin de Licencia Local', 'pages/local_license_admin.py'),
-    ('Buyer Demo Local', 'Demo Local para Comprador', 'pages/buyer_demo_local.py'),
-    ('Learning Memory Safety', 'Seguridad de Memoria de Aprendizaje', 'pages/learning_memory_safety.py'),
-    ('CLV Sandbox Tester', 'Probador CLV Sandbox', 'pages/clv_sandbox_tester.py'),
+    ('Proof Center', 'Centro de Prueba', 'pages/proof_center.py'),
+    ('Local Control Center', 'Centro de Control Local', 'pages/local_control_center.py'),
+    ('Learning Memory', 'Memoria de Aprendizaje', 'pages/learn_memory_safe.py'),
     ('Storage Diagnostics', 'Diagnóstico de Almacenamiento', 'pages/storage_diagnostics.py'),
     ('Reset Storage', 'Reiniciar almacenamiento', 'pages/reset_storage.py'),
-    ('Learning Memory', 'Memoria de Aprendizaje', 'pages/learn_memory_safe.py'),
 )
 PRO_PREDICTOR_LARGE_LIST_70_DEFAULTS = {'baseline_accuracy_min_books': 1,'baseline_accuracy_min_model_prob': 0.58,'baseline_accuracy_min_edge': -0.03,'baseline_accuracy_strong_edge': 0.04,'baseline_accuracy_min_strength': 38.0,'baseline_accuracy_use_high_conf': True,'baseline_accuracy_max_high_conf': 700,'baseline_accuracy_min_high_prob': 0.58,'baseline_accuracy_min_high_edge': -0.03,'baseline_accuracy_min_high_strength': 38.0,'baseline_accuracy_min_high_agent': 35.0}
 SIDEBAR_CSS = '''
