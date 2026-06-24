@@ -15,6 +15,15 @@ from autonomous_betting_agent.chain_optimizer_report import (
     split_chain_optimizer_sections,
 )
 from autonomous_betting_agent.client_profiles import normalize_client_profile
+from autonomous_betting_agent.daily_chain_report import (
+    build_daily_chain_report,
+    build_single_game_chain_magazine,
+    daily_chain_report_to_rows,
+    render_daily_chain_report,
+    render_daily_chain_summary_card,
+    render_single_game_chain_magazine,
+    sanitize_report_filename,
+)
 from autonomous_betting_agent.script_chain_core import ScriptChainResult, build_same_game_chain_from_script, build_target_payout_chain
 from autonomous_betting_agent.script_chain_report import render_game_script_chain_section, render_script_chain_card
 
@@ -25,6 +34,11 @@ st.caption("Local-first analytics and report generation only. No execution and n
 uploaded = st.file_uploader("Upload candidate rows CSV", type=["csv"])
 
 with st.sidebar:
+    st.header("Report Names")
+    magazine_report_name = st.text_input("Magazine report name", "ABA Signal Pro Betting Magazine")
+    daily_report_name = st.text_input("Daily chain report name", "ABA Signal Pro — Daily Chain Report")
+    single_game_report_name = st.text_input("Single-game report name", "ABA Signal Pro — Single Game Chain Report")
+
     st.header("Client Profile")
     name = st.text_input("Name", "Default Client")
     risk_profile = st.selectbox("Mode", ["conservative", "balanced", "aggressive"], index=1)
@@ -34,6 +48,15 @@ with st.sidebar:
     allow_chains = st.checkbox("Allow combined rows", value=True)
     allow_player_markets = st.checkbox("Allow player markets", value=(risk_profile != "conservative"))
     allow_hr_markets = st.checkbox("Allow HR markets", value=(risk_profile == "aggressive"))
+
+    st.header("Daily Chain Report")
+    enable_daily_chain_report = st.checkbox("Enable daily chain report", value=True)
+    show_single_game_deep_dive = st.checkbox("Show single-game deep dive", value=True)
+    auto_select_best_one_game = st.checkbox("Auto-select best one-game chain", value=True)
+    show_compact_chain_cards = st.checkbox("Show compact chain cards", value=True)
+    max_daily_chain_cards = st.slider("Max chain cards", 3, 10, 5)
+    daily_report_style = st.selectbox("Report style", ["Summary", "Magazine", "Both"], index=2)
+
     st.header("Game Script Chains")
     enable_script_chains = st.checkbox("Enable game-script chains", value=True)
     enable_target_payout = st.checkbox("Enable target-payout chains", value=True)
@@ -41,10 +64,12 @@ with st.sidebar:
     target_payout = st.number_input("Target payout", min_value=0.0, value=2.0, step=1.0)
     min_chain_probability = st.slider("Minimum adjusted probability", 0.0, 1.0, 0.25, 0.01)
     max_risk_score = st.slider("Maximum chain risk score", 1.0, 10.0, 8.0, 0.5)
+
     st.header("Chain Optimizer v2")
     enable_chain_optimizer_v2 = st.checkbox("Enable Chain Optimizer v2", value=True)
     show_chain_optimizer_cards = st.checkbox("Show Chain Optimizer v2 cards", value=True)
     optimizer_target_payout_mode = st.checkbox("Target payout mode for optimizer", value=False)
+
     st.header("Chain Learning")
     enable_chain_learning_notes = st.checkbox("Enable chain learning notes", value=True)
     show_failed_leg_patterns = st.checkbox("Show failed-leg patterns", value=True)
@@ -69,6 +94,18 @@ if uploaded is None:
 rows_df = pd.read_csv(uploaded)
 rows = rows_df.fillna("").to_dict(orient="records")
 
+def _game_key(row: dict) -> str:
+    return str(row.get("game") or row.get("event") or row.get("event_name") or row.get("matchup") or "Unknown")
+
+with st.sidebar:
+    game_options = sorted({_game_key(row) for row in rows})
+    st.header("Single-game report selector")
+    if auto_select_best_one_game or not game_options:
+        selected_single_game = "Auto best game"
+        st.write("Auto best game")
+    else:
+        selected_single_game = st.selectbox("Manual game", game_options)
+
 st.subheader("Imported Rows")
 st.dataframe(rows_df, use_container_width=True)
 
@@ -83,8 +120,7 @@ script_chains: list[ScriptChainResult] = []
 if enable_script_chains:
     grouped: dict[str, list[dict]] = {}
     for row in rows:
-        key = str(row.get("game") or row.get("event") or row.get("event_name") or row.get("matchup") or "Unknown")
-        grouped.setdefault(key, []).append(row)
+        grouped.setdefault(_game_key(row), []).append(row)
     for game_rows in grouped.values():
         event = game_rows[0]
         result = build_target_payout_chain(event, game_rows, stake_amount, target_payout, profile, minimum_probability=min_chain_probability, maximum_risk_score=max_risk_score) if enable_target_payout else build_same_game_chain_from_script(event, game_rows, profile)
@@ -105,11 +141,44 @@ learning_section = render_chain_learning_summary(learning_memory) if enable_chai
 script_chain_rows = [chain.as_row() for chain in script_chains]
 optimizer_rows = chain_optimizer_results_to_rows(optimizer_results)
 learning_rows = chain_learning_summary_to_rows(learning_memory) if enable_chain_learning_notes else []
-all_rows = rows + chain_rows + script_chain_rows
+all_rows = rows + chain_rows + script_chain_rows + optimizer_rows
 catalog = build_bet_catalog(all_rows)
-magazine = render_betting_magazine(all_rows, subscriber_name=profile.name) + "\n" + render_game_script_chain_section(script_chains)
+
+daily_report = None
+daily_markdown = ""
+daily_summary_markdown = ""
+single_game_report = None
+single_game_markdown = ""
+daily_rows = []
+if enable_daily_chain_report:
+    daily_report = build_daily_chain_report(all_rows, client_profile=profile, max_cards=max_daily_chain_cards, learning_memory=learning_memory)
+    daily_markdown = render_daily_chain_report(daily_report, title=daily_report_name)
+    daily_summary_markdown = render_daily_chain_summary_card(daily_report, title=daily_report_name)
+    daily_rows = daily_chain_report_to_rows(daily_report)
+    if show_single_game_deep_dive:
+        if auto_select_best_one_game and daily_report.best_single_game is not None:
+            target_game = daily_report.best_single_game.game
+        elif selected_single_game != "Auto best game":
+            target_game = selected_single_game
+        else:
+            target_game = ""
+        game_rows = [row for row in all_rows if _game_key(row) == target_game]
+        if game_rows:
+            single_game_report = build_single_game_chain_magazine(game_rows, client_profile=profile, learning_memory=learning_memory)
+            single_game_markdown = render_single_game_chain_magazine(single_game_report, title=single_game_report_name)
+        else:
+            single_game_markdown = f"# {single_game_report_name}\n\nNO ONE-GAME CHAIN RECOMMENDED TODAY\nStraight bet or watch-only report available.\n"
+
+magazine = render_betting_magazine(all_rows, title=magazine_report_name, subscriber_name=profile.name) + "\n" + render_game_script_chain_section(script_chains)
 if enable_chain_optimizer_v2:
     magazine += "\n" + render_chain_optimizer_magazine_section(optimizer_results)
+if enable_daily_chain_report:
+    if daily_report_style in {"Summary", "Both"}:
+        magazine += "\n" + daily_summary_markdown
+    if daily_report_style in {"Magazine", "Both"}:
+        magazine += "\n" + daily_markdown
+    if show_single_game_deep_dive and single_game_markdown:
+        magazine += "\n" + single_game_markdown
 if enable_chain_learning_notes:
     magazine += "\n" + learning_section
 
@@ -145,6 +214,32 @@ if enable_chain_optimizer_v2:
             else:
                 st.dataframe(pd.DataFrame(chain_optimizer_results_to_rows(results)), use_container_width=True)
 
+if enable_daily_chain_report:
+    st.subheader("Daily Chain Report")
+    if daily_report_style in {"Summary", "Both"}:
+        st.markdown(daily_summary_markdown)
+    if show_compact_chain_cards and daily_report is not None:
+        with st.expander("Compact Daily Chain Cards", expanded=True):
+            for index, candidate in enumerate(daily_report.candidates, start=1):
+                st.markdown(f"### {index}. {candidate.game}")
+                st.write(f"Main Read: {candidate.main_read}")
+                st.write(f"Chain: {candidate.chain}")
+                st.write(f"Confidence: {'N/A' if candidate.confidence is None else f'{candidate.confidence:.0%}'} | Risk: {candidate.risk_level} | Filler Risk: {candidate.filler_leg_risk}")
+                st.write("Why: " + " • ".join(candidate.why_bullets))
+                st.divider()
+    if daily_report_style in {"Magazine", "Both"}:
+        with st.expander("Daily Chain Magazine Markdown", expanded=False):
+            st.markdown(daily_markdown)
+    st.download_button("Download Daily Chain Markdown", daily_markdown, file_name=sanitize_report_filename(daily_report_name, "md"), mime="text/markdown")
+    if daily_rows:
+        daily_df = pd.DataFrame(daily_rows)
+        st.download_button("Download Daily Chain CSV", daily_df.to_csv(index=False), file_name=sanitize_report_filename(daily_report_name, "csv"), mime="text/csv")
+
+if show_single_game_deep_dive and single_game_markdown:
+    st.subheader("Single-Game Chain Magazine")
+    st.markdown(single_game_markdown)
+    st.download_button("Download Single Game Magazine Markdown", single_game_markdown, file_name=sanitize_report_filename(single_game_report_name, "md"), mime="text/markdown")
+
 if enable_chain_learning_notes:
     st.subheader("Chain Learning Summary")
     st.markdown(learning_section)
@@ -162,8 +257,8 @@ if enable_chain_learning_notes:
             st.write("No chain learning memory yet. Grade completed chains to build memory.")
 
 st.subheader("Magazine")
-st.download_button("Download Markdown", magazine, file_name="client_magazine.md", mime="text/markdown")
-st.download_button("Download HTML", "<pre>" + magazine.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") + "</pre>", file_name="client_magazine.html", mime="text/html")
+st.download_button("Download Markdown", magazine, file_name=sanitize_report_filename(magazine_report_name, "md"), mime="text/markdown")
+st.download_button("Download HTML", "<pre>" + magazine.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") + "</pre>", file_name=sanitize_report_filename(magazine_report_name, "html"), mime="text/html")
 
 flat_catalog = []
 for section, picks in catalog.items():
@@ -177,6 +272,9 @@ for chain in script_chains:
     flat_catalog.append(row)
 for row in optimizer_rows:
     row["section"] = "Chain Bet Optimizer v2"
+    flat_catalog.append(row)
+for row in daily_rows:
+    row["section"] = "Daily Chain Report"
     flat_catalog.append(row)
 for row in learning_rows:
     row["section"] = "Chain Learning"
