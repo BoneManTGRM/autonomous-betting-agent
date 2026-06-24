@@ -1,14 +1,17 @@
 area,area_type,group_value,records,avg_predicted,actual_hit_rate,actual_minus_predicted,smoothed_hit_rate,smoothed_edge,stake_units,profit_units,roi,avg_price,avg_clv_percent,beat_close_rate,reliability,brier,memory_type,importance,action
-Probability bucket: 70-80%,probability_bucket,70-80%,75,0.75,0.733333,-0.016667,0.73494,-0.01506,75.0,35.0,0.466667,,,,0.877604,0.195833,probability_bucket,0.43012,raise_trust
 Probability source: predicted_probability,probability_source,predicted_probability,75,0.75,0.733333,-0.016667,0.73494,-0.01506,75.0,35.0,0.466667,,,,0.877604,0.195833,probability_source,0.43012,raise_trust
 Confidence/read: 0.75,confidence,0.75,75,0.75,0.733333,-0.016667,0.73494,-0.01506,75.0,35.0,0.466667,,,,0.877604,0.195833,confidence,0.43012,raise_trust
+Probability bucket: 70-80%,probability_bucket,70-80%,91,0.741209,0.747253,0.006044,0.746764,0.005556,91.0,45.0,0.494505,,,,0.880992,0.190412,probability_bucket,0.411111,raise_trust
 Market: estimated_score,market_type,estimated_score,64,0.75,0.75,0.0,0.75,0.0,64.0,32.0,0.5,,,,0.882812,0.1875,market_type,0.4,raise_trust
 Sport: FIFA World Cup,sport,FIFA World Cup,27,0.75,0.703704,-0.046296,0.714286,-0.035714,27.0,11.0,0.407407,,,,0.784467,0.210648,sport,0.379557,lower_trust
 FIFA World Cup / 70-80%,sport_probability_bucket,FIFA World Cup|70-80%,27,0.75,0.703704,-0.046296,0.714286,-0.035714,27.0,11.0,0.407407,,,,0.784467,0.210648,sport_probability_bucket,0.379557,lower_trust
 FIFA World Cup / estimated_score,sport_market,FIFA World Cup|estimated_score,27,0.75,0.703704,-0.046296,0.714286,-0.035714,27.0,11.0,0.407407,,,,0.784467,0.210648,sport_market,0.379557,lower_trust
+Probability source: model_probability,probability_source,model_probability,16,0.7,0.8125,0.1125,0.775,0.075,16.0,10.0,0.625,,,,0.743197,0.165,probability_source,0.303847,raise_trust
+Confidence/read: 0.70,confidence,0.70,16,0.7,0.8125,0.1125,0.775,0.075,16.0,10.0,0.625,,,,0.743197,0.165,confidence,0.303847,raise_trust
 Market: round/method,market_type,round/method,11,0.75,0.636364,-0.113636,0.684211,-0.065789,11.0,3.0,0.272727,,,,0.6449,0.244318,market_type,0.229571,lower_trust
-Sport: MMA,sport,MMA,7,0.75,0.571429,-0.178571,0.666667,-0.083333,7.0,1.0,0.142857,,,,0.56789,0.276786,sport,0.147539,lower_trust
-MMA / 70-80%,sport_probability_bucket,MMA|70-80%,7,0.75,0.571429,-0.178571,0.666667,-0.083333,7.0,1.0,0.142857,,,,0.56789,0.276786,sport_probability_bucket,0.147539,lower_trust
+Market: Winner,market_type,Winner,7,0.7,1.0,0.3,0.84,0.14,7.0,7.0,1.0,,,,0.684631,0.09,market_type,0.221775,raise_trust
+Sport: MMA,sport,MMA,9,0.738889,0.666667,-0.072222,0.700654,-0.038235,9.0,3.0,0.333333,,,,0.625046,0.235278,sport,0.181372,lower_trust
+MMA / 70-80%,sport_probability_bucket,MMA|70-80%,9,0.738889,0.666667,-0.072222,0.700654,-0.038235,9.0,3.0,0.333333,,,,0.625046,0.235278,sport_probability_bucket,0.181372,lower_trust
 MMA / round/method,sport_market,MMA|round/method,7,0.75,0.571429,-0.178571,0.666667,-0.083333,7.0,1.0,0.142857,,,,0.56789,0.276786,sport_market,0.147539,lower_trust
 Sport: NRL,sport,NRL,7,0.75,0.714286,-0.035714,0.733333,-0.016667,7.0,3.0,0.428571,,,,0.612533,0.205357,sport,0.141327,raise_trust
 NRL / 70-80%,sport_probability_bucket,NRL|70-80%,7,0.75,0.714286,-0.035714,0.733333,-0.016667,7.0,3.0,0.428571,,,,0.612533,0.205357,sport_probability_bucket,0.141327,raise_trust
@@ -16,6 +19,13 @@ NRL / estimated_score,sport_market,NRL|estimated_score,7,0.75,0.714286,-0.035714
 Sport: WNBA,sport,WNBA,6,0.75,0.833333,0.083333,0.785714,0.035714,6.0,4.0,0.666667,,,,0.631056,0.145833,sport,0.13999,raise_trust
 WNBA / 70-80%,sport_probability_bucket,WNBA|70-80%,6,0.75,0.833333,0.083333,0.785714,0.035714,6.0,4.0,0.666667,,,,0.631056,0.145833,sport_probability_bucket,0.13999,raise_trust
 WNBA / estimated_score,sport_market,WNBA|estimated_score,6,0.75,0.833333,0.083333,0.785714,0.035714,6.0,4.0,0.666667,,,,0.631056,0.145833,sport_market,0.13999,raise_trust
+Sport: Cricket,sport,Cricket,4,0.7,1.0,0.3,0.8,0.1,4.0,4.0,1.0,,,,0.618885,0.09,sport,0.139174,raise_trust
+Cricket / 70-80%,sport_probability_bucket,Cricket|70-80%,4,0.7,1.0,0.3,0.8,0.1,4.0,4.0,1.0,,,,0.618885,0.09,sport_probability_bucket,0.139174,raise_trust
+Cricket / Winner,sport_market,Cricket|Winner,4,0.7,1.0,0.3,0.8,0.1,4.0,4.0,1.0,,,,0.618885,0.09,sport_market,0.139174,raise_trust
+Sport: Soccer,sport,Soccer,7,0.7,0.571429,-0.128571,0.64,-0.06,7.0,1.0,0.142857,,,,0.577488,0.261429,sport,0.132319,lower_trust
+Soccer / 70-80%,sport_probability_bucket,Soccer|70-80%,7,0.7,0.571429,-0.128571,0.64,-0.06,7.0,1.0,0.142857,,,,0.577488,0.261429,sport_probability_bucket,0.132319,lower_trust
+Market: Moneyline,market_type,Moneyline,7,0.7,0.571429,-0.128571,0.64,-0.06,7.0,1.0,0.142857,,,,0.577488,0.261429,market_type,0.132319,lower_trust
+Soccer / Moneyline,sport_market,Soccer|Moneyline,7,0.7,0.571429,-0.128571,0.64,-0.06,7.0,1.0,0.142857,,,,0.577488,0.261429,sport_market,0.132319,lower_trust
 Sport: AFL,sport,AFL,5,0.75,0.8,0.05,0.769231,0.019231,5.0,3.0,0.6,,,,0.599076,0.1625,sport,0.116556,raise_trust
 AFL / 70-80%,sport_probability_bucket,AFL|70-80%,5,0.75,0.8,0.05,0.769231,0.019231,5.0,3.0,0.6,,,,0.599076,0.1625,sport_probability_bucket,0.116556,raise_trust
 AFL / estimated_score,sport_market,AFL|estimated_score,5,0.75,0.8,0.05,0.769231,0.019231,5.0,3.0,0.6,,,,0.599076,0.1625,sport_market,0.116556,raise_trust
