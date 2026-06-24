@@ -1,7 +1,8 @@
 """Local-first Report Studio export helpers.
 
-Provides Markdown, HTML, and copy/paste client delivery formats without a cloud
-server. PDF can be layered on later by callers if a local renderer is available.
+Provides Markdown, HTML, print-to-PDF-ready HTML, and copy/paste client delivery
+formats without a cloud server. Users can open the HTML report and use the
+browser print dialog to save as PDF.
 """
 
 from __future__ import annotations
@@ -16,6 +17,8 @@ from .ledger_types import public_metric_allowed
 _NON_DECISIONS = {"push", "void", "cancel", "cancelled", "canceled", "pending", "no action", "draw"}
 _WINS = {"win", "won", "w"}
 _LOSSES = {"loss", "lost", "l"}
+
+PRINT_TO_PDF_NOTE = "Open this HTML report in a browser, then use Print or Save as PDF for a local PDF copy."
 
 
 def _text(value: Any) -> str:
@@ -40,7 +43,7 @@ def summarize_record(rows: Iterable[Mapping[str, Any]], official_only: bool = Tr
     counts = Counter(_lower(row.get("grade") or row.get("result") or "pending") or "pending" for row in filtered)
     wins = sum(counts[key] for key in _WINS)
     losses = sum(counts[key] for key in _LOSSES)
-    pushes = sum(counts[key] for key in {"push", "void", "draw", "no action"})
+    pushes = sum(counts[key] for {"push", "void", "draw", "no action"})
     cancels = sum(counts[key] for key in {"cancel", "cancelled", "canceled"})
     pending = counts["pending"]
     resolved = wins + losses
@@ -120,6 +123,26 @@ def render_markdown_report(
     return "\n".join(lines).strip() + "\n"
 
 
+def _print_ready_css(background_image_url: str = "") -> str:
+    bg = ""
+    if background_image_url:
+        bg = f"background-image: linear-gradient(rgba(255,255,255,.90), rgba(255,255,255,.90)), url('{html.escape(background_image_url)}'); background-size: cover; background-attachment: fixed;"
+    return f"""
+    :root {{ color-scheme: light; }}
+    body {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.45; color: #111; {bg} }}
+    main {{ max-width: 980px; }}
+    p {{ max-width: 980px; margin: 0 0 .55rem 0; }}
+    .print-note {{ border: 1px solid #ddd; padding: .75rem 1rem; border-radius: .5rem; background: #fafafa; margin-bottom: 1rem; }}
+    @page {{ size: auto; margin: 0.55in; }}
+    @media print {{
+      body {{ margin: 0; background: #fff !important; color: #000; }}
+      .print-note {{ display: none; }}
+      a {{ color: #000; text-decoration: none; }}
+      p {{ page-break-inside: avoid; }}
+    }}
+    """
+
+
 def render_html_report(
     rows: Iterable[Mapping[str, Any]],
     title: str = "ABA Signal Pro Report",
@@ -128,22 +151,20 @@ def render_html_report(
     public_safe: bool = True,
 ) -> str:
     markdown = render_markdown_report(rows, title=title, client_name=client_name, public_safe=public_safe)
-    bg = ""
-    if background_image_url:
-        bg = f"background-image: linear-gradient(rgba(255,255,255,.90), rgba(255,255,255,.90)), url('{html.escape(background_image_url)}'); background-size: cover; background-attachment: fixed;"
     body = "\n".join(f"<p>{html.escape(line)}</p>" if line else "<br>" for line in markdown.splitlines())
     return f"""<!doctype html>
 <html>
 <head>
   <meta charset=\"utf-8\">
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
   <title>{html.escape(title)}</title>
-  <style>
-    body {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.45; {bg} }}
-    p {{ max-width: 980px; }}
-  </style>
+  <style>{_print_ready_css(background_image_url)}</style>
 </head>
 <body>
+<main>
+<div class=\"print-note\">{html.escape(PRINT_TO_PDF_NOTE)}</div>
 {body}
+</main>
 </body>
 </html>
 """
