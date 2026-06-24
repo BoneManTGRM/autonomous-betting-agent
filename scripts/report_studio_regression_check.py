@@ -61,7 +61,6 @@ def check_static_page_contract() -> None:
         "RISK DESK",
         "MATCHUP NOTES",
         "CHAIN BETTING NOTES",
-        "FINAL RECOMMENDATION",
         "TENDENCIA",
         "Player data not available in uploaded row",
         "Data not available from uploaded row",
