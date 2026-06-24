@@ -24,6 +24,16 @@ from autonomous_betting_agent.daily_chain_report import (
     render_single_game_chain_magazine,
     sanitize_report_filename,
 )
+from autonomous_betting_agent.magazine_book_export import (
+    pick_full_page_filename,
+    render_card_image_png,
+    render_compact_magazine_png,
+    render_full_magazine_book_pdf,
+    render_full_magazine_book_png,
+    render_full_magazine_zip,
+    render_full_pick_magazine_page_png,
+    sanitize_image_filename,
+)
 from autonomous_betting_agent.script_chain_core import ScriptChainResult, build_same_game_chain_from_script, build_target_payout_chain
 from autonomous_betting_agent.script_chain_report import render_game_script_chain_section, render_script_chain_card
 
@@ -38,6 +48,9 @@ with st.sidebar:
     magazine_report_name = st.text_input("Magazine report name", "ABA Signal Pro Betting Magazine")
     daily_report_name = st.text_input("Daily chain report name", "ABA Signal Pro — Daily Chain Report")
     single_game_report_name = st.text_input("Single-game report name", "ABA Signal Pro — Single Game Chain Report")
+    full_magazine_book_name = st.text_input("Full magazine book name", "ABA Signal Pro — Full Pick Magazine")
+    magazine_background = st.file_uploader("Magazine background image", type=["png", "jpg", "jpeg"])
+    background_bytes = magazine_background.getvalue() if magazine_background is not None else None
 
     st.header("Client Profile")
     name = st.text_input("Name", "Default Client")
@@ -143,6 +156,7 @@ optimizer_rows = chain_optimizer_results_to_rows(optimizer_results)
 learning_rows = chain_learning_summary_to_rows(learning_memory) if enable_chain_learning_notes else []
 all_rows = rows + chain_rows + script_chain_rows + optimizer_rows
 catalog = build_bet_catalog(all_rows)
+book_picks = all_rows
 
 daily_report = None
 daily_markdown = ""
@@ -187,8 +201,12 @@ for section, picks in catalog.items():
     with st.expander(f"{section} ({len(picks)})", expanded=section in {"Best 65%+ Singles", "Conservative Baseball Chains"}):
         if not picks:
             st.write("No qualifying rows in this section.")
-        for pick in picks:
+        for index, pick in enumerate(picks, start=1):
             st.markdown(render_pick_card(pick))
+            compact_png = render_card_image_png(pick, background_image=background_bytes, report_name=magazine_report_name, page_number=index)
+            full_page_png = render_full_pick_magazine_page_png(pick, background_image=background_bytes, report_name=full_magazine_book_name, page_number=index, total_pages=len(picks))
+            st.download_button("Download Card Image", compact_png, file_name=sanitize_image_filename(f"{section}_{index:02d}", "card", "png"), mime="image/png", key=f"card-{section}-{index}")
+            st.download_button("Download Full Magazine Page", full_page_png, file_name=pick_full_page_filename(pick, index), mime="image/png", key=f"full-page-{section}-{index}")
             st.divider()
 
 st.subheader("Best Game-Script Chains")
@@ -259,6 +277,17 @@ if enable_chain_learning_notes:
 st.subheader("Magazine")
 st.download_button("Download Markdown", magazine, file_name=sanitize_report_filename(magazine_report_name, "md"), mime="text/markdown")
 st.download_button("Download HTML", "<pre>" + magazine.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") + "</pre>", file_name=sanitize_report_filename(magazine_report_name, "html"), mime="text/html")
+
+if book_picks:
+    st.subheader("Generated Magazine PNG preview")
+    compact_magazine_png = render_compact_magazine_png(book_picks, background_image=background_bytes, report_name=magazine_report_name)
+    full_magazine_png = render_full_magazine_book_png(book_picks, background_image=background_bytes, report_name=full_magazine_book_name)
+    full_magazine_pdf = render_full_magazine_book_pdf(book_picks, background_image=background_bytes, report_name=full_magazine_book_name)
+    full_magazine_zip = render_full_magazine_zip(book_picks, background_image=background_bytes, report_name=full_magazine_book_name)
+    st.download_button("Download Magazine PNG", compact_magazine_png, file_name=sanitize_image_filename(magazine_report_name, "compact_magazine", "png"), mime="image/png")
+    st.download_button("Download Full Magazine Book PNG", full_magazine_png, file_name=sanitize_image_filename(full_magazine_book_name, "", "png"), mime="image/png")
+    st.download_button("Download Full Magazine Book PDF", full_magazine_pdf, file_name=sanitize_image_filename(full_magazine_book_name, "", "pdf"), mime="application/pdf")
+    st.download_button("Download Full Magazine ZIP", full_magazine_zip, file_name=sanitize_image_filename(full_magazine_book_name, "", "zip"), mime="application/zip")
 
 flat_catalog = []
 for section, picks in catalog.items():
