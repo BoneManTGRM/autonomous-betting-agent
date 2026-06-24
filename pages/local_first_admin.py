@@ -5,11 +5,13 @@ import streamlit as st
 
 from autonomous_betting_agent.grading_rules import summarize_event_level, summarize_row_level
 from autonomous_betting_agent.ledger_types import LEDGER_TYPES
+from autonomous_betting_agent.local_access import require_streamlit_access
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 from autonomous_betting_agent.storage import LocalStorage
 
 st.set_page_config(page_title="Local First Admin", layout="wide")
 render_app_sidebar("local_first_admin", language_key="local_first_admin_language")
+require_streamlit_access(st, allow_roles={"admin"})
 
 st.title("Local First Admin")
 st.caption("Local SQLite/CSV proof storage, ledger counts, audit log, and export controls. No cloud server required.")
