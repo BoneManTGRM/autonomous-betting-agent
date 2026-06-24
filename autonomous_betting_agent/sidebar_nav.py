@@ -7,7 +7,7 @@ from typing import Any
 APP_TAGLINE = 'Powered by Reparodynamics'
 APP_TAGLINE_ES = 'Impulsado por Reparodynamics'
 GLOBAL_LANGUAGE_KEY = 'aba_global_language'
-LANGUAGE_KEYS = ['global_language','signal_board_language','pro_predictor_language','threshold_optimizer_language','what_are_the_odds_language','what_are_the_odds_pro_language','odds_lock_pro_language','report_studio_language','report_studio_local_export_language','consumer_report_studio_language','consumer_magazine_builder_language','public_proof_dashboard_language','proof_id_verification_language','local_calibration_dashboard_language','local_admin_workflow_guide_language','clv_sandbox_tester_language','storage_diagnostics_language','local_first_admin_language','learning_memory_language','learning_memory_safety_language','learning_impact_report_language','simulation_lab_language','proof_control_center_language','reset_storage_language']
+LANGUAGE_KEYS = ['global_language','signal_board_language','pro_predictor_language','threshold_optimizer_language','what_are_the_odds_language','what_are_the_odds_pro_language','odds_lock_pro_language','report_studio_language','report_studio_local_export_language','consumer_report_studio_language','consumer_magazine_builder_language','public_proof_dashboard_language','proof_id_verification_language','local_calibration_dashboard_language','local_admin_workflow_guide_language','local_bankroll_risk_language','local_license_admin_language','buyer_demo_local_language','clv_sandbox_tester_language','storage_diagnostics_language','local_first_admin_language','learning_memory_language','learning_memory_safety_language','learning_impact_report_language','simulation_lab_language','proof_control_center_language','reset_storage_language']
 TOOLS: tuple[tuple[str, str, str], ...] = (
     ('Signal Board', 'Panel de Señales', 'pages/signal_board.py'),
     ('Pro Predictor', 'Predictor Pro', 'pages/pro_predictor_volume.py'),
@@ -23,6 +23,9 @@ TOOLS: tuple[tuple[str, str, str], ...] = (
     ('Local First Admin', 'Admin Local First', 'pages/local_first_admin.py'),
     ('Local Admin Workflow Guide', 'Guía de Flujo Admin Local', 'pages/local_admin_workflow_guide.py'),
     ('Local Calibration Dashboard', 'Panel de Calibración Local', 'pages/local_calibration_dashboard.py'),
+    ('Local Bankroll Risk', 'Riesgo de Bankroll Local', 'pages/local_bankroll_risk.py'),
+    ('Local License Admin', 'Admin de Licencia Local', 'pages/local_license_admin.py'),
+    ('Buyer Demo Local', 'Demo Local para Comprador', 'pages/buyer_demo_local.py'),
     ('Learning Memory Safety', 'Seguridad de Memoria de Aprendizaje', 'pages/learning_memory_safety.py'),
     ('CLV Sandbox Tester', 'Probador CLV Sandbox', 'pages/clv_sandbox_tester.py'),
     ('Storage Diagnostics', 'Diagnóstico de Almacenamiento', 'pages/storage_diagnostics.py'),
