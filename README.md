@@ -12,10 +12,10 @@ It is designed for sports analysts, betting-market researchers, prediction revie
 
 ## Current product structure
 
-The app is organized around a no-password commercial workflow:
+The app is organized around a local-first commercial workflow:
 
 ```text
-Deployment Health -> Scanner Pro -> ABA Signal Pro -> Pro Predictor / Pro Predictor Volume -> Odds Lock Pro -> Auto Result Grading -> Public Proof Dashboard -> Report Studio -> Learning Memory
+Deployment Health -> Scanner Pro -> ABA Signal Pro -> Pro Predictor / Pro Predictor Volume -> Odds Lock Pro -> Auto Result Grading -> Public Proof Dashboard -> Report Studio -> Local First Admin -> Learning Memory
 ```
 
 | Tool | Main job |
@@ -31,25 +31,70 @@ Deployment Health -> Scanner Pro -> ABA Signal Pro -> Pro Predictor / Pro Predic
 | **Auto Result Grading** | Grades the persistent proof ledger from finished-result CSV uploads or an explicit one-click score fetch. |
 | **Public Proof Dashboard** | Displays no-login proof metrics, demo mode, proof audit, CLV, result uploads, persistent ledger storage, and report cards. |
 | **Report Studio** | Generates client-ready performance reports with win/loss tracking, ROI summaries, filters, branded layouts, and custom background images. |
+| **Report Studio Local Export** | Generates local Markdown, HTML, and messenger-ready report exports from local proof rows without a cloud server. |
+| **Proof ID Verification** | Searches local proof IDs and verifies proof hash, lock time, event start time, grade, ledger type, and public-safe status. |
+| **Local First Admin** | Reviews local SQLite/CSV storage, ledger counts, event-level and row-level summaries, audit logs, and CSV exports. |
 | **Monthly License Readiness** | Scores whether the product is ready for private beta, operator licensing, or white-label licensing, then produces pricing and offer copy. |
 | **Buyer Demo Mode** | Shows a polished buyer-ready dashboard with demo locked rows, audit, proof table, and report cards without API keys. |
 | **Learning Memory** | Trains durable calibration and pattern memory from finished, graded results. |
 
 Older duplicate scanner, market-finder, league-specific, and legacy self-learning pages were removed or consolidated.
 
+## Local-first commercial agent layer
+
+The local-first upgrade adds a safer commercial foundation without requiring a cloud server.
+
+Local-first modules:
+
+| Module | Purpose |
+| --- | --- |
+| `autonomous_betting_agent/ledger_types.py` | Separates official, research, all-high-confidence, quarantine, learning-only, and client-facing ledgers. |
+| `autonomous_betting_agent/sqlite_store.py` | Saves proof rows and audit events into local SQLite at `data/aba_signal_pro.sqlite`. |
+| `autonomous_betting_agent/storage.py` | Provides SQLite-first storage with CSV fallback in `data/ledgers`. |
+| `autonomous_betting_agent/explanations.py` | Builds client-safe pick explanations covering Pattern Points, odds audit, probability, edge, book coverage, and risk. |
+| `autonomous_betting_agent/report_exports.py` | Produces local Markdown, HTML, and copy/paste report output. |
+| `autonomous_betting_agent/grading_rules.py` | Separates row-level and event-level summaries, including win/loss/push/cancel/pending counts. |
+| `autonomous_betting_agent/bankroll.py` | Provides conservative risk-management stake helpers using flat stake or conservative Kelly-style sizing. |
+| `autonomous_betting_agent/local_access.py` | Provides optional local access helper logic while keeping no-login mode as the default. |
+
+Local-first pages:
+
+| Page | Purpose |
+| --- | --- |
+| `pages/local_first_admin.py` | Local storage/admin overview, ledger counts, audit log, and exports. |
+| `pages/report_studio_local_export.py` | Local Markdown, HTML, and messenger-ready Report Studio exports. |
+| `pages/proof_id_verification.py` | Local proof ID verification and client-safe explanation display. |
+
+No Supabase, Postgres, Firebase, OAuth, paid database, or cloud server is required for this layer. SQLite is preferred when available; CSV fallback is used if SQLite fails.
+
+## Optional local access
+
+The current default remains no-login/no-password mode so existing Streamlit workflows continue to work.
+
+Optional local access can be enabled later with:
+
+```text
+ABA_REQUIRE_LOGIN=true
+```
+
+The helper in `autonomous_betting_agent/local_access.py` supports local admin/client/demo roles from environment variables or Streamlit secrets. It does not require OAuth, email verification, a cloud identity service, or a separate server.
+
 ## Current safety and scoring updates
 
 The current recommended testing path is:
 
 ```text
-Pro Predictor Volume -> Odds Lock Pro -> Public Proof Dashboard -> Auto Result Grading -> Learning Memory
+Pro Predictor Volume -> Odds Lock Pro -> Public Proof Dashboard -> Auto Result Grading -> Report Studio Local Export -> Learning Memory
 ```
 
-Recent updates added three important protections and ranking layers:
+Recent updates added important protections and ranking layers:
 
-1. **Consensus odds normalization**: live odds summaries now normalize Pro Predictor outputs toward the market average/consensus price instead of trusting a single outlier best-book price. This prevents a favorite from being exported with a suspicious long-shot price when the average market price says otherwise.
+1. **Consensus odds normalization**: live odds summaries normalize Pro Predictor outputs toward the market average/consensus price instead of trusting a single outlier best-book price.
 2. **Price-safety audit**: `autonomous_betting_agent/odds_quality.py` defines an `audit_prices()` layer that uses the average price as the proof-safe price and flags suspicious price patterns.
-3. **Pattern Points**: `pages/pro_predictor_volume.py` adds a dedicated learned-pattern score so the system can rank both obvious high-confidence picks and lower-confidence rows that match historically profitable patterns.
+3. **Pattern Points**: `pages/pro_predictor_volume.py` adds a dedicated learned-pattern score so the system can rank both obvious high-confidence picks and lower-confidence rows that match historically useful patterns.
+4. **Ledger separation**: public proof metrics should only use rows eligible for official/client proof, not research, learning-only, or quarantine rows.
+5. **Pick explanations**: report-ready rows can now include client-safe explanations without guaranteed-win language.
+6. **Event-level summaries**: duplicate rows from one matchup can be summarized as one event when needed.
 
 ## Odds safety rules
 
@@ -94,65 +139,7 @@ Pattern Points is not a guarantee. It is a ranking and review score. It should b
 | **C Research Edge** | `55-64` | Research/watch candidate. Needs more results before trusting. |
 | **D Review Only** | `<55` | Weak pattern profile or risk penalty. Usually do not lock without manual reason. |
 
-### How Pattern Points is calculated
-
-The score combines multiple signals:
-
-| Component | Effect |
-| --- | --- |
-| `learned_agent_score` | Base learned ranking from the existing Adaptive Learning system. |
-| `learned_model_probability` | Rewards higher learned probability, but does not require only high-confidence rows. |
-| `model_market_edge` | Rewards positive model edge and penalizes negative edge. |
-| `scanner_strength_score` | Rewards stronger scanner/signal agreement. |
-| `books` / `bookmaker_count` | Rewards broader book coverage because one-book rows are less reliable. |
-| Odds band | Rewards the most useful proof zones, especially roughly `1.30-1.89`, gives smaller bonus around `1.90-2.24`, and penalizes extreme or suspicious prices. |
-| `learning_pattern_count` | Rewards rows that match multiple learned historical patterns. |
-| `learning_adjustment_score` | Rewards positive learned pattern adjustment and penalizes negative learned adjustment. |
-| `odds_audit_status` | Applies a large penalty if the price audit did not pass. |
-
-The current formula in Pro Predictor Volume is:
-
-```text
-pattern_points =
-    learned_agent_score * 0.35
-  + learned_model_probability * 25
-  + clipped_model_market_edge * 130
-  + scanner_strength_score * 0.12
-  + min(book_count, 10) * 0.8
-  + odds_band_bonus
-  + clipped_learning_pattern_count * 4.0
-  + clipped_learning_adjustment_score * 1.4
-  - odds_audit_penalty
-```
-
-The final score is clipped to `0-100`.
-
-### Low-confidence pattern detection
-
-The system marks a row as `low_confidence_pattern_candidate = True` when:
-
-```text
-learned_model_probability < 0.58
-pattern_points >= 65
-learning_pattern_count >= 2
-learning_adjustment_score > 0
-```
-
-This is meant to find rows that do not look elite by raw confidence alone, but match historically favorable conditions. These rows should be treated as research/test candidates first until the sample grows.
-
-### Pattern output columns
-
-Pro Predictor Volume adds these columns:
-
-| Column | Meaning |
-| --- | --- |
-| `pattern_points` | 0-100 learned-pattern score. |
-| `pattern_confidence_tier` | A+/A/B/C/D tier based on Pattern Points. |
-| `pattern_edge_label` | Human-readable reason class such as `low_confidence_pattern_edge` or `high_confidence_pattern_edge`. |
-| `pattern_high_confidence` | `True` when Pattern Points is `75+`. |
-| `low_confidence_pattern_candidate` | `True` when lower-confidence probability is supported by strong learned patterns. |
-
-## Report Studio
+## Report Studio and local exports
 
 Report Studio is the dedicated reporting and presentation layer for ABA Signal Pro. It turns locked predictions, graded results, proof data, and performance metrics into cleaner client-facing reports.
 
@@ -165,7 +152,9 @@ Core Report Studio capabilities:
 - Use custom branding and presentation layouts for sales, buyer demos, client updates, and internal review.
 - Add nearly any user-selected image as the report background so reports can match a brand, theme, client, or campaign.
 - Support export-ready report output for sharing, proof tracking, and record keeping.
-- Connect reporting with Odds Lock Pro, Public Proof Dashboard, Auto Result Grading, and One-Click Daily Workflow.
+- Connect reporting with Odds Lock Pro, Public Proof Dashboard, Auto Result Grading, One-Click Daily Workflow, and the local-first storage layer.
+
+`pages/report_studio_local_export.py` adds local Markdown, HTML, and copy/paste report output without requiring PDF services, email services, or a cloud server.
 
 Report Studio should be treated as a presentation and proof-reporting tool, not as a guarantee engine. It can make results easier to explain, but claims should still be based on timestamped locked proof, clean grading, ROI, sample size, and audit quality.
 
@@ -173,22 +162,24 @@ Report Studio should be treated as a presentation and proof-reporting tool, not 
 
 The app now includes the most valuable platform upgrades without requiring users to log in every time:
 
-1. **Persistent ledger storage** through a local CSV ledger at `data/odds_lock_pro_ledger.csv`.
+1. **Persistent ledger storage** through local CSV and local SQLite support.
 2. **Auto-grading from finished-result uploads** by `proof_id` or event/pick matching.
 3. **Optional explicit score fetch** for one sport key at a time from Auto Result Grading; this runs only when the button is pressed.
 4. **Public proof dashboard** for record, ROI, units, pending picks, sport breakdowns, market breakdowns, and client-safe ledgers.
 5. **Report-card generator** for Markdown, HTML, and daily copy/paste reports.
 6. **Report Studio** for client-ready reports, performance summaries, branded layouts, and custom background images.
-7. **Proof audit layer** that checks proof hashes and pre-start lock status.
-8. **Proof quality score** for buyer/demo review.
-9. **CLV tracking** from locked price vs closing price when closing odds are supplied.
-10. **Demo ledger mode** so a buyer can see the dashboard without an API key or real locked picks.
-11. **Deployment Health** so the operator can see readiness and blockers before daily use.
-12. **One-Click Daily Workflow** so non-technical users can run the daily lock/report process.
-13. **Monthly License Readiness** so the operator can package private beta, analyst, operator, or white-label offers.
-14. **Public-safe exports** and private audit exports.
+7. **Local Report Studio exports** for Markdown, HTML, and messenger-ready summaries.
+8. **Proof ID Verification** for local proof lookup and proof-field review.
+9. **Proof audit layer** that checks proof hashes and pre-start lock status.
+10. **Proof quality score** for buyer/demo review.
+11. **CLV tracking** from locked price vs closing price when closing odds are supplied.
+12. **Demo ledger mode** so a buyer can see the dashboard without an API key or real locked picks.
+13. **Deployment Health** so the operator can see readiness and blockers before daily use.
+14. **One-Click Daily Workflow** so non-technical users can run the daily lock/report process.
+15. **Monthly License Readiness** so the operator can package private beta, analyst, operator, or white-label offers.
+16. **Public-safe exports** and private audit exports.
 
-This is not a full password-protected client portal yet. Login, paid accounts, Stripe, and client roles can be added later.
+This is not a full password-protected client portal yet. Login, paid accounts, Stripe, and client roles can be added later. The new local access helper is optional and disabled by default.
 
 ## Recommended daily workflow
 
@@ -199,9 +190,11 @@ This is not a full password-protected client portal yet. Login, paid accounts, S
 5. Save locked rows into the persistent proof ledger.
 6. Use **Auto Result Grading** when finished results are available.
 7. Use **Public Proof Dashboard** to review public metrics, proof audit, CLV, report cards, and exports.
-8. Use **Report Studio** to generate branded client-ready reports with custom background images and filtered performance summaries.
-9. Use **Learning Memory** after results are graded and probabilities/prices are available.
-10. Use **Monthly License Readiness** before pitching monthly clients or raising prices.
+8. Use **Local First Admin** to review local ledger counts, row-level/event-level records, and audit events.
+9. Use **Proof ID Verification** to verify individual proof rows.
+10. Use **Report Studio Local Export** to generate branded or client-ready Markdown/HTML/copy-paste summaries.
+11. Use **Learning Memory** after results are graded and probabilities/prices are available.
+12. Use **Monthly License Readiness** before pitching monthly clients or raising prices.
 
 ## Data proof rules
 
@@ -217,7 +210,7 @@ For public proof, never advertise rows that are only research candidates as offi
 
 ## Monthly license readiness
 
-The product should be sold as a monthly sports betting analytics and proof-tracking license, not as guaranteed betting income and not as a one-time code dump.
+The product should be sold as a monthly sports analytics and proof-tracking license, not as guaranteed betting income and not as a one-time code dump.
 
 Minimum readiness for a private beta license:
 
@@ -227,8 +220,8 @@ Minimum readiness for a private beta license:
 | Resolved proof rows | 20+ |
 | Proof quality | 90/100+ preferred |
 | Hash mismatches | 0 |
-| Product pages | Deployment Health, Odds Lock Pro, Public Proof Dashboard, Report Studio, Daily Workflow, Auto Result Grading, Buyer Demo Mode, Monthly License Readiness |
-| Client outputs | public dashboard, Report Studio output, daily report, proof card, branded background report, private audit export |
+| Product pages | Deployment Health, Odds Lock Pro, Public Proof Dashboard, Report Studio, Report Studio Local Export, Proof ID Verification, Local First Admin, Daily Workflow, Auto Result Grading, Buyer Demo Mode, Monthly License Readiness |
+| Client outputs | public dashboard, Report Studio output, local HTML/Markdown report, daily report, proof card, branded background report, private audit export |
 | Positioning | analytics/research only; no guaranteed wins or returns |
 
 Suggested pricing path:
@@ -247,6 +240,8 @@ Before pitching higher tiers, use the **Monthly License Readiness** page to gene
 The report/dashboard/demo pages do not scan live APIs by themselves.
 
 Auto Result Grading only fetches score data when the user presses the fetch button for a specific sport key. Otherwise, result grading is done from uploaded result CSVs or already available rows.
+
+The local-first SQLite/CSV storage layer does not require any API key.
 
 ## Install
 
@@ -276,7 +271,7 @@ If your deployment uses the older entrypoint, run:
 streamlit run app_streamlit.py
 ```
 
-## API keys
+## API keys and local settings
 
 The app can read keys from Streamlit secrets, environment variables, or user input fields depending on the page.
 
@@ -292,11 +287,18 @@ GITHUB_TOKEN
 GH_TOKEN
 GITHUB_REPOSITORY
 GITHUB_BRANCH
+ABA_REQUIRE_LOGIN
+ABA_ADMIN_NAME
+ABA_ADMIN_CODE
+ABA_CLIENT_NAME
+ABA_CLIENT_CODE
+ABA_DEMO_NAME
+ABA_DEMO_CODE
 ```
 
 `GITHUB_TOKEN` is only needed if Learning Memory should save trained memory files back to GitHub from the deployed app.
 
-Do not put real API keys in GitHub, README files, screenshots, or public CSVs.
+Do not put real API keys, private access codes, secrets, screenshots with secrets, or private CSVs into GitHub.
 
 ## Run tests and CI
 
@@ -314,7 +316,7 @@ A green badge or workflow run should be checked directly in GitHub before claimi
 
 ## Commercial positioning
 
-This project is intended to become a licensable product, not a free open-source prediction bot. It can support private sports-betting analysis dashboards, paid research tools, white-label prediction-review systems, Report Studio client-facing sports analytics reports, custom branded report backgrounds, internal research workflows, custom API integrations, private deployment, support, and model-tuning packages.
+This project is intended to become a licensable product, not a free open-source prediction bot. It can support private sports analytics dashboards, paid research tools, white-label prediction-review systems, Report Studio client-facing sports analytics reports, custom branded report backgrounds, internal research workflows, custom API integrations, private deployment, support, and model-tuning packages.
 
 The repository is public for limited review and evaluation, but the code is governed by a proprietary evaluation license. Commercial use, resale, sublicensing, hosting, paid access, SaaS deployment, API access, white-label use, competing-product use, model-training use, or monetized derivative use requires written permission from Reparodynamics.
 
@@ -328,4 +330,5 @@ The repository is public for limited review and evaluation, but the code is gove
 - Pattern Points are a ranking signal, not a guarantee.
 - Price audit flags data-quality risk; it does not prove the pick itself is wrong.
 - API outages, missing keys, low quota, unsupported sports, or bad market coverage can reduce output quality.
+- Local SQLite/CSV storage protects against cloud dependency but is not a replacement for backups.
 - This software does not execute transactions or provide guarantees.
