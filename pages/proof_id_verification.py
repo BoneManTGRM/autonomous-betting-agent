@@ -5,11 +5,13 @@ import streamlit as st
 
 from autonomous_betting_agent.explanations import build_client_safe_pick_summary
 from autonomous_betting_agent.ledger_types import classify_ledger_type, is_future_locked, public_metric_allowed
+from autonomous_betting_agent.local_access import require_streamlit_access
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 from autonomous_betting_agent.storage import LocalStorage
 
 st.set_page_config(page_title="Proof ID Verification", layout="wide")
 render_app_sidebar("proof_id_verification", language_key="proof_id_verification_language")
+require_streamlit_access(st, allow_roles={"admin", "client", "demo"})
 
 st.title("Proof ID Verification")
 st.caption("Search local proof rows by proof ID and verify lock time, event start, ledger type, grade, and public-safe status.")
