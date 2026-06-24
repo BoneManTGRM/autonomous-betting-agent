@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from autonomous_betting_agent.ledger_types import classify_ledger_type
+from autonomous_betting_agent.learning_memory_controls import reset_confirmation_matches, split_learning_safe_rows, version_placeholder_path
 from autonomous_betting_agent.local_access import require_streamlit_access
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 from autonomous_betting_agent.storage import LocalStorage
@@ -22,24 +22,7 @@ if not rows:
     st.info("No local rows found yet.")
     st.stop()
 
-safe_rows = []
-blocked_rows = []
-for row in rows:
-    ledger_type = classify_ledger_type(row)
-    grade = str(row.get("grade") or row.get("result") or "").strip().lower()
-    audit_status = str(row.get("odds_audit_status") or row.get("audit_status") or "").strip().lower()
-    has_probability = bool(row.get("learned_model_probability") or row.get("model_probability") or row.get("probability"))
-    has_price = bool(row.get("decimal_price") or row.get("odds_at_pick"))
-    usable_grade = grade in {"win", "won", "w", "loss", "lost", "l", "push", "void", "draw"}
-    safe = ledger_type in {"official", "client", "research", "all_high_confidence"} and audit_status not in {"fail", "failed", "quarantine", "blocked"} and usable_grade and has_probability and has_price
-    output = dict(row)
-    output["learning_safe"] = safe
-    output["learning_block_reason"] = "" if safe else "Needs grade, probability, proof-safe price, and non-quarantined audit status."
-    output["ledger_type"] = ledger_type
-    if safe:
-        safe_rows.append(output)
-    else:
-        blocked_rows.append(output)
+safe_rows, blocked_rows = split_learning_safe_rows(rows)
 
 col1, col2, col3 = st.columns(3)
 col1.metric("Total local rows", len(rows))
@@ -53,6 +36,33 @@ if safe_rows:
     st.download_button("Download learning-safe CSV", df.to_csv(index=False).encode("utf-8"), file_name="learning_safe_rows.csv", mime="text/csv")
 else:
     st.info("No rows currently meet the local learning-safety requirements.")
+
+st.subheader("Import preview only")
+upload = st.file_uploader("Preview a learning-safe CSV before using it elsewhere", type=["csv"])
+if upload is not None:
+    try:
+        preview = pd.read_csv(upload)
+        st.dataframe(preview.head(100), use_container_width=True)
+        st.caption("Preview only. This page does not automatically train, overwrite, or reset memory.")
+    except Exception as exc:
+        st.warning(f"Could not preview CSV: {exc}")
+
+st.subheader("Version and reset controls")
+version_label = st.text_input("Version label placeholder", "manual")
+st.code(str(version_placeholder_path(version_label)))
+st.caption("Use this path as a future local version marker before replacing memory files. This page does not write the version file automatically.")
+confirmation = st.text_input("Reset confirmation placeholder", "", help="Type RESET LEARNING MEMORY to enable the placeholder warning.")
+if reset_confirmation_matches(confirmation):
+    st.error("Reset confirmation entered. This page still does not delete memory automatically; back up files before any manual reset.")
+else:
+    st.info("Reset disabled. Exact confirmation is required before any future reset workflow should run.")
+
+st.subheader("Before/after and pattern review placeholders")
+st.write({
+    "before_after_comparison": "Placeholder: compare performance before and after a memory update.",
+    "patterns_improved": "Placeholder: list pattern groups that improved after learning.",
+    "patterns_failed": "Placeholder: list pattern groups that weakened or should be excluded.",
+})
 
 st.subheader("Blocked or review rows")
 if blocked_rows:
