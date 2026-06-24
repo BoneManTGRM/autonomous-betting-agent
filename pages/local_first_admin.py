@@ -6,6 +6,7 @@ import streamlit as st
 from autonomous_betting_agent.grading_rules import summarize_event_level, summarize_row_level
 from autonomous_betting_agent.ledger_types import LEDGER_TYPES
 from autonomous_betting_agent.local_access import require_streamlit_access
+from autonomous_betting_agent.local_alerts import sqlite_fallback_alert
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 from autonomous_betting_agent.storage import LocalStorage
 
@@ -20,9 +21,8 @@ store = LocalStorage()
 if store.using_sqlite:
     st.success("Using local SQLite storage: data/aba_signal_pro.sqlite")
 else:
-    st.warning("SQLite is unavailable. The app is using CSV fallback storage in data/ledgers.")
-    if store.sqlite_error:
-        st.caption(store.sqlite_error)
+    alert = sqlite_fallback_alert(store.sqlite_error)
+    st.warning(alert["message"])
 
 rows = store.load_rows()
 ledger_counts = {ledger: len(store.load_rows(ledger)) for ledger in sorted(LEDGER_TYPES)}
