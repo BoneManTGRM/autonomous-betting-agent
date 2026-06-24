@@ -6,6 +6,8 @@ import streamlit as st
 from autonomous_betting_agent.bet_catalog import build_bet_catalog, render_betting_magazine, render_pick_card
 from autonomous_betting_agent.chain_core import build_candidate_chains
 from autonomous_betting_agent.client_profiles import normalize_client_profile
+from autonomous_betting_agent.script_chain_core import ScriptChainResult, build_same_game_chain_from_script, build_target_payout_chain
+from autonomous_betting_agent.script_chain_report import render_game_script_chain_section, render_script_chain_card
 
 st.set_page_config(page_title="Client Magazine", layout="wide")
 st.title("Client Magazine")
@@ -23,6 +25,13 @@ with st.sidebar:
     allow_chains = st.checkbox("Allow combined rows", value=True)
     allow_player_markets = st.checkbox("Allow player markets", value=(risk_profile != "conservative"))
     allow_hr_markets = st.checkbox("Allow HR markets", value=(risk_profile == "aggressive"))
+    st.header("Game Script Chains")
+    enable_script_chains = st.checkbox("Enable game-script chains", value=True)
+    enable_target_payout = st.checkbox("Enable target-payout chains", value=True)
+    stake_amount = st.number_input("Stake amount", min_value=0.0, value=1.0, step=1.0)
+    target_payout = st.number_input("Target payout", min_value=0.0, value=2.0, step=1.0)
+    min_chain_probability = st.slider("Minimum adjusted probability", 0.0, 1.0, 0.25, 0.01)
+    max_risk_score = st.slider("Maximum chain risk score", 1.0, 10.0, 8.0, 0.5)
 
 profile = normalize_client_profile({
     "name": name,
@@ -52,9 +61,24 @@ if isinstance(chain_groups, dict):
         if isinstance(value, list):
             chain_rows.extend(chain.as_row() for chain in value)
 
-all_rows = rows + chain_rows
+script_chains: list[ScriptChainResult] = []
+if enable_script_chains:
+    grouped: dict[str, list[dict]] = {}
+    for row in rows:
+        key = str(row.get("game") or row.get("event") or row.get("event_name") or row.get("matchup") or "Unknown")
+        grouped.setdefault(key, []).append(row)
+    for game_rows in grouped.values():
+        event = game_rows[0]
+        result = build_target_payout_chain(event, game_rows, stake_amount, target_payout, profile, minimum_probability=min_chain_probability, maximum_risk_score=max_risk_score) if enable_target_payout else build_same_game_chain_from_script(event, game_rows, profile)
+        if isinstance(result, ScriptChainResult):
+            script_chains.append(result)
+
+script_chain_rows = [chain.as_row() for chain in script_chains]
+all_rows = rows + chain_rows + script_chain_rows
 catalog = build_bet_catalog(all_rows)
-magazine = render_betting_magazine(all_rows, subscriber_name=profile.name)
+base_magazine = render_betting_magazine(all_rows, subscriber_name=profile.name)
+script_section = render_game_script_chain_section(script_chains)
+magazine = base_magazine + "\n" + script_section
 
 st.subheader("Catalog Sections")
 for section, picks in catalog.items():
@@ -64,6 +88,13 @@ for section, picks in catalog.items():
         for pick in picks:
             st.markdown(render_pick_card(pick))
             st.divider()
+
+st.subheader("Best Game-Script Chains")
+if not script_chains:
+    st.write("NO CHAIN RECOMMENDED")
+for chain in script_chains:
+    st.markdown(render_script_chain_card(chain))
+    st.divider()
 
 st.subheader("Magazine")
 st.download_button("Download Markdown", magazine, file_name="client_magazine.md", mime="text/markdown")
@@ -75,6 +106,10 @@ for section, picks in catalog.items():
         row = pick.as_dict()
         row["section"] = section
         flat_catalog.append(row)
+for chain in script_chains:
+    row = chain.as_row()
+    row["section"] = "Best Game-Script Chains"
+    flat_catalog.append(row)
 if flat_catalog:
     export_df = pd.DataFrame(flat_catalog)
     st.download_button("Download Catalog CSV", export_df.to_csv(index=False), file_name="client_catalog.csv", mime="text/csv")
