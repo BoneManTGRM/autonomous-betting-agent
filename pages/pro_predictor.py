@@ -14,13 +14,13 @@ import streamlit as st
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 from autonomous_betting_agent.adaptive_learning import apply_adaptive_learning
 from autonomous_betting_agent.four_tool_orchestrator import page_health, page_health_frame
-from autonomous_betting_agent.live_api_context import LiveAPIContextBuilder
+from autonomous_betting_agent.extended_api_context import ExtendedLiveAPIContextBuilder as LiveAPIContextBuilder
 from autonomous_betting_agent.live_odds import list_sports, scan_market
 from autonomous_betting_agent.multi_source_fusion import fuse_row
 from autonomous_betting_agent.pick_hold_store import save_held_rows
 from autonomous_betting_agent.scanner_strength import score_scanner_frame, scanner_strength_summary
 
-APP_VERSION = 'pro-predictor-v22-volume-safe-defaults'
+APP_VERSION = 'pro-predictor-v23-extended-api-context'
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SPORT_KEYS = ['basketball_nba', 'baseball_mlb', 'soccer_epl']
 
@@ -169,7 +169,7 @@ def pct(value: float | None) -> str:
     return 'N/A' if value is None else f'{value * 100:.1f}%'
 
 
-def api_coverage_fields(api_context: dict[str, Any], *, odds: bool, sports: bool, weather: bool) -> dict[str, Any]:
+def api_coverage_fields(api_context: dict[str, Any], *, odds: bool, sports: bool, weather: bool, api_football: bool = False, perplexity: bool = False, newsapi: bool = False) -> dict[str, Any]:
     configured, used = [], []
     if odds:
         configured.append('odds_api'); used.append('odds_api')
@@ -181,11 +181,23 @@ def api_coverage_fields(api_context: dict[str, Any], *, odds: bool, sports: bool
         configured.append('weatherapi')
         if str(api_context.get('weather_source_used', '')).lower() == 'yes':
             used.append('weatherapi')
+    if api_football:
+        configured.append('api_football')
+        if str(api_context.get('api_football_source_used', '')).lower() == 'yes':
+            used.append('api_football')
+    if perplexity:
+        configured.append('perplexity')
+        if str(api_context.get('perplexity_source_used', '')).lower() == 'yes':
+            used.append('perplexity')
+    if newsapi:
+        configured.append('newsapi')
+        if str(api_context.get('newsapi_source_used', '')).lower() == 'yes':
+            used.append('newsapi')
     score = 0.0 if not configured else round(len(used) / len(configured), 6)
     return {'configured_api_sources': ','.join(configured), 'api_sources_used': ','.join(used), 'api_coverage_score': score, 'api_coverage_percent': pct(score)}
 
 
-def build_rows(events: list[Any], sport: Any, *, context_builder: LiveAPIContextBuilder, odds_key: str, sports_key: str, weather_key: str, team_filter: str, latest_event_date: date, min_books: int) -> list[dict[str, Any]]:
+def build_rows(events: list[Any], sport: Any, *, context_builder: LiveAPIContextBuilder, odds_key: str, sports_key: str, weather_key: str, api_football_key: str = '', perplexity_key: str = '', newsapi_key: str = '', team_filter: str, latest_event_date: date, min_books: int) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for event in events:
         sport_title = getattr(event, 'sport_title', getattr(sport, 'title', ''))
@@ -212,7 +224,7 @@ def build_rows(events: list[Any], sport: Any, *, context_builder: LiveAPIContext
                 api_context = context_builder.context_for_event(event, pick_name=prediction)
             except Exception as exc:
                 api_context = {'api_context_error': str(exc)[:180]}
-            api_context.update(api_coverage_fields(api_context, odds=bool(odds_key), sports=bool(sports_key), weather=bool(weather_key)))
+            api_context.update(api_coverage_fields(api_context, odds=bool(odds_key), sports=bool(sports_key), weather=bool(weather_key), api_football=bool(api_football_key), perplexity=bool(perplexity_key), newsapi=bool(newsapi_key)))
             fused = fuse_row({'market_probability': market_probability, 'learning_adjustment': 0.0})
             model_probability = round(float(fused.final_probability), 6)
             implied = None if not best_price or float(best_price) <= 1 else round(1 / float(best_price), 6)
@@ -339,7 +351,7 @@ if st.button(t('run'), type='primary', use_container_width=True):
         selected_sports = sorted(selected_sports, key=lambda sport: sport_score(sport, sport_query), reverse=True)[: int(max_sports)]
         if scope == 'one' and sport_query.strip() and clean(sport_query) != 'auto':
             selected_sports = [sport for sport in selected_sports if sport_score(sport, sport_query) >= 0.35]
-    context_builder = LiveAPIContextBuilder(sportsdataio_key=sports_key, weatherapi_key=weather_key)
+    context_builder = LiveAPIContextBuilder(sportsdataio_key=sports_key, weatherapi_key=weather_key, api_football_key=api_football_key, perplexity_key=perplexity_key, newsapi_key=newsapi_key)
     rows: list[dict[str, Any]] = []
     progress = st.progress(0)
     for index, sport in enumerate(selected_sports):
@@ -348,7 +360,7 @@ if st.button(t('run'), type='primary', use_container_width=True):
         except Exception as exc:
             skipped.append(f'{getattr(sport, "title", sport.key)}: {str(exc)[:180]}')
             events = []
-        rows.extend(build_rows(events, sport, context_builder=context_builder, odds_key=odds_key, sports_key=sports_key, weather_key=weather_key, team_filter=team_filter, latest_event_date=latest_event_date, min_books=int(min_books)))
+        rows.extend(build_rows(events, sport, context_builder=context_builder, odds_key=odds_key, sports_key=sports_key, weather_key=weather_key, api_football_key=api_football_key, perplexity_key=perplexity_key, newsapi_key=newsapi_key, team_filter=team_filter, latest_event_date=latest_event_date, min_books=int(min_books)))
         progress.progress((index + 1) / max(1, len(selected_sports)))
     progress.empty()
     raw = pd.DataFrame(rows)
@@ -389,7 +401,7 @@ if st.button(t('run'), type='primary', use_container_width=True):
     st.subheader(t('handoff'))
     st.dataframe(display_frame(page_health_frame(handoff, page='pro_predictor')), use_container_width=True, hide_index=True)
     tabs = st.tabs([t('large_tab'), t('all_tab'), t('lock_tab'), t('skipped')])
-    display_cols = [col for col in ['event', 'sport', 'market_type', 'line_point', 'prediction', 'model_probability_clean', 'learned_model_probability', 'market_implied_probability', 'model_market_edge', 'decimal_price', 'odds_at_pick', 'bookmaker', 'agent_decision', 'agent_score', 'learning_adjustment_score', 'learning_pattern_count', 'scanner_strength_score', 'scanner_strength_tier', 'lock_ready', 'learning_notes', 'decision_signals'] if col in decisions.columns]
+    display_cols = [col for col in ['event', 'sport', 'market_type', 'line_point', 'prediction', 'model_probability_clean', 'learned_model_probability', 'market_implied_probability', 'model_market_edge', 'decimal_price', 'odds_at_pick', 'bookmaker', 'agent_decision', 'agent_score', 'learning_adjustment_score', 'learning_pattern_count', 'scanner_strength_score', 'scanner_strength_tier', 'lock_ready', 'learning_notes', 'decision_signals', 'configured_api_sources', 'api_sources_used', 'api_coverage_percent'] if col in decisions.columns]
     with tabs[0]:
         st.dataframe(display_frame(large[display_cols] if display_cols else large), use_container_width=True, hide_index=True)
         csv_link(t('download_large'), display_frame(large), 'pro_predictor_large_list_volume.csv')
