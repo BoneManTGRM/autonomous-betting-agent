@@ -116,7 +116,8 @@ def _exists(p: Path) -> bool:
 
 
 def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
-    key = (int(size), bool(bold))
+    size = max(1, int(size))
+    key = (size, bool(bold))
     if key in _FONT_CACHE:
         return _FONT_CACHE[key]
     names = BOLD_NAMES if bold else REG_NAMES
@@ -161,30 +162,59 @@ def _headline_font(text: str, width: int, preferred: int, minimum: int) -> Image
     return _fit(text, width, max(minimum, start), max(44, minimum - 6), True)
 
 
-def _wrap(d: ImageDraw.ImageDraw, text: str, f: ImageFont.ImageFont, width: int, max_lines: int) -> list[str]:
-    out, cur = [], ""
+def _line_height(font: ImageFont.ImageFont) -> int:
+    return getattr(font, "size", 18) + 4
+
+
+def _wrap(d: ImageDraw.ImageDraw, text: str, f: ImageFont.ImageFont, width: int, max_lines: int | None = None) -> list[str]:
+    out: list[str] = []
+    cur = ""
     words = str(text or "").replace("\n", " ").split()
-    for w in words:
-        t = w if not cur else cur + " " + w
-        if d.textbbox((0, 0), t, font=f)[2] <= width:
-            cur = t
+    for word in words:
+        trial = word if not cur else f"{cur} {word}"
+        if d.textbbox((0, 0), trial, font=f)[2] <= width:
+            cur = trial
         else:
             if cur:
                 out.append(cur)
-            cur = w
-            if len(out) >= max_lines:
-                break
-    if cur and len(out) < max_lines:
+            cur = word
+            if max_lines is not None and len(out) >= max_lines:
+                return out
+    if cur and (max_lines is None or len(out) < max_lines):
         out.append(cur)
-    if len(out) == max_lines and len(" ".join(out).split()) < len(words):
-        out[-1] = out[-1].rstrip(".,;:") + "..."
     return out
 
 
 def _txt(d: ImageDraw.ImageDraw, x: int, y: int, text: str, f: ImageFont.ImageFont, fill: Any, width: int, max_lines: int = 1) -> int:
     for line in _wrap(d, text, f, width, max_lines):
         d.text((x, y), line, font=f, fill=fill)
-        y += getattr(f, "size", 18) + 5
+        y += _line_height(f)
+    return y
+
+
+def _txt_auto(d: ImageDraw.ImageDraw, x: int, y: int, text: str, width: int, height: int, start: int, minimum: int, fill: Any, bold: bool = False, max_lines: int | None = None) -> int:
+    text = str(text or "")
+    if max_lines == 1:
+        f = _fit(text, width, start, minimum, bold)
+        d.text((x, y), text, font=f, fill=fill)
+        return y + _line_height(f)
+    for size in range(int(start), int(minimum) - 1, -1):
+        f = _font(size, bold)
+        lines = _wrap(d, text, f, width, max_lines)
+        if not lines:
+            return y
+        if len(lines) * _line_height(f) <= height:
+            for line in lines:
+                d.text((x, y), line, font=f, fill=fill)
+                y += _line_height(f)
+            return y
+    f = _font(minimum, bold)
+    bottom = y + height
+    for line in _wrap(d, text, f, width, max_lines):
+        if y + _line_height(f) > bottom:
+            break
+        d.text((x, y), line, font=f, fill=fill)
+        y += _line_height(f)
     return y
 
 
@@ -343,6 +373,33 @@ def _bullets(d: ImageDraw.ImageDraw, x: int, y: int, items: list[str], width: in
         y = _txt(d, x + 25, y, item, f, TEXT, width - 30, lines) + 8
 
 
+def _bullets_auto(d: ImageDraw.ImageDraw, x: int, y: int, items: list[str], width: int, height: int, color: tuple[int, int, int], start: int = 18, minimum: int = 11, limit: int | None = None) -> None:
+    chosen: ImageFont.ImageFont | None = None
+    chosen_lines: list[list[str]] = []
+    data = items[:limit] if limit is not None else items
+    for size in range(start, minimum - 1, -1):
+        f = _font(size)
+        blocks = [_wrap(d, item, f, width - 30, None) for item in data]
+        need = sum(max(1, len(block)) * _line_height(f) + 8 for block in blocks)
+        if need <= height:
+            chosen, chosen_lines = f, blocks
+            break
+    if chosen is None:
+        chosen = _font(minimum)
+        chosen_lines = [_wrap(d, item, chosen, width - 30, None) for item in data]
+    bottom = y + height
+    for block in chosen_lines:
+        if y + _line_height(chosen) > bottom:
+            break
+        d.ellipse((x, y + 8, x + 12, y + 20), fill=color)
+        for line in block:
+            if y + _line_height(chosen) > bottom:
+                break
+            d.text((x + 25, y), line, font=chosen, fill=TEXT)
+            y += _line_height(chosen)
+        y += 8
+
+
 def _items(r: Any, keys: Iterable[str], fallback: str | list[str], limit: int) -> list[str]:
     out: list[str] = []
     for k in keys:
@@ -373,13 +430,13 @@ def _pairs(r: Any) -> list[tuple[str, str]]:
 def _team_snapshot(img: Image.Image, d: ImageDraw.ImageDraw, x: int, y: int, width: int, team: str, color: tuple[int, int, int], use_logo: bool) -> None:
     _badge(img, d, team, x, y, 50, 50, color, use_logo)
     d.text((x + 66, y + 9), team.upper(), font=_fit(team.upper(), width - 70, 25, 16, True), fill=color)
-    _bullets(d, x, y + 76, [TEAM_DATA_FALLBACK, "Use team form, injuries, and market movement before publishing."], width - 10, color, 4, 18, 2)
+    _bullets_auto(d, x, y + 76, [TEAM_DATA_FALLBACK, "Use team form, injuries, and market movement before publishing."], width - 10, 165, color, 18, 11, 4)
 
 
 def _player_notes(d: ImageDraw.ImageDraw, x: int, y: int, width: int, team: str, prefix: str, color: tuple[int, int, int], r: Any) -> None:
     d.text((x, y), team.upper(), font=_fit(team.upper(), width, 20, 14, True), fill=color)
     items = _items(r, (f"{prefix}_injuries", f"{prefix}_injury_report", f"{prefix}_lineup_status", f"{prefix}_player_notes", "injury_report", "injuries", "lineup_status", "key_players"), [PLAYER_DATA_FALLBACK, "Confirm lineup/injury news before placing the bet."], 2)
-    _bullets(d, x, y + 38, items, width, color, 2, 15, 1)
+    _bullets_auto(d, x, y + 30, items, width, 58, color, 13, 7, 2)
 
 
 def _metric(d: ImageDraw.ImageDraw, x: int, y: int, w: int, label: str, value: str, color: tuple[int, int, int]) -> None:
@@ -387,14 +444,13 @@ def _metric(d: ImageDraw.ImageDraw, x: int, y: int, w: int, label: str, value: s
     d.rectangle((x, y, x + w, y + 94), fill=BLACK, outline=(230, 224, 204), width=1)
     d.text((x + 7, y + 10), label, font=_fit(label, w - 12, 16, 12, True), fill=(232, 230, 220))
     clean = _clean(value, True)
-    _txt(d, x + 7, y + 43, clean, _fit(clean, w - 12, 31, 15, True), color, w - 12, 1)
+    _txt_auto(d, x + 7, y + 43, clean, w - 12, 38, 27, 8, color, True, 1)
 
 
 def render_full_pick_magazine_page(pick: Any, background_image: Any = None, report_name: str | None = None, page_number: int = 1, total_pages: int = 1, logo_image: Any = None, background_mode: str = "hero_right", logo_mode: str = "header", background_opacity: float = 0.9, logo_opacity: float = 1.0, use_team_logo: bool = True) -> Image.Image:
     away, home = _teams(pick)
     sport = _get(pick, "sport", "league", default="Sport N/A")
     source = _get(pick, "odds_source", "data_source", "bookmaker", "sportsbook", default="Agent row")
-    date = _get(pick, "report_date", "event_date", "event_start_utc", default=NOT_PROVIDED)
     img = _paper(int(sha256(_game(pick).encode()).hexdigest()[:8], 16))
     _hero(img, background_image, background_mode, background_opacity)
     d = ImageDraw.Draw(img, "RGBA")
@@ -404,10 +460,7 @@ def render_full_pick_magazine_page(pick: Any, background_image: Any = None, repo
     d.text((330, 29), "DAILY SPORTS ANALYSIS", font=_fit("DAILY SPORTS ANALYSIS", 470, 36, 27, True), fill="white")
     d.rounded_rectangle((840, 24, 1050, 74), radius=5, fill=CREAM, outline=BLACK)
     d.text((862, 34), f"PAGE {page_number} OF {total_pages}", font=_fit(f"PAGE {page_number} OF {total_pages}", 174, 26, 19, True), fill=BLACK)
-    # Metadata row intentionally removed to prevent overlap with the main headline and hero image.
-    d.rounded_rectangle((910, 90, 1040, 174), radius=8, fill=BLACK, outline=CREAM, width=3)
-    d.text((930, 106), sport.upper()[:12], font=_fit(sport.upper()[:12], 90, 23, 15, True), fill=CREAM)
-    _badge(img, d, sport, 948, 136, 66, 34, BLUE, use_team_logo)
+
     d.text((36, 105), away.upper(), font=_headline_font(away, 590, 132, 66), fill=RED)
     d.text((40, 246), "VS", font=_font(46, True), fill=BLACK)
     d.line((40, 304, 104, 304), fill=BLACK, width=4)
@@ -420,12 +473,13 @@ def render_full_pick_magazine_page(pick: Any, background_image: Any = None, repo
     for k in ("preview_summary", "game_summary", "sports_context_summary", "short_reason", "decision_reasons"):
         ctx += _split(_row(pick).get(k))
     for line in (ctx or ["Context unavailable.", "Confirm price and lineup news before entry."])[:2]:
-        cy = _txt(d, 42, cy, line, _font(20), TEXT, 565, 1)
+        cy = _txt_auto(d, 42, cy, line, 565, 28, 20, 13, TEXT, False, 1)
+
     sy = 456
     d.rounded_rectangle((20, sy, PAGE_WIDTH - 20, sy + 106), radius=13, fill=BLACK, outline=CREAM, width=3)
     d.text((50, sy + 16), "TENDENCIA", font=_font(25, True), fill=RED)
     pick_text = _clean(_pick(pick), True)
-    d.text((50, sy + 52), pick_text, font=_fit(pick_text, 220, 34, 18, True), fill=CREAM)
+    _txt_auto(d, 50, sy + 52, pick_text, 210, 38, 30, 11, CREAM, True, 1)
     _badge(img, d, home, 268, sy + 27, 58, 50, BLUE, use_team_logo)
     odds = _fmt(_get(pick, "american_odds", "odds_american", "decimal_price", "odds_at_pick", "best_price", "odds"), "odds")
     conf = _pct(_num(pick, "learned_model_probability", "model_probability_clean", "model_probability", "final_probability"))
@@ -438,31 +492,55 @@ def render_full_pick_magazine_page(pick: Any, background_image: Any = None, repo
     for (lab, val, col), w in zip([("ODDS", odds, CREAM), ("CONFIDENCE", conf, GREEN), ("EDGE", edge, DANGER if edge.startswith("-") else GREEN), ("EV", ev, DANGER if ev.startswith("-") else GREEN), ("UNITS", units, CREAM), ("RISK", risk, GREEN), ("MARKET", market, CREAM)], [84, 126, 94, 98, 84, 94, 94]):
         _metric(d, x, sy + 6, w, lab, val, col)
         x += w
-    _section(d, 20, 585, 350, 300, "WHY WE PICKED IT", RED); _bullets(d, 44, 655, _why(pick), 306, RED, 4, 20, 2)
+
+    _section(d, 20, 585, 350, 300, "WHY WE PICKED IT", RED)
+    _bullets_auto(d, 44, 655, _why(pick), 306, 210, RED, 19, 11, 4)
     _section(d, 20, 905, 350, 225, "PRO BETTOR EVIDENCE", BLUE)
     ry = 974
     for lab, val in (_pairs(pick) or [("SOURCE", source), ("BOOK", NO_VERIFIED)])[:5]:
-        d.text((44, ry), f"{lab}:", font=_font(17, True), fill=BLACK); _txt(d, 132, ry, val, _font(17, True), BLACK, 205, 1); ry += 31
-    d.rectangle((28, 1088, 362, 1120), fill=BLUE); _txt(d, 42, 1095, _get(pick, "evidence_summary", default="Market and model evidence support this read."), _font(16, True), CREAM, 304, 1)
-    _section(d, 386, 585, 674, 365, "TEAM SNAPSHOTS", BLUE); d.line((724, 660, 724, 922), fill=BLACK + (170,), width=1)
-    _team_snapshot(img, d, 410, 675, 292, away, RED, use_team_logo); _team_snapshot(img, d, 746, 675, 292, home, BLUE, use_team_logo)
-    _section(d, 386, 965, 674, 165, "PLAYER / INJURY NOTES", BLUE); d.line((724, 1028, 724, 1110), fill=BLACK + (160,), width=1)
-    _player_notes(d, 410, 1036, 292, away, "away", RED, pick); _player_notes(d, 746, 1036, 292, home, "home", BLUE, pick)
-    _section(d, 20, 1150, 340, 205, "RISK DESK", RED); _bullets(d, 44, 1222, _items(pick, ("why_lose", "risk_reason", "hidden_risk", "risk_notes"), [f"Risk status: {risk}", "Recheck odds before entry.", "Avoid if major lineup/weather news changes."], 3), 292, RED, 3, 18, 2)
-    _section(d, 374, 1150, 332, 205, "MATCHUP NOTES", BLUE); _bullets(d, 398, 1222, _items(pick, ("matchup_note", "matchup_notes", "head_to_head", "h2h", "venue_note", "weather_location", "sports_context_summary"), ["Context unavailable.", "Confirm venue and start time.", "Recheck market movement before publishing."], 3), 284, BLUE, 3, 18, 2)
-    _section(d, 720, 1150, 340, 205, "CHAIN BETTING NOTES", BLUE); _bullets(d, 744, 1222, _items(pick, ("chain_notes", "main_read", "add_on_legs", "parlay_notes"), ["Better as an individual straight analysis unless another verified edge exists.", "Do not add weak legs just to increase payout."], 2), 292, BLUE, 2, 18, 2)
+        d.text((44, ry), f"{lab}:", font=_font(17, True), fill=BLACK)
+        _txt_auto(d, 132, ry, val, 205, 22, 17, 10, BLACK, True, 1)
+        ry += 31
+    d.rectangle((28, 1088, 362, 1120), fill=BLUE)
+    _txt_auto(d, 42, 1093, _get(pick, "evidence_summary", default="Market and model evidence support this read."), 304, 26, 16, 9, CREAM, True, None)
+
+    _section(d, 386, 585, 674, 365, "TEAM SNAPSHOTS", BLUE)
+    d.line((724, 660, 724, 922), fill=BLACK + (170,), width=1)
+    _team_snapshot(img, d, 410, 675, 292, away, RED, use_team_logo)
+    _team_snapshot(img, d, 746, 675, 292, home, BLUE, use_team_logo)
+
+    _section(d, 386, 965, 674, 165, "PLAYER / INJURY NOTES", BLUE)
+    d.line((724, 1028, 724, 1110), fill=BLACK + (160,), width=1)
+    _player_notes(d, 410, 1036, 292, away, "away", RED, pick)
+    _player_notes(d, 746, 1036, 292, home, "home", BLUE, pick)
+
+    _section(d, 20, 1150, 340, 205, "RISK DESK", RED)
+    _bullets_auto(d, 44, 1222, _items(pick, ("why_lose", "risk_reason", "hidden_risk", "risk_notes"), [f"Risk status: {risk}", "Recheck odds before entry.", "Avoid if major lineup/weather news changes."], 3), 292, 114, RED, 17, 10, 3)
+    _section(d, 374, 1150, 332, 205, "MATCHUP NOTES", BLUE)
+    _bullets_auto(d, 398, 1222, _items(pick, ("matchup_note", "matchup_notes", "head_to_head", "h2h", "venue_note", "weather_location", "sports_context_summary"), ["Context unavailable.", "Confirm venue and start time.", "Recheck market movement before publishing."], 3), 284, 114, BLUE, 17, 9, 3)
+    _section(d, 720, 1150, 340, 205, "CHAIN BETTING NOTES", BLUE)
+    _bullets_auto(d, 744, 1222, _items(pick, ("chain_notes", "main_read", "add_on_legs", "parlay_notes"), ["Better as an individual straight analysis unless another verified edge exists.", "Do not add weak legs just to increase payout."], 2), 292, 114, BLUE, 17, 10, 2)
+
     action = _clean(_get(pick, "final_decision", "agent_decision", "recommendation", "consumer_action", "recommended_action", default="PLAY STANDARD"), True)
     expl = _get(pick, "final_explanation", "action_reason", "recommendation_reason", "decision_reasons", default="Use only if the line remains playable and key news does not change.")
     fy = 1380
-    d.rounded_rectangle((20, fy, PAGE_WIDTH - 20, 1562), radius=14, fill=BLACK, outline=RED, width=3); d.rectangle((20, fy, 250, 1562), fill=RED)
-    d.text((40, fy + 36), "FINAL", font=_font(32, True), fill=CREAM); d.text((40, fy + 84), "RECOMMENDATION", font=_fit("RECOMMENDATION", 190, 27, 20, True), fill=CREAM)
-    d.text((284, fy + 25), action, font=_fit(action, 340, 58, 32, True), fill=GREEN); _txt(d, 284, fy + 100, pick_text, _fit(pick_text, 360, 40, 24, True), CREAM, 360, 1); _txt(d, 670, fy + 44, expl, _font(21), CREAM, 340, 3)
-    d.rectangle((20, 1568, PAGE_WIDTH - 20, 1606), fill=BLACK); box = d.textbbox((0, 0), SAFETY_FOOTER, font=_font(16)); d.text(((PAGE_WIDTH - (box[2] - box[0])) / 2, 1578), SAFETY_FOOTER, font=_font(16), fill=CREAM)
+    d.rounded_rectangle((20, fy, PAGE_WIDTH - 20, 1562), radius=14, fill=BLACK, outline=RED, width=3)
+    d.rectangle((20, fy, 250, 1562), fill=RED)
+    d.text((40, fy + 36), "FINAL", font=_font(30, True), fill=CREAM)
+    d.text((40, fy + 84), "RECOMMENDATION", font=_fit("RECOMMENDATION", 190, 25, 18, True), fill=CREAM)
+    d.text((284, fy + 25), action, font=_fit(action, 340, 56, 30, True), fill=GREEN)
+    _txt_auto(d, 284, fy + 100, pick_text, 360, 42, 36, 14, CREAM, True, 1)
+    _txt_auto(d, 670, fy + 44, expl, 340, 94, 21, 13, CREAM, False, None)
+    d.rectangle((20, 1568, PAGE_WIDTH - 20, 1606), fill=BLACK)
+    box = d.textbbox((0, 0), SAFETY_FOOTER, font=_font(16))
+    d.text(((PAGE_WIDTH - (box[2] - box[0])) / 2, 1578), SAFETY_FOOTER, font=_font(16), fill=CREAM)
     return img.convert("RGB")
 
 
 def _png(image: Image.Image) -> bytes:
-    out = BytesIO(); image.save(out, format="PNG", optimize=True); return out.getvalue()
+    out = BytesIO()
+    image.save(out, format="PNG", optimize=True)
+    return out.getvalue()
 
 
 def render_full_pick_magazine_page_png(pick: Any, background_image: Any = None, report_name: str | None = None, page_number: int = 1, total_pages: int = 1, logo_image: Any = None, background_mode: str = "hero_right", logo_mode: str = "header", background_opacity: float = 0.9, logo_opacity: float = 1.0, use_team_logo: bool = True) -> bytes:
@@ -484,13 +562,18 @@ def render_full_magazine_book_png(picks: Iterable[Any], background_image: Any = 
 
 def render_full_magazine_book_pdf(picks: Iterable[Any], background_image: Any = None, report_name: str | None = None, logo_image: Any = None, background_mode: str = "hero_right", logo_mode: str = "header", background_opacity: float = 0.9, logo_opacity: float = 1.0, use_team_logo: bool = True) -> bytes:
     pages = [p.convert("RGB") for p in render_full_magazine_book_pages(picks, background_image, report_name, logo_image, background_mode, logo_mode, background_opacity, logo_opacity, use_team_logo)]
-    out = BytesIO(); pages[0].save(out, format="PDF", save_all=True, append_images=pages[1:], resolution=100.0); return out.getvalue()
+    out = BytesIO()
+    pages[0].save(out, format="PDF", save_all=True, append_images=pages[1:], resolution=100.0)
+    return out.getvalue()
 
 
 def render_full_magazine_zip(picks: Iterable[Any], background_image: Any = None, report_name: str | None = None, logo_image: Any = None, background_mode: str = "hero_right", logo_mode: str = "header", background_opacity: float = 0.9, logo_opacity: float = 1.0, use_team_logo: bool = True) -> bytes:
-    rows = list(picks); pages = render_full_magazine_book_pages(rows, background_image, report_name, logo_image, background_mode, logo_mode, background_opacity, logo_opacity, use_team_logo); out = BytesIO()
+    rows = list(picks)
+    pages = render_full_magazine_book_pages(rows, background_image, report_name, logo_image, background_mode, logo_mode, background_opacity, logo_opacity, use_team_logo)
+    out = BytesIO()
     with ZipFile(out, "w", compression=ZIP_DEFLATED) as z:
-        z.writestr("full_magazine_book.png", render_full_magazine_book_png(rows, background_image, report_name, logo_image, background_mode, logo_mode, background_opacity, logo_opacity, use_team_logo)); z.writestr("full_magazine_book.pdf", render_full_magazine_book_pdf(rows, background_image, report_name, logo_image, background_mode, logo_mode, background_opacity, logo_opacity, use_team_logo))
+        z.writestr("full_magazine_book.png", render_full_magazine_book_png(rows, background_image, report_name, logo_image, background_mode, logo_mode, background_opacity, logo_opacity, use_team_logo))
+        z.writestr("full_magazine_book.pdf", render_full_magazine_book_pdf(rows, background_image, report_name, logo_image, background_mode, logo_mode, background_opacity, logo_opacity, use_team_logo))
         for i, page in enumerate(pages):
             z.writestr(pick_full_page_filename(rows[i] if i < len(rows) else {"event": "No Picks"}, i), _png(page))
     return out.getvalue()
