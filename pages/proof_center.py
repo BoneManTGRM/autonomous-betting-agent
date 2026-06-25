@@ -3,10 +3,12 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from autonomous_betting_agent.commercial_platform_tools import load_persistent_ledger, normalize_workspace_id
 from autonomous_betting_agent.explanations import build_client_safe_pick_summary
 from autonomous_betting_agent.grading_rules import summarize_event_level, summarize_row_level
 from autonomous_betting_agent.ledger_types import classify_ledger_type, is_future_locked, public_metric_allowed
 from autonomous_betting_agent.local_access import require_streamlit_access
+from autonomous_betting_agent.row_normalizer import safe_text
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 from autonomous_betting_agent.storage import LocalStorage
 
@@ -19,13 +21,15 @@ TEXT = {
         "title": "Proof Center",
         "caption": "Unified proof review, proof ID verification, row-level/event-level records, and local proof rows.",
         "warning": "Proof Center is for analytics and proof tracking only. It does not guarantee outcomes or returns.",
-        "local_rows": "Local rows",
+        "workspace": "Workspace",
+        "source_counts": "Rows loaded: {total} total, {local} local, {ledger} ledger.",
+        "local_rows": "Rows",
         "row_record": "Row record",
         "events": "Events",
         "event_record": "Event record",
         "tabs": ["Summary", "Proof ID Verification", "Proof Audit", "Row vs Event Record", "Local Proof Rows"],
         "public_summary": "Public proof summary",
-        "no_rows": "No local proof rows found yet.",
+        "no_rows": "No local or ledger proof rows found yet.",
         "public_safe_rows": "Public-safe rows",
         "research_review_rows": "Research/review rows",
         "legacy_dashboard": "Open legacy Public Proof Dashboard",
@@ -45,20 +49,22 @@ TEXT = {
         "row_summary": "Row-level summary",
         "event_summary": "Event-level summary",
         "event_caption": "Use event-level counts when multiple rows belong to the same matchup/game.",
-        "local_proof_rows": "Local proof rows",
-        "download_rows": "Download local proof rows",
+        "local_proof_rows": "Proof rows",
+        "download_rows": "Download proof rows",
     },
     "es": {
         "title": "Centro de Prueba",
         "caption": "Revisión unificada de prueba, verificación de ID, récord por fila/evento y filas locales.",
         "warning": "El Centro de Prueba es solo para analítica y seguimiento de prueba. No garantiza resultados ni ganancias.",
-        "local_rows": "Filas locales",
+        "workspace": "Workspace",
+        "source_counts": "Filas cargadas: {total} total, {local} locales, {ledger} ledger.",
+        "local_rows": "Filas",
         "row_record": "Récord por fila",
         "events": "Eventos",
         "event_record": "Récord por evento",
         "tabs": ["Resumen", "Verificación de ID", "Auditoría de prueba", "Fila vs evento", "Filas locales"],
         "public_summary": "Resumen de prueba pública",
-        "no_rows": "Todavía no hay filas locales de prueba.",
+        "no_rows": "Todavía no hay filas locales ni de ledger.",
         "public_safe_rows": "Filas seguras para público",
         "research_review_rows": "Filas investigación/revisión",
         "legacy_dashboard": "Abrir Panel Público de Prueba anterior",
@@ -78,8 +84,8 @@ TEXT = {
         "row_summary": "Resumen por fila",
         "event_summary": "Resumen por evento",
         "event_caption": "Usa conteos por evento cuando varias filas pertenecen al mismo partido/juego.",
-        "local_proof_rows": "Filas locales de prueba",
-        "download_rows": "Descargar filas locales de prueba",
+        "local_proof_rows": "Filas de prueba",
+        "download_rows": "Descargar filas de prueba",
     },
 }
 
@@ -88,12 +94,45 @@ def t(key: str):
     return TEXT.get(LANG, TEXT["en"]).get(key, TEXT["en"].get(key, key))
 
 
+def to_records(value) -> list[dict]:
+    frame = pd.DataFrame(value) if value is not None else pd.DataFrame()
+    if frame.empty:
+        return []
+    return frame.fillna("").to_dict("records")
+
+
+def merge_rows(*parts: list[dict]) -> list[dict]:
+    rows: list[dict] = []
+    seen: set[str] = set()
+    for part in parts:
+        for row in part:
+            proof_id = safe_text(row.get("proof_id"))
+            event = safe_text(row.get("event") or row.get("event_name") or row.get("matchup"))
+            pick = safe_text(row.get("prediction") or row.get("pick") or row.get("selection"))
+            start = safe_text(row.get("event_start_utc") or row.get("event_start_time") or row.get("commence_time"))
+            key = proof_id or "|".join([event.lower(), pick.lower(), start.lower()])
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            rows.append(dict(row))
+    return rows
+
+
 st.title(t("title"))
 st.caption(t("caption"))
 st.warning(t("warning"))
 
+workspace_id = normalize_workspace_id(st.session_state.get("aba_test_window_id", "test_01"))
+st.caption(f"{t('workspace')}: {workspace_id}")
+
 store = LocalStorage()
-rows = store.load_rows()
+local_rows = store.load_rows()
+ledger_rows = to_records(load_persistent_ledger(workspace_id=workspace_id, active_only=False))
+if not ledger_rows and workspace_id != "default":
+    ledger_rows = to_records(load_persistent_ledger(active_only=False))
+rows = merge_rows(local_rows, ledger_rows)
+st.caption(t("source_counts").format(total=len(rows), local=len(local_rows), ledger=len(ledger_rows)))
 
 row_summary = summarize_row_level(rows)
 event_summary = summarize_event_level(rows)
