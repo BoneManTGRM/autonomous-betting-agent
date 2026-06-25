@@ -30,7 +30,7 @@ from autonomous_betting_agent.white_label_profiles import WhiteLabelProfile, lis
 
 st.set_page_config(page_title='Report Studio', layout='wide')
 LANG = render_app_sidebar('report_studio', language_key='report_studio_language', selector='radio')
-NO_MARKET_EXPORT_VERSION = 'no_market_metric_v3'
+NO_MARKET_EXPORT_VERSION = 'no_market_metric_v4_units_fixed'
 
 TEXT = {
     'en': {
