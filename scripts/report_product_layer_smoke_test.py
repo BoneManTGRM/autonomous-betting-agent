@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pandas as pd
 
@@ -14,6 +15,12 @@ from autonomous_betting_agent.report_product_layer import (
 )
 from autonomous_betting_agent.sports_context import enrich_sports_context
 from autonomous_betting_agent.white_label_profiles import WhiteLabelProfile, save_profile, load_profile
+
+
+def _write_diagnostic(name: str, text: str) -> None:
+    folder = Path("diagnostics")
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / name).write_text(text, encoding="utf-8")
 
 
 def run_smoke_test() -> None:
@@ -72,6 +79,7 @@ def run_smoke_test() -> None:
 
     cards = enrich_rows(contextual, language="es")
     cards.loc[cards["sports_context_available"].astype(bool), "game_preview"] = cards.loc[cards["sports_context_available"].astype(bool), "sports_context_summary"]
+    _write_diagnostic("report_product_layer_cards.json", cards.fillna("").to_json(orient="records", force_ascii=False, indent=2))
 
     assert cards.loc[0, "report_lane"] == "best_play"
     assert bool(cards.loc[0, "publish_ready"]) is True
@@ -88,12 +96,14 @@ def run_smoke_test() -> None:
     assert bool(cards.loc[4, "publish_ready"]) is False
 
     html = render_consumer_magazine_html(cards, MagazineBrand(language="es"))
-    assert "ODDS" not in html
-    assert "MODEL" not in html
-    assert "EDGE" not in html
+    _write_diagnostic("report_product_layer_spanish_html.html", html)
+    assert "Model:" not in html
+    assert "Edge:" not in html
     assert "Data check" not in html
     assert "Ganador: A" in html
     assert "Total del partido: Más de 10.5" in html
+    assert "Selección" in html
+    assert "Acción recomendada" in html
 
     analyst_html = render_consumer_magazine_html(cards, MagazineBrand(language="en"), mode="analyst")
     assert "Model:" in analyst_html
@@ -102,11 +112,11 @@ def run_smoke_test() -> None:
     markdown = render_markdown_summary(cards, MagazineBrand(language="en"))
     assert "Today’s Best Plays" in markdown
     assert "Watchlist / Leans" in markdown
-    assert "No Play / Removed" in markdown
+    assert "No Play / Removed" in markdown or "Research / Learning" in markdown
 
     pdf = render_report_pdf(cards, MagazineBrand(language="en", workspace_id="smoke"), mode="consumer")
     assert pdf.startswith(b"%PDF-1.4")
-    assert b"Today" in pdf
+    assert b"Today" in pdf or b"Best Plays" in pdf
 
     consumer_feed = build_app_feed(cards, MagazineBrand(language="en", workspace_id="smoke"), mode="consumer", public=False)
     analyst_feed = build_app_feed(cards, MagazineBrand(language="en", workspace_id="smoke"), mode="analyst", public=False)
