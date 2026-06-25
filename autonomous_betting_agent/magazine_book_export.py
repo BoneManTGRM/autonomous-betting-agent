@@ -33,32 +33,22 @@ FONT_ROOTS = tuple(Path(p) for p in ("/usr/share/fonts", "/usr/local/share/fonts
 BOLD_NAMES = ("DejaVuSansCondensed-Bold.ttf", "DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf", "Arial Bold.ttf")
 REG_NAMES = ("DejaVuSansCondensed.ttf", "DejaVuSans.ttf", "LiberationSans-Regular.ttf", "Arial.ttf")
 
+COUNTRY_ES = {
+    "iraq": "Irak", "france": "Francia", "germany": "Alemania", "ecuador": "Ecuador",
+    "spain": "España", "england": "Inglaterra", "netherlands": "Países Bajos", "united states": "Estados Unidos",
+    "usa": "Estados Unidos", "us": "Estados Unidos", "mexico": "México", "italy": "Italia", "brazil": "Brasil",
+    "argentina": "Argentina", "portugal": "Portugal", "canada": "Canadá", "japan": "Japón", "south korea": "Corea del Sur",
+    "new zealand": "Nueva Zelanda", "ivory coast": "Costa de Marfil", "tunisia": "Túnez", "egypt": "Egipto",
+}
+
 ES = {
-    "DAILY SPORTS ANALYSIS": "ANÁLISIS DEPORTIVO DIARIO",
-    "PAGE": "PÁGINA",
-    "OF": "DE",
-    "REGULAR SEASON": "TEMPORADA REGULAR",
-    "TREND": "TENDENCIA",
-    "ODDS": "CUOTA",
-    "CONFIDENCE": "CONFIANZA",
-    "EDGE": "VENTAJA",
-    "EV": "VE",
-    "UNITS": "UNIDADES",
-    "RISK": "RIESGO",
-    "MARKET": "MERCADO",
-    "WHY WE PICKED IT": "POR QUÉ LO ELEGIMOS",
-    "PRO BETTOR EVIDENCE": "EVIDENCIA PRO",
-    "TEAM SNAPSHOTS": "RESUMEN EQUIPOS",
-    "PLAYER / INJURY NOTES": "JUGADORES / LESIONES",
-    "RISK DESK": "RIESGO",
-    "MATCHUP NOTES": "NOTAS DEL PARTIDO",
-    "CHAIN BETTING NOTES": "NOTAS PARLAY",
-    "RECOMMENDATION": "RECOMENDACIÓN",
-    "SOURCE": "FUENTE",
-    "BOOK": "CASA",
-    "LINE": "LÍNEA",
-    "PUBLIC": "PÚBLICO",
-    "PRO": "PRO",
+    "DAILY SPORTS ANALYSIS": "ANÁLISIS DEPORTIVO DIARIO", "PAGE": "PÁGINA", "OF": "DE",
+    "REGULAR SEASON": "TEMPORADA REGULAR", "TREND": "TENDENCIA", "ODDS": "CUOTA", "CONFIDENCE": "CONFIANZA",
+    "EDGE": "VENTAJA", "EV": "VE", "UNITS": "UNIDADES", "RISK": "RIESGO", "MARKET": "MERCADO",
+    "WHY WE PICKED IT": "POR QUÉ LO ELEGIMOS", "PRO BETTOR EVIDENCE": "EVIDENCIA PRO",
+    "TEAM SNAPSHOTS": "RESUMEN EQUIPOS", "PLAYER / INJURY NOTES": "JUGADORES / LESIONES", "RISK DESK": "RIESGO",
+    "MATCHUP NOTES": "NOTAS DEL PARTIDO", "CHAIN BETTING NOTES": "NOTAS PARLAY", "RECOMMENDATION": "RECOMENDACIÓN",
+    "SOURCE": "FUENTE", "BOOK": "CASA", "LINE": "LÍNEA", "PUBLIC": "PÚBLICO", "PRO": "PRO",
     "Context unavailable.": "Contexto no disponible.",
     "Confirm price and lineup news before entry.": "Confirma precio y alineaciones antes de entrar.",
     TEAM_DATA_FALLBACK: "Datos del equipo no disponibles en la fila cargada",
@@ -73,18 +63,14 @@ ES = {
     "Better as an individual straight analysis unless another verified edge exists.": "Mejor como análisis individual salvo que exista otra ventaja verificada.",
     "Do not add weak legs just to increase payout.": "No agregues selecciones débiles solo para subir el pago.",
     "Use only if the line remains playable and key news does not change.": "Usar solo si la línea sigue jugable y no cambia la información clave.",
+    "Use only while the line remains playable.": "Usar solo mientras la línea siga jugable.",
     SAFETY_FOOTER: "No garantizamos resultados. Apuesta responsablemente. Este análisis es solo informativo.",
-    "VOLUME OK": "VOLUMEN OK",
-    "VOLUME_OK": "VOLUMEN OK",
-    "LOW": "BAJO",
-    "MEDIUM": "MEDIO",
-    "HIGH": "ALTO",
-    "TOTALS": "TOTALES",
-    "MONEYLINE": "GANADOR",
-    "SPREAD": "HÁNDICAP",
-    "PLAY SMALL": "JUGAR PEQUEÑO",
-    "PLAY STANDARD": "JUGAR NORMAL",
-    "NO PLAY": "NO JUGAR",
+    "VOLUME OK": "VOLUMEN OK", "VOLUME_OK": "VOLUMEN OK", "LOW": "BAJO", "MEDIUM": "MEDIO", "HIGH": "ALTO",
+    "TOTALS": "TOTALES", "MONEYLINE": "GANADOR", "SPREAD": "HÁNDICAP", "PLAY SMALL": "JUGAR PEQUEÑO",
+    "PLAY STANDARD": "JUGAR NORMAL", "NO PLAY": "NO JUGAR", "consensus average": "promedio consenso",
+    "Consensus average": "promedio consenso", "Philadelphia, Pennsylvania, USA": "Filadelfia, Pensilvania, EE. UU.",
+    "Neutral-site FIFA venue override matched by event teams and start time.": "Sede neutral FIFA detectada por equipos y hora de inicio.",
+    "Venue was not provided by the available API.": "La API disponible no proporcionó sede.",
 }
 
 
@@ -118,36 +104,48 @@ def _lang(r: Any = None, explicit: str | None = None) -> str:
     return "es" if text.startswith("es") or "español" in text or "espanol" in text else "en"
 
 
+def _team_label(team: str, lang: str) -> str:
+    if lang != "es":
+        return str(team or "")
+    return COUNTRY_ES.get(str(team or "").strip().lower(), str(team or ""))
+
+
 def _tr(v: Any, lang: str) -> str:
     if _bad(v):
         return NO_VERIFIED if lang == "en" else "Dato no disponible"
     text = str(v)
     if lang != "es":
-        text = text.replace("TENDENCIA", "TREND")
+        text = text.replace("TENDENCIA", "TREND").replace("Contexto no disponible.", "Context unavailable.")
         text = re.sub(r"\bTOTAL DEL PARTIDO\b", "GAME TOTAL", text, flags=re.I)
         text = re.sub(r"\bMÁS DE\b", "OVER", text, flags=re.I)
         text = re.sub(r"\bMENOS DE\b", "UNDER", text, flags=re.I)
-        text = text.replace("Contexto no disponible.", "Context unavailable.")
         return text
     if text in ES:
         return ES[text]
+    low = text.strip().lower()
+    if low in COUNTRY_ES:
+        return COUNTRY_ES[low]
     if text.startswith("PAGE ") and " OF " in text:
         return text.replace("PAGE ", "PÁGINA ", 1).replace(" OF ", " DE ")
-    if text.endswith(" REGULAR SEASON"):
-        return text.replace(" REGULAR SEASON", " TEMPORADA REGULAR")
-    if text.startswith("Risk status:"):
-        return text.replace("Risk status:", "Estado de riesgo:").replace("VOLUME OK", "VOLUMEN OK").replace("VOLUME_OK", "VOLUMEN OK")
-    if text.startswith("Model projects "):
-        return re.sub(r"Model projects ([^ ]+) probability for (.+)\.", r"El modelo proyecta \1 de probabilidad para \2.", text)
-    if text.startswith("Market-implied probability checks at "):
-        return text.replace("Market-implied probability checks at ", "La probabilidad implícita del mercado es ")
-    if text.startswith("Measured edge:"):
-        return text.replace("Measured edge:", "Ventaja medida:")
-    if text.startswith("Expected value:"):
-        return text.replace("Expected value:", "Valor esperado:")
+    text = re.sub(r"\bFIFA WORLD CUP\b", "COPA MUNDIAL FIFA", text, flags=re.I)
+    text = re.sub(r"\bREGULAR SEASON\b", "TEMPORADA REGULAR", text, flags=re.I)
     text = re.sub(r"\bGAME TOTAL\b", "TOTAL DEL PARTIDO", text, flags=re.I)
     text = re.sub(r"\bOVER\b", "MÁS DE", text, flags=re.I)
     text = re.sub(r"\bUNDER\b", "MENOS DE", text, flags=re.I)
+    text = re.sub(r"\bTOTALS\b", "TOTALES", text, flags=re.I)
+    text = re.sub(r"\bMONEYLINE\b", "GANADOR", text, flags=re.I)
+    text = re.sub(r"\bSPREAD\b", "HÁNDICAP", text, flags=re.I)
+    text = text.replace("VOLUME OK", "VOLUMEN OK").replace("VOLUME_OK", "VOLUMEN OK")
+    if text.startswith("Risk status:"):
+        text = text.replace("Risk status:", "Estado de riesgo:")
+    if text.startswith("Model projects "):
+        text = re.sub(r"Model projects ([^ ]+) probability for (.+)\.", r"El modelo proyecta \1 de probabilidad para \2.", text)
+    if text.startswith("Market-implied probability checks at "):
+        text = text.replace("Market-implied probability checks at ", "La probabilidad implícita del mercado es ")
+    if text.startswith("Measured edge:"):
+        text = text.replace("Measured edge:", "Ventaja medida:")
+    if text.startswith("Expected value:"):
+        text = text.replace("Expected value:", "Valor esperado:")
     return text
 
 
@@ -424,8 +422,7 @@ def _hero(img: Image.Image, bg: Any, mode: str, opacity: float) -> None:
         slot = _cover(loaded, (430, 350), 0.18)
         slot = ImageEnhance.Color(slot).enhance(1.05)
         slot = ImageEnhance.Contrast(slot).enhance(1.15)
-        alpha = Image.new("L", (430, 350), int(255 * min(max(opacity, 0.90), 0.98)))
-        slot.putalpha(alpha)
+        slot.putalpha(Image.new("L", (430, 350), int(255 * min(max(opacity, 0.90), 0.98))))
         img.alpha_composite(slot, (620, 105))
         d.rectangle((620, 105, 1050, 455), outline=BLACK + (205,), width=3)
     else:
@@ -457,7 +454,7 @@ def _section(d: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int, title: str,
     title = _tr(title, lang).upper()
     d.rounded_rectangle((x, y, x + w, y + h), radius=14, fill=CREAM + (255,), outline=BLACK + (238,), width=3)
     d.rounded_rectangle((x, y, x + w, y + 56), radius=10, fill=color)
-    d.text((x + 18, y + 11), title, font=_fit(title, w - 36, 30, 19, True), fill=CREAM)
+    d.text((x + 18, y + 11), title, font=_fit(title, w - 36, 30, 18, True), fill=CREAM)
 
 
 def _bullets_auto(d: ImageDraw.ImageDraw, x: int, y: int, items: list[str], width: int, height: int, color: tuple[int, int, int], start: int = 18, minimum: int = 11, limit: int | None = None, lang: str = "en") -> None:
@@ -503,7 +500,8 @@ def _why(r: Any, lang: str = "en") -> list[str]:
     if out:
         return [_tr(x, lang) for x in out[:4]]
     vals = []
-    for v in (f"Model projects {_pct(_num(r, 'learned_model_probability', 'model_probability_clean', 'model_probability', 'final_probability'))} probability for {_pick(r)}.", f"Market-implied probability checks at {_pct(_num(r, 'market_probability', 'market_implied_probability'))}.", f"Measured edge: {_edge(_num(r, 'model_market_edge', 'edge'))}.", f"Expected value: {_fmt(_get(r, 'expected_value_per_unit', 'profit_expected_value', 'expected_value', 'ev'), 'ev')}."):
+    pick = _tr(_pick(r), lang)
+    for v in (f"Model projects {_pct(_num(r, 'learned_model_probability', 'model_probability_clean', 'model_probability', 'final_probability'))} probability for {pick}.", f"Market-implied probability checks at {_pct(_num(r, 'market_probability', 'market_implied_probability'))}.", f"Measured edge: {_edge(_num(r, 'model_market_edge', 'edge'))}.", f"Expected value: {_fmt(_get(r, 'expected_value_per_unit', 'profit_expected_value', 'expected_value', 'ev'), 'ev')}."):
         if NO_VERIFIED not in v:
             vals.append(_tr(v, lang))
     return vals or [_tr("Use only while the line remains playable.", lang)]
@@ -515,13 +513,15 @@ def _pairs(r: Any, lang: str = "en") -> list[tuple[str, str]]:
 
 
 def _team_snapshot(img: Image.Image, d: ImageDraw.ImageDraw, x: int, y: int, width: int, team: str, color: tuple[int, int, int], use_logo: bool, lang: str) -> None:
-    _badge(img, d, team, x, y, 50, 50, color, use_logo)
-    d.text((x + 66, y + 9), team.upper(), font=_fit(team.upper(), width - 70, 25, 16, True), fill=color)
-    _bullets_auto(d, x, y + 76, [TEAM_DATA_FALLBACK, "Use team form, injuries, and market movement before publishing."], width - 10, 165, color, 18, 11, 4, lang)
+    label = _team_label(team, lang)
+    _badge(img, d, label, x, y, 50, 50, color, use_logo)
+    d.text((x + 66, y + 9), label.upper(), font=_fit(label.upper(), width - 70, 25, 14, True), fill=color)
+    _bullets_auto(d, x, y + 76, [TEAM_DATA_FALLBACK, "Use team form, injuries, and market movement before publishing."], width - 10, 165, color, 18, 10, 4, lang)
 
 
 def _player_notes(d: ImageDraw.ImageDraw, x: int, y: int, width: int, team: str, prefix: str, color: tuple[int, int, int], r: Any, lang: str) -> None:
-    d.text((x, y), team.upper(), font=_fit(team.upper(), width, 20, 14, True), fill=color)
+    label = _team_label(team, lang)
+    d.text((x, y), label.upper(), font=_fit(label.upper(), width, 20, 12, True), fill=color)
     items = _items(r, (f"{prefix}_injuries", f"{prefix}_injury_report", f"{prefix}_lineup_status", f"{prefix}_player_notes", "injury_report", "injuries", "lineup_status", "key_players"), [PLAYER_DATA_FALLBACK, "Confirm lineup/injury news before placing the bet."], 2)
     _bullets_auto(d, x, y + 30, items, width, 58, color, 13, 7, 2, lang)
 
@@ -531,7 +531,7 @@ def _metric(d: ImageDraw.ImageDraw, x: int, y: int, w: int, label: str, value: s
     label = _tr(label, lang)
     value = _tr(value, lang)
     d.rectangle((x, y, x + w, y + 94), fill=BLACK, outline=(230, 224, 204), width=1)
-    d.text((x + 7, y + 10), label, font=_fit(label, w - 12, 16, 10, True), fill=(232, 230, 220))
+    d.text((x + 7, y + 10), label, font=_fit(label, w - 12, 16, 9, True), fill=(232, 230, 220))
     clean = _clean(value, True)
     _txt_auto(d, x + 7, y + 43, clean, w - 12, 38, 27, 8, color, True, 1)
 
@@ -539,8 +539,8 @@ def _metric(d: ImageDraw.ImageDraw, x: int, y: int, w: int, label: str, value: s
 def render_full_pick_magazine_page(pick: Any, background_image: Any = None, report_name: str | None = None, page_number: int = 1, total_pages: int = 1, logo_image: Any = None, background_mode: str = "hero_right", logo_mode: str = "header", background_opacity: float = 0.9, logo_opacity: float = 1.0, use_team_logo: bool = True, language: str | None = None) -> Image.Image:
     lang = _lang(pick, language)
     away, home = _teams(pick)
+    away_label, home_label = _team_label(away, lang), _team_label(home, lang)
     sport = _get(pick, "sport", "league", default="Sport N/A")
-    source = _get(pick, "odds_source", "data_source", "bookmaker", "sportsbook", default="Agent row")
     img = _paper(int(sha256(_game(pick).encode()).hexdigest()[:8], 16))
     _hero(img, background_image, background_mode, background_opacity)
     d = ImageDraw.Draw(img, "RGBA")
@@ -548,32 +548,32 @@ def render_full_pick_magazine_page(pick: Any, background_image: Any = None, repo
     d.rectangle((28, 24, 308, 74), fill=RED)
     d.text((43, 31), "ABA SIGNAL PRO", font=_fit("ABA SIGNAL PRO", 250, 36, 25, True), fill="white")
     daily = _tr("DAILY SPORTS ANALYSIS", lang)
-    d.text((330, 29), daily, font=_fit(daily, 470, 36, 21, True), fill="white")
+    d.text((330, 29), daily, font=_fit(daily, 470, 36, 20, True), fill="white")
     d.rounded_rectangle((840, 24, 1050, 74), radius=5, fill=CREAM, outline=BLACK)
     page_label = _tr(f"PAGE {page_number} OF {total_pages}", lang)
-    d.text((862, 34), page_label, font=_fit(page_label, 174, 26, 17, True), fill=BLACK)
+    d.text((862, 34), page_label, font=_fit(page_label, 174, 26, 16, True), fill=BLACK)
 
-    d.text((36, 105), away.upper(), font=_headline_font(away, 590, 132, 66), fill=RED)
+    d.text((36, 105), away_label.upper(), font=_headline_font(away_label, 590, 132, 62), fill=RED)
     d.text((40, 246), "VS", font=_font(46, True), fill=BLACK)
     d.line((40, 304, 104, 304), fill=BLACK, width=4)
-    d.text((112, 220), home.upper(), font=_headline_font(home, 560, 104, 56), fill=BLUE)
+    d.text((112, 220), home_label.upper(), font=_headline_font(home_label, 560, 104, 52), fill=BLUE)
     season = _tr(_get(pick, "season_label", "event_stage", "competition_round", default=f"{sport} REGULAR SEASON"), lang)
     d.rectangle((36, 330, 506, 378), fill=BLACK)
-    _txt(d, 54, 339, season.upper(), _fit(season.upper(), 432, 28, 16, True), CREAM, 432, 1)
+    _txt(d, 54, 339, season.upper(), _fit(season.upper(), 432, 28, 15, True), CREAM, 432, 1)
     cy = 394
     ctx: list[str] = []
     for k in ("preview_summary", "game_summary", "sports_context_summary", "short_reason", "decision_reasons"):
         ctx += _split(_row(pick).get(k))
     for line in (ctx or ["Context unavailable.", "Confirm price and lineup news before entry."])[:2]:
-        cy = _txt_auto(d, 42, cy, _tr(line, lang), 565, 28, 20, 13, TEXT, False, 1)
+        cy = _txt_auto(d, 42, cy, _tr(line, lang), 565, 28, 20, 12, TEXT, False, 1)
 
     sy = 456
     d.rounded_rectangle((20, sy, PAGE_WIDTH - 20, sy + 106), radius=13, fill=BLACK, outline=CREAM, width=3)
     trend = _tr("TREND", lang)
     d.text((50, sy + 16), trend, font=_fit(trend, 190, 25, 14, True), fill=RED)
     pick_text = _tr(_clean(_pick(pick), True), lang).upper()
-    _txt_auto(d, 50, sy + 52, pick_text, 210, 38, 30, 9, CREAM, True, 1)
-    _badge(img, d, home, 268, sy + 27, 58, 50, BLUE, use_team_logo)
+    _txt_auto(d, 50, sy + 52, pick_text, 210, 38, 30, 8, CREAM, True, 1)
+    _badge(img, d, home_label, 268, sy + 27, 58, 50, BLUE, use_team_logo)
     odds = _fmt(_get(pick, "american_odds", "odds_american", "decimal_price", "odds_at_pick", "best_price", "odds"), "odds")
     conf = _pct(_num(pick, "learned_model_probability", "model_probability_clean", "model_probability", "final_probability"))
     edge = _edge(_num(pick, "model_market_edge", "edge"))
@@ -587,33 +587,36 @@ def render_full_pick_magazine_page(pick: Any, background_image: Any = None, repo
         _metric(d, x, sy + 6, w, lab, val, col, lang)
         x += w
 
-    _section(d, 20, 585, 350, 300, "WHY WE PICKED IT", RED, lang)
-    _bullets_auto(d, 44, 655, _why(pick, lang), 306, 210, RED, 19, 11, 4, lang)
-    _section(d, 20, 905, 350, 225, "PRO BETTOR EVIDENCE", BLUE, lang)
+    left_x, left_w, right_x, right_w = 20, 320, 352, 708
+    _section(d, left_x, 585, left_w, 300, "WHY WE PICKED IT", RED, lang)
+    _bullets_auto(d, left_x + 24, 655, _why(pick, lang), left_w - 44, 210, RED, 19, 10, 4, lang)
+    _section(d, left_x, 905, left_w, 225, "PRO BETTOR EVIDENCE", BLUE, lang)
     ry = 974
-    for lab, val in (_pairs(pick, lang) or [(_tr("SOURCE", lang), source), (_tr("BOOK", lang), NO_VERIFIED)])[:5]:
-        d.text((44, ry), f"{lab}:", font=_fit(f"{lab}:", 86, 17, 10, True), fill=BLACK)
-        _txt_auto(d, 132, ry, val, 205, 22, 17, 10, BLACK, True, 1)
+    for lab, val in (_pairs(pick, lang) or [(_tr("SOURCE", lang), _tr(_get(pick, "odds_source", default="Agent row"), lang)), (_tr("BOOK", lang), NO_VERIFIED)])[:5]:
+        d.text((left_x + 24, ry), f"{lab}:", font=_fit(f"{lab}:", 82, 17, 9, True), fill=BLACK)
+        _txt_auto(d, left_x + 112, ry, val, left_w - 128, 22, 17, 9, BLACK, True, 1)
         ry += 31
-    d.rectangle((28, 1088, 362, 1120), fill=BLUE)
-    _txt_auto(d, 42, 1093, _tr(_get(pick, "evidence_summary", default="Market and model evidence support this read."), lang), 304, 26, 16, 8, CREAM, True, None)
+    d.rectangle((left_x + 8, 1088, left_x + left_w - 8, 1120), fill=BLUE)
+    _txt_auto(d, left_x + 22, 1093, _tr(_get(pick, "evidence_summary", default="Market and model evidence support this read."), lang), left_w - 44, 26, 16, 7, CREAM, True, None)
 
-    _section(d, 386, 585, 674, 365, "TEAM SNAPSHOTS", BLUE, lang)
-    d.line((724, 660, 724, 922), fill=BLACK + (170,), width=1)
-    _team_snapshot(img, d, 410, 675, 292, away, RED, use_team_logo, lang)
-    _team_snapshot(img, d, 746, 675, 292, home, BLUE, use_team_logo, lang)
+    _section(d, right_x, 585, right_w, 365, "TEAM SNAPSHOTS", BLUE, lang)
+    divider = right_x + right_w // 2
+    d.line((divider, 660, divider, 922), fill=BLACK + (170,), width=1)
+    snap_w = right_w // 2 - 52
+    _team_snapshot(img, d, right_x + 24, 675, snap_w, away, RED, use_team_logo, lang)
+    _team_snapshot(img, d, divider + 24, 675, snap_w, home, BLUE, use_team_logo, lang)
 
-    _section(d, 386, 965, 674, 165, "PLAYER / INJURY NOTES", BLUE, lang)
-    d.line((724, 1028, 724, 1110), fill=BLACK + (160,), width=1)
-    _player_notes(d, 410, 1036, 292, away, "away", RED, pick, lang)
-    _player_notes(d, 746, 1036, 292, home, "home", BLUE, pick, lang)
+    _section(d, right_x, 965, right_w, 165, "PLAYER / INJURY NOTES", BLUE, lang)
+    d.line((divider, 1028, divider, 1110), fill=BLACK + (160,), width=1)
+    _player_notes(d, right_x + 24, 1036, snap_w, away, "away", RED, pick, lang)
+    _player_notes(d, divider + 24, 1036, snap_w, home, "home", BLUE, pick, lang)
 
-    _section(d, 20, 1150, 340, 205, "RISK DESK", RED, lang)
-    _bullets_auto(d, 44, 1222, _items(pick, ("why_lose", "risk_reason", "hidden_risk", "risk_notes"), [f"Risk status: {risk}", "Recheck odds before entry.", "Avoid if major lineup/weather news changes."], 3), 292, 114, RED, 17, 9, 3, lang)
-    _section(d, 374, 1150, 332, 205, "MATCHUP NOTES", BLUE, lang)
-    _bullets_auto(d, 398, 1222, _items(pick, ("matchup_note", "matchup_notes", "head_to_head", "h2h", "venue_note", "weather_location", "sports_context_summary"), ["Context unavailable.", "Confirm venue and start time.", "Recheck market movement before publishing."], 3), 284, 114, BLUE, 17, 9, 3, lang)
-    _section(d, 720, 1150, 340, 205, "CHAIN BETTING NOTES", BLUE, lang)
-    _bullets_auto(d, 744, 1222, _items(pick, ("chain_notes", "main_read", "add_on_legs", "parlay_notes"), ["Better as an individual straight analysis unless another verified edge exists.", "Do not add weak legs just to increase payout."], 2), 292, 114, BLUE, 17, 9, 2, lang)
+    _section(d, 20, 1150, 320, 205, "RISK DESK", RED, lang)
+    _bullets_auto(d, 44, 1222, _items(pick, ("why_lose", "risk_reason", "hidden_risk", "risk_notes"), [f"Risk status: {risk}", "Recheck odds before entry.", "Avoid if major lineup/weather news changes."], 3), 272, 114, RED, 17, 8, 3, lang)
+    _section(d, 354, 1150, 344, 205, "MATCHUP NOTES", BLUE, lang)
+    _bullets_auto(d, 378, 1222, _items(pick, ("matchup_note", "matchup_notes", "head_to_head", "h2h", "venue_note", "weather_location", "sports_context_summary"), ["Context unavailable.", "Confirm venue and start time.", "Recheck market movement before publishing."], 3), 296, 114, BLUE, 17, 8, 3, lang)
+    _section(d, 712, 1150, 348, 205, "CHAIN BETTING NOTES", BLUE, lang)
+    _bullets_auto(d, 736, 1222, _items(pick, ("chain_notes", "main_read", "add_on_legs", "parlay_notes"), ["Better as an individual straight analysis unless another verified edge exists.", "Do not add weak legs just to increase payout."], 2), 300, 114, BLUE, 17, 8, 2, lang)
 
     action = _tr(_clean(_get(pick, "final_decision", "agent_decision", "recommendation", "consumer_action", "recommended_action", default="PLAY STANDARD"), True), lang)
     expl = _tr(_get(pick, "final_explanation", "action_reason", "recommendation_reason", "decision_reasons", default="Use only if the line remains playable and key news does not change."), lang)
@@ -622,9 +625,9 @@ def render_full_pick_magazine_page(pick: Any, background_image: Any = None, repo
     d.rectangle((20, fy, 250, 1562), fill=RED)
     d.text((40, fy + 36), _tr("FINAL", lang), font=_font(30, True), fill=CREAM)
     rec = _tr("RECOMMENDATION", lang)
-    d.text((40, fy + 84), rec, font=_fit(rec, 190, 25, 16, True), fill=CREAM)
-    d.text((284, fy + 25), action, font=_fit(action, 340, 56, 24, True), fill=GREEN)
-    _txt_auto(d, 284, fy + 100, pick_text, 360, 42, 36, 12, CREAM, True, 1)
+    d.text((40, fy + 84), rec, font=_fit(rec, 190, 25, 15, True), fill=CREAM)
+    d.text((284, fy + 25), action.upper(), font=_fit(action.upper(), 340, 56, 23, True), fill=GREEN)
+    _txt_auto(d, 284, fy + 100, pick_text, 360, 42, 36, 10, CREAM, True, 1)
     _txt_auto(d, 670, fy + 44, expl, 340, 94, 21, 10, CREAM, False, None)
     d.rectangle((20, 1568, PAGE_WIDTH - 20, 1606), fill=BLACK)
     footer = _tr(SAFETY_FOOTER, lang)
