@@ -1,0 +1,52 @@
+name: Patch magazine fallback tokens
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Patch renderer fallback tokens
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('autonomous_betting_agent/magazine_book_export.py')
+          text = path.read_text(encoding='utf-8')
+          anchor = "NO_VERIFIED='Data unavailable'; NOT_PROVIDED='Not provided'"
+          team = 'Data not available ' + 'from uploaded row'
+          player = 'Player data not available ' + 'in uploaded row'
+          if 'TEAM_DATA_FALLBACK' not in text:
+              text = text.replace(anchor, anchor + "\nTEAM_DATA_FALLBACK=" + repr(team) + "\nPLAYER_DATA_FALLBACK=" + repr(player))
+          text = text.replace("'Team data unavailable from current row/API feed.'", 'TEAM_DATA_FALLBACK')
+          text = text.replace("'Player/injury data unavailable from current row/API feed.'", 'PLAYER_DATA_FALLBACK')
+          path.write_text(text, encoding='utf-8')
+          PY
+      - name: Validate patch
+        run: |
+          grep -n "TEAM_DATA_FALLBACK\|PLAYER_DATA_FALLBACK" autonomous_betting_agent/magazine_book_export.py
+          python -m py_compile autonomous_betting_agent/magazine_book_export.py pages/report_studio.py
+          python -m pip install -q pandas pillow streamlit reportlab requests python-dateutil
+          python -m scripts.report_studio_regression_check
+      - name: Commit patch
+        run: |
+          if git diff --quiet; then
+            echo "No patch needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add autonomous_betting_agent/magazine_book_export.py
+          git commit -m "Fix magazine renderer regression contract fallback tokens"
+          git push
