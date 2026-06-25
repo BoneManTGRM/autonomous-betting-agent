@@ -136,14 +136,14 @@ def check_functional_contract() -> None:
         "book_filename": book_filename,
     }
     _write_diagnostics("report_studio_functional_contract.json", diagnostics)
-    assert page_png.startswith(PNG_HEADER), "full magazine page PNG did not start with PNG header"
-    assert len(page_png) > 10000, f"full magazine page PNG was too small: {len(page_png)} bytes"
-    assert book_png.startswith(PNG_HEADER), "full magazine book PNG did not start with PNG header"
-    assert len(book_png) > 10000, f"full magazine book PNG was too small: {len(book_png)} bytes"
-    assert book_pdf.startswith(PDF_HEADER), "full magazine book PDF did not start with PDF header"
-    assert len(book_pdf) > 5000, f"full magazine book PDF was too small: {len(book_pdf)} bytes"
-    assert book_zip.startswith(b"PK"), "full magazine ZIP did not start with ZIP header"
-    assert len(book_zip) > 5000, f"full magazine ZIP was too small: {len(book_zip)} bytes"
+    assert page_png.startswith(PNG_HEADER)
+    assert len(page_png) > 10000
+    assert book_png.startswith(PNG_HEADER)
+    assert len(book_png) > 10000
+    assert book_pdf.startswith(PDF_HEADER)
+    assert len(book_pdf) > 5000
+    assert book_zip.startswith(b"PK")
+    assert len(book_zip) > 5000
     assert page_filename.endswith(".png")
     assert book_filename.endswith(".png")
 
@@ -205,9 +205,9 @@ def check_spanish_localization_contract() -> None:
     assert direct_checks["event_netherlands_tunisia"] == "Países Bajos vs Túnez"
     assert direct_checks["pick_over"] == "Total del partido: Más de 2.5"
     assert direct_checks["sport_world_cup"] == "Copa Mundial FIFA"
-    assert direct_checks["value_price_watch"] == "Seguimiento de precio / investigación"
+    assert direct_checks["value_price_watch"] == "Seguimiento de momio / investigación"
     assert direct_checks["value_needs_grading"] == "Necesita calificación"
-    assert direct_checks["value_negative"] == "Negativo con la cuota actual"
+    assert direct_checks["value_negative"] == "Negativo con el momio actual"
 
     html = render_consumer_magazine_html(cards, brand, mode="consumer")
     deck_html = render_premium_card_deck(cards, language="es")
@@ -224,9 +224,9 @@ def check_spanish_localization_contract() -> None:
         "Países Bajos vs Túnez",
         "Copa Mundial FIFA",
         "Total del partido: Más de 2.5",
-        "Seguimiento de precio / investigación",
+        "Seguimiento de momio / investigación",
         "Necesita calificación",
-        "Negativo con la cuota actual",
+        "Negativo con el momio actual",
         "Investigación / no oficial",
     ]
     forbidden_english = [
@@ -237,6 +237,7 @@ def check_spanish_localization_contract() -> None:
         "Negative at listed odds",
         "Needs grading",
         "Research / Not Official",
+        "Daily Sports Analysis",
     ]
     diagnostics = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
