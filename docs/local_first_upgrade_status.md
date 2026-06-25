@@ -1,6 +1,6 @@
 # Local-First Upgrade Status
 
-This document tracks the local-first commercial agent upgrade for ABA Signal Pro.
+This document tracks the local-first commercial assistant upgrade for ABA Signal Pro.
 
 ## Current status
 

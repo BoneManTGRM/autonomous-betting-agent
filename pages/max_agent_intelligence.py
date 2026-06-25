@@ -12,8 +12,8 @@ from autonomous_betting_agent.post_loss_autopsy import autopsy_summary, build_lo
 from autonomous_betting_agent.sport_specific_models import build_sport_specific_decisions, sport_model_summary
 from autonomous_betting_agent.walk_forward_lab import walk_forward_summary, walk_forward_validate
 
-st.set_page_config(page_title='Max Agent Intelligence', layout='wide')
-st.title('Max Agent Intelligence')
+st.set_page_config(page_title='Max Assistant Intelligence', layout='wide')
+st.title('Max Assistant Intelligence')
 st.caption('Runs the highest-value intelligence layers together: API snapshot memory, loss autopsy, CLV intelligence, walk-forward validation, and sport-specific routing.')
 
 upload = st.file_uploader('Upload CSV', type=['csv'])

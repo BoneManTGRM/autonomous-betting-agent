@@ -10,7 +10,7 @@ LANG = render_app_sidebar('home', language_key='global_language', selector='radi
 TEXT = {
     'en': {
         'title': 'ABA Signal Pro',
-        'caption': 'Powered by Reparodynamics',
+        'caption': 'AI Betting Intelligence Assistant · Powered by Reparodynamics',
         'body': 'Use the Tools menu to run Pro Predictor, lock proof rows, grade results, and review learning memory.',
         'steps': 'Workflow: Pro Predictor → Odds Lock Pro → Proof Control Center → Public Proof Dashboard → Learning Memory.',
         'proof_control': 'Open Proof Control Center',
@@ -19,7 +19,7 @@ TEXT = {
     },
     'es': {
         'title': 'ABA Signal Pro',
-        'caption': 'Powered by Reparodynamics',
+        'caption': 'Asistente de inteligencia para apuestas · Powered by Reparodynamics',
         'body': 'Usa el menú Tools para ejecutar Predictor Pro, bloquear pruebas, calificar resultados y revisar la memoria.',
         'steps': 'Flujo: Predictor Pro → Odds Lock Pro → Centro de Control de Prueba → Dashboard Público → Learning Memory.',
         'proof_control': 'Abrir Centro de Control de Prueba',
