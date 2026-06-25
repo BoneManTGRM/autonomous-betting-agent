@@ -13,6 +13,8 @@ SAFETY_FOOTER='No guarantees. Bet responsibly. This analysis is for informationa
 ASSET_DIRS=(Path('assets/team_logos'),Path('assets/report_logos'),Path('assets/licensed_logos'))
 RED=(190,30,28); BLUE=(19,66,108); BLACK=(13,14,16); PAPER=(244,235,211); CREAM=(255,248,230); GREEN=(61,205,84); TEXT=(14,17,21)
 NO_VERIFIED='Data unavailable'; NOT_PROVIDED='Not provided'
+TEAM_DATA_FALLBACK='Data not available from uploaded row'
+PLAYER_DATA_FALLBACK='Player data not available in uploaded row'
 
 def _row(v:Any)->Mapping[str,Any]:
     if isinstance(v,Mapping): return v
@@ -202,9 +204,9 @@ def _metric(d,x,y,w,lab,val,col):
 def _team_snap(img,d,x,y,w,team,prefix,c,r,use):
     _logo_or_badge(img,d,team,x,y,42,42,c,use); d.text((x+54,y+5),team.upper(),font=_fit(team.upper(),w-58,22,14,True),fill=c); sy=y+54; stats=_stats(r,prefix) or [('RECORD','N/A'),('LAST 10','N/A'),('TEAM AVG','N/A'),('SCORING','N/A')]
     for lab,val in stats[:5]: sy=_stat(d,x,sy,lab,val,w-10)
-    sy+=10; d.text((x,sy),'NOTES',font=_font(16,True),fill=RED); notes=_items(r,(f'{prefix}_notes',f'{prefix}_snapshot',f'{prefix}_context',f'{prefix}_team_snapshot'),'Team data unavailable from current row/API feed.',3); _bullets(d,x,sy+28,notes,w-10,BLUE,3,15,2)
+    sy+=10; d.text((x,sy),'NOTES',font=_font(16,True),fill=RED); notes=_items(r,(f'{prefix}_notes',f'{prefix}_snapshot',f'{prefix}_context',f'{prefix}_team_snapshot'),TEAM_DATA_FALLBACK,3); _bullets(d,x,sy+28,notes,w-10,BLUE,3,15,2)
 def _players(d,x,y,w,team,prefix,c,r):
-    d.text((x,y),team.upper(),font=_fit(team.upper(),w,18,13,True),fill=c); items=_items(r,(f'{prefix}_injuries',f'{prefix}_injury_report',f'{prefix}_lineup_status',f'{prefix}_player_notes','injury_report','injuries','lineup_status','key_players'),'Player/injury data unavailable from current row/API feed.',3); _bullets(d,x,y+30,items,w,c,3,14,2)
+    d.text((x,y),team.upper(),font=_fit(team.upper(),w,18,13,True),fill=c); items=_items(r,(f'{prefix}_injuries',f'{prefix}_injury_report',f'{prefix}_lineup_status',f'{prefix}_player_notes','injury_report','injuries','lineup_status','key_players'),PLAYER_DATA_FALLBACK,3); _bullets(d,x,y+30,items,w,c,3,14,2)
 def _recommend(r): return _text(r,'final_decision','agent_decision','recommendation','consumer_action','recommended_action',default='PLAY STANDARD'),_text(r,'final_explanation','action_reason','recommendation_reason','decision_reasons',default='Use only if the line remains playable and key news does not change.')
 def sanitize_image_filename(value:str,suffix:str='',extension:str='png')->str:
     c=re.sub(r'[^A-Za-z0-9]+','_',str(value or 'magazine').lower()).strip('_') or 'magazine'; s=re.sub(r'[^A-Za-z0-9]+','_',str(suffix or '').lower()).strip('_'); ext=(extension or 'png').lstrip('.'); return f'{c+"_"+s if s else c}.{ext}'
