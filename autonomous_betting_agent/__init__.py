@@ -125,6 +125,89 @@ def _install_magazine_renderer_patches() -> None:
     install()
 
 
+def _install_mexico_spanish_terms() -> None:
+    try:
+        from . import report_product_layer as rpl
+    except Exception:
+        return
+    if getattr(rpl, '_aba_mexico_spanish_terms_v2', False):
+        return
+    try:
+        rpl.COUNTRY_ES.update({
+            'qatar': 'Qatar',
+            'bosnia & herzegovina': 'Bosnia y Herzegovina',
+            'bosnia and herzegovina': 'Bosnia y Herzegovina',
+            'bosnia-herzegovina': 'Bosnia y Herzegovina',
+            'netherlands': 'Países Bajos',
+            'ivory coast': 'Costa de Marfil',
+            'iraq': 'Irak',
+            'france': 'Francia',
+            'germany': 'Alemania',
+            'tunisia': 'Túnez',
+        })
+        rpl.SPORT_ES.update({
+            'boxing': 'Boxeo',
+            'mma': 'MMA',
+            'soccer': 'Fútbol',
+            'fifa world cup': 'Copa Mundial FIFA',
+            'baseball': 'Béisbol',
+            'basketball': 'Baloncesto',
+            'football': 'Fútbol americano',
+            'tennis': 'Tenis',
+        })
+        rpl.VALUE_ES.update({
+            'Odds': 'Momio',
+            'ODDS': 'MOMIO',
+            'Price Watch': 'Seguimiento de momio',
+            'Price Watch / Research': 'Seguimiento de momio / investigación',
+            'Negative at listed odds': 'Negativo con el momio actual',
+            'Missing or unverified odds': 'Momios faltantes o no verificados',
+            'Thin edge favorite': 'Ventaja delgada',
+            'THIN EDGE FAVORITE': 'VENTAJA DELGADA',
+            'Research Only': 'Investigación',
+            'RESEARCH ONLY': 'INVESTIGACIÓN',
+            'Watchlist Only': 'Seguimiento',
+            'WATCHLIST ONLY': 'SEGUIMIENTO',
+            'Low': 'Bajo',
+            'Medium': 'Medio',
+            'High': 'Alto',
+            'LOW': 'BAJO',
+            'MEDIUM': 'MEDIO',
+            'HIGH': 'ALTO',
+            'Review': 'Revisar',
+            'REVIEW': 'REVISAR',
+        })
+        original_value_text = rpl.value_text
+
+        def mexico_value_text(value, language='en'):
+            text = original_value_text(value, language)
+            if rpl.lang_code(language) != 'es' or not text:
+                return text
+            return (
+                text.replace('Seguimiento de precio', 'Seguimiento de momio')
+                .replace('cuota actual', 'momio actual')
+                .replace('Cuotas', 'Momios')
+                .replace('cuotas', 'momios')
+                .replace('Cuota', 'Momio')
+                .replace('cuota', 'momio')
+            )
+
+        rpl.value_text = mexico_value_text
+        original_market_read = rpl.market_read
+
+        def mexico_market_read(odds_ok, model_prob, market_prob, edge, language='en'):
+            text = original_market_read(odds_ok, model_prob, market_prob, edge, language)
+            if rpl.lang_code(language) != 'es':
+                return text
+            return text.replace('Cuotas', 'Momios').replace('cuotas', 'momios').replace('cuota', 'momio')
+
+        rpl.market_read = mexico_market_read
+        rpl._aba_mexico_spanish_terms_v2 = True
+    except Exception:
+        return
+
+
 _install_price_normalizer()
 _install_adaptive_learning_area_key_normalizer()
 _install_magazine_renderer_patches()
+_install_mexico_spanish_terms()
