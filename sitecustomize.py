@@ -7,7 +7,12 @@ from contextlib import contextmanager
 
 
 def get_secret(*names: str) -> str:
-    """Read a secret from Streamlit secrets first, then environment variables."""
+    """Read a secret from Streamlit secrets first, then environment variables.
+
+    This file intentionally does not monkey-patch Streamlit widgets. Uploaders,
+    buttons, forms, text inputs, radios, and selectboxes must stay native so the
+    app remains stable on mobile and desktop.
+    """
     try:
         import streamlit as st
     except Exception:
@@ -197,6 +202,7 @@ def _patch_pillow_text_for_magazine() -> None:
 def _patch_magazine_renderer() -> None:
     try:
         from autonomous_betting_agent import magazine_book_export as m
+        from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
     except Exception:
         return
     if getattr(m, '_aba_language_patch_applied', False):
@@ -213,6 +219,35 @@ def _patch_magazine_renderer() -> None:
     original_bullets_auto = getattr(m, '_bullets_auto', None)
     original_section = getattr(m, '_section', None)
     original_metric = getattr(m, '_metric', None)
+
+    def hero_square_corners(img, bg, mode, opacity):
+        d = ImageDraw.Draw(img, 'RGBA')
+        loaded = m._load_image(bg)
+        mode = str(mode or 'hero_right').lower()
+        if loaded and mode == 'full_page':
+            layer = m._cover(loaded, (m.PAGE_WIDTH, m.PAGE_HEIGHT)).filter(ImageFilter.GaussianBlur(0.8))
+            layer = ImageEnhance.Color(layer).enhance(0.4)
+            layer.putalpha(int(255 * min(max(opacity, 0.08), 0.12)))
+            img.alpha_composite(layer, (0, 0))
+            img.alpha_composite(Image.new('RGBA', (m.PAGE_WIDTH, m.PAGE_HEIGHT), m.PAPER + (155,)), (0, 0))
+        elif loaded and mode == 'watermark':
+            mark = m._contain(loaded, (560, 420))
+            mark.putalpha(int(255 * min(max(opacity, 0.10), 0.15)))
+            img.alpha_composite(mark, (m.PAGE_WIDTH - mark.width - 34, 120))
+        elif loaded and mode != 'none':
+            slot = m._cover(loaded, (430, 350), 0.18)
+            slot = ImageEnhance.Color(slot).enhance(1.05)
+            slot = ImageEnhance.Contrast(slot).enhance(1.15)
+            alpha = Image.new('L', (430, 350), int(255 * min(max(opacity, 0.90), 0.98)))
+            slot.putalpha(alpha)
+            img.alpha_composite(slot, (620, 105))
+            d.rectangle((620, 105, 1050, 455), outline=m.BLACK + (205,), width=3)
+        else:
+            d.rectangle((620, 105, 1050, 455), fill=m.BLUE + (90,), outline=m.BLACK + (185,), width=3)
+            for i in range(12):
+                d.line((620 + i * 25, 420, 850 + i * 25, 120), fill=m.RED + (76,), width=9)
+
+    m._hero = hero_square_corners
 
     def _translate_row(row: object, language: str) -> object:
         if not isinstance(row, dict):
