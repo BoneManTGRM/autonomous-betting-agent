@@ -30,7 +30,7 @@ from autonomous_betting_agent.white_label_profiles import WhiteLabelProfile, lis
 
 st.set_page_config(page_title='Report Studio', layout='wide')
 LANG = render_app_sidebar('report_studio', language_key='report_studio_language', selector='radio')
-NO_MARKET_EXPORT_VERSION = 'no_market_metric_v4_units_fixed'
+NO_MARKET_EXPORT_VERSION = 'no_market_metric_v5_stable_cached'
 
 TEXT = {
     'en': {
@@ -192,6 +192,7 @@ def with_report_language(rowd: dict, language: str) -> dict:
     return data
 
 
+@st.cache_data(show_spinner=False)
 def cached_render_full_pick_magazine_page_png(row_items: tuple[tuple[str, str], ...], background_bytes: bytes | None, report_name: str, page_number: int, total_pages: int, language: str, style_version: str, cache_bust: str) -> bytes:
     rowd = with_report_language(dict(row_items), language)
     rowd['_magazine_style_version'] = f'{style_version}:{cache_bust}'
@@ -204,7 +205,7 @@ def serializable_row(rowd: dict) -> tuple[tuple[str, str], ...]:
 
 st.title(t('title'))
 st.caption(t('caption'))
-profile_background_bytes = None
+profile_background_bytes = st.session_state.get('report_studio_profile_background_bytes')
 
 with st.expander(t('input'), expanded=True):
     workspace_input = st.text_input(t('workspace'), value=st.session_state.get('aba_test_window_id', 'test_01'))
@@ -243,7 +244,9 @@ with st.expander(t('profile'), expanded=True):
     full_magazine_book_name = st.text_input(t('full_book_name'), 'ABA Signal Pro — Full Pick Magazine')
     logo_url = b2.text_input(t('logo_url'), value=loaded.logo_url)
     background_profile_upload = st.file_uploader(t('background_upload'), type=['png', 'jpg', 'jpeg'], key='report_studio_profile_background_upload')
-    profile_background_bytes = background_profile_upload.getvalue() if background_profile_upload is not None else None
+    if background_profile_upload is not None:
+        profile_background_bytes = background_profile_upload.getvalue()
+        st.session_state['report_studio_profile_background_bytes'] = profile_background_bytes
     if profile_background_bytes:
         st.success(t('background_ready'))
         st.image(profile_background_bytes, caption=t('background_preview'), width=260)
@@ -319,7 +322,9 @@ with tabs[6]:
     st.caption(t('images_note'))
     st.info(t('image_tab_info'))
     background_upload = st.file_uploader(t('background_upload'), type=['png', 'jpg', 'jpeg'], key='report_studio_image_background_upload')
-    background_bytes = background_upload.getvalue() if background_upload is not None else report_background_bytes
+    if background_upload is not None:
+        st.session_state['report_studio_image_background_bytes'] = background_upload.getvalue()
+    background_bytes = st.session_state.get('report_studio_image_background_bytes') or report_background_bytes
     if background_bytes:
         st.success(t('background_ready'))
         st.image(background_bytes, caption=t('background_preview'), width=260)
