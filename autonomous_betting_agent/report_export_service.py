@@ -11,10 +11,13 @@ from .report_learning_layer_compat import apply_learning_layer_compat
 from .report_product_layer import (
     MagazineBrand,
     cards_to_json,
+    event_text,
     grouped_report,
+    pick_text,
     render_consumer_magazine_html,
     render_markdown_summary,
     safe_text,
+    value_text,
 )
 
 
@@ -42,14 +45,15 @@ def clean_legacy_report_labels(text: str) -> str:
 
 def render_whatsapp_report(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any], *, max_items: int = 8) -> str:
     brand_obj = brand if isinstance(brand, MagazineBrand) else MagazineBrand(**{key: value for key, value in dict(brand).items() if key in MagazineBrand.__dataclass_fields__})
-    es = str(brand_obj.language or "en").lower().startswith("es")
+    language = "es" if str(brand_obj.language or "en").lower().startswith("es") else "en"
+    es = language == "es"
     groups = grouped_report(cards)
     sections = (
         ("best_plays", "Oficial +EV" if es else "Official +EV"),
-        ("watchlist", "Price Watch" if es else "Price Watch"),
+        ("watchlist", "Seguimiento de precio" if es else "Price Watch"),
         ("no_play", "Investigación / aprendizaje" if es else "Research / Learning"),
     )
-    lines = [brand_obj.report_title, f"{brand_obj.brand_name} — {brand_obj.tagline}", ""]
+    lines = [value_text(brand_obj.report_title, language), f"{brand_obj.brand_name} — {value_text(brand_obj.tagline, language)}", ""]
     for key, title in sections:
         section = groups.get(key, pd.DataFrame())
         lines.append(title)
@@ -57,12 +61,12 @@ def render_whatsapp_report(cards: pd.DataFrame, brand: MagazineBrand | Mapping[s
             lines.append("— " + ("Sin tarjetas." if es else "No cards."))
         for _, row in section.head(max_items).iterrows():
             item = row.to_dict()
-            event = safe_text(item.get("event")) or "Matchup"
-            pick = safe_text(item.get("public_pick") or item.get("prediction"))
-            action = safe_text(item.get("consumer_action") or item.get("recommended_action"))
-            result = safe_text(item.get("result_status")) or "PENDING"
-            learning = safe_text(item.get("learning_status"))
-            market = safe_text(item.get("market_read"))
+            event = event_text(item.get("public_event") or item.get("event") or "Matchup", language)
+            pick = pick_text(item.get("public_pick") or item.get("prediction"), language)
+            action = value_text(item.get("consumer_action") or item.get("recommended_action"), language)
+            result = value_text(safe_text(item.get("result_status")) or "PENDING", language)
+            learning = value_text(item.get("learning_status"), language)
+            market = value_text(item.get("market_read"), language)
             lines.append(f"— {event}: {pick}")
             lines.append(f"  {'Acción' if es else 'Action'}: {action}")
             lines.append(f"  {'Resultado' if es else 'Result'}: {result}")
@@ -72,7 +76,7 @@ def render_whatsapp_report(cards: pd.DataFrame, brand: MagazineBrand | Mapping[s
                 lines.append(f"  {'Mercado' if es else 'Market'}: {market}")
         lines.append("")
     if brand_obj.disclaimer:
-        lines.append(brand_obj.disclaimer)
+        lines.append(value_text(brand_obj.disclaimer, language))
     return clean_legacy_report_labels("\n".join(lines).strip())
 
 
