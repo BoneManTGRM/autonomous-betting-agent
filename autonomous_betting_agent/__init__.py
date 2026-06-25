@@ -117,5 +117,14 @@ def _install_adaptive_learning_area_key_normalizer() -> None:
     adaptive_learning._aba_area_key_normalizer_v1 = True
 
 
+def _install_magazine_renderer_patches() -> None:
+    try:
+        from .magazine_book_export_patches import install
+    except Exception:
+        return
+    install()
+
+
 _install_price_normalizer()
 _install_adaptive_learning_area_key_normalizer()
+_install_magazine_renderer_patches()
