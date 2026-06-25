@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -9,6 +10,111 @@ import pandas as pd
 
 UNVERIFIED_SOURCE_TOKENS = ("unavailable", "missing", "no odds", "no_odds", "api limit", "limit reached", "quota", "maxed", "rate limit", "offline", "simulated", "model_only")
 TENNIS_TOKENS = ("tennis", "atp", "wta", "itf", "challenger")
+
+COUNTRY_ES = {
+    "iraq": "Irak",
+    "iran": "Irán",
+    "france": "Francia",
+    "germany": "Alemania",
+    "ecuador": "Ecuador",
+    "australia": "Australia",
+    "paraguay": "Paraguay",
+    "netherlands": "Países Bajos",
+    "tunisia": "Túnez",
+    "egypt": "Egipto",
+    "ivory coast": "Costa de Marfil",
+    "curacao": "Curazao",
+    "curaçao": "Curazao",
+    "senegal": "Senegal",
+    "norway": "Noruega",
+    "algeria": "Argelia",
+    "jordan": "Jordania",
+    "argentina": "Argentina",
+    "brazil": "Brasil",
+    "spain": "España",
+    "england": "Inglaterra",
+    "united states": "Estados Unidos",
+    "usa": "Estados Unidos",
+    "us": "Estados Unidos",
+    "mexico": "México",
+    "italy": "Italia",
+    "portugal": "Portugal",
+    "canada": "Canadá",
+    "japan": "Japón",
+    "south korea": "Corea del Sur",
+    "new zealand": "Nueva Zelanda",
+}
+
+SPORT_ES = {
+    "boxing": "Boxeo",
+    "soccer": "Fútbol",
+    "football": "Fútbol americano",
+    "basketball": "Baloncesto",
+    "baseball": "Béisbol",
+    "hockey": "Hockey",
+    "tennis": "Tenis",
+    "fifa world cup": "Copa Mundial FIFA",
+    "brazil série b": "Serie B de Brasil",
+    "league of ireland": "Liga de Irlanda",
+    "mlb": "MLB",
+    "mma": "MMA",
+    "ncaa baseball": "Béisbol NCAA",
+    "super league - china": "Superliga - China",
+    "veikkausliiga - finland": "Veikkausliiga - Finlandia",
+}
+
+VALUE_ES = {
+    "Daily Sports Analysis": "Análisis Deportivo Diario",
+    "Powered by Reparodynamics": "Impulsado por Reparodynamics",
+    "Price Watch / Research": "Seguimiento de precio / investigación",
+    "Price Watch": "Seguimiento de precio",
+    "Research": "Investigación",
+    "Research / Learning": "Investigación / aprendizaje",
+    "Research / Track for Learning": "Investigación / seguimiento para aprendizaje",
+    "Research / Not Official": "Investigación / no oficial",
+    "Watchlist / thin value": "Lista de seguimiento / valor delgado",
+    "Official +EV Play": "Jugada oficial +EV",
+    "Official +EV": "Oficial +EV",
+    "No approved plays in this report.": "No hay jugadas aprobadas en este reporte.",
+    "No approved plays.": "No hay jugadas aprobadas.",
+    "No cards.": "Sin tarjetas.",
+    "Matchup": "Partido",
+    "Sport": "Deporte",
+    "Medium": "Medio",
+    "High": "Alto",
+    "Low": "Bajo",
+    "Strong": "Fuerte",
+    "Thin": "Delgado",
+    "Positive": "Positivo",
+    "Negative at listed odds": "Negativo con la cuota actual",
+    "Unknown": "Desconocido",
+    "UNKNOWN": "DESCONOCIDO",
+    "PENDING": "PENDIENTE",
+    "WIN": "GANADO",
+    "LOSS": "PERDIDO",
+    "PUSH": "EMPATE/PUSH",
+    "CANCELLED": "CANCELADO",
+    "Needs grading": "Necesita calificación",
+    "Included in calibration": "Incluido en calibración",
+    "Excluded: data blocked": "Excluido: datos bloqueados",
+    "Data Blocked": "Bloqueado por datos",
+    "Watchlist": "Lista de seguimiento",
+    "Unsupported sport": "Deporte no soportado",
+    "Missing or unverified odds": "Cuotas faltantes o no verificadas",
+    "Missing independent model probability": "Falta probabilidad independiente del modelo",
+    "Research upgrade candidate": "Candidato para subir a investigación",
+    "Calibration opportunity / needs larger sample": "Oportunidad de calibración / necesita muestra mayor",
+    "Monitor / no promotion": "Monitorear / sin promoción",
+    "Model average": "Promedio del modelo",
+    "Selected rows": "Filas seleccionadas",
+    "Strict proof gate": "Filtro estricto de prueba",
+    "Model lean / track": "Lean del modelo / seguimiento",
+    "Report-ready": "Listas para reporte",
+    "Final results": "Resultados finales",
+    "Blocked rows": "Filas bloqueadas",
+    "Paid proof": "Prueba pagada",
+    "Calibration rows": "Filas de calibración",
+}
 
 
 @dataclass(frozen=True)
@@ -49,6 +155,51 @@ def safe_float(value: Any) -> float | None:
     if pd.isna(parsed):
         return None
     return parsed
+
+
+def value_text(value: Any, language: str = "en") -> str:
+    text = safe_text(value)
+    if lang_code(language) != "es" or not text:
+        return text
+    if text in VALUE_ES:
+        return VALUE_ES[text]
+    result = text
+    replacements = (
+        (r"\bFIFA World Cup\b", "Copa Mundial FIFA"),
+        (r"\bGame total\b", "Total del partido"),
+        (r"\bPoint spread\b", "Hándicap"),
+        (r"\bMoneyline\b", "Ganador"),
+        (r"\bTeam total\b", "Total del equipo"),
+        (r"\bDraw no bet\b", "Empate no apuesta"),
+        (r"\bBoth teams to score\b", "Ambos equipos anotan"),
+        (r"\bOver\b", "Más de"),
+        (r"\bUnder\b", "Menos de"),
+        (r"\bNegative at listed odds\b", "Negativo con la cuota actual"),
+        (r"\bNeeds grading\b", "Necesita calificación"),
+        (r"\bPrice Watch / Research\b", "Seguimiento de precio / investigación"),
+        (r"\bResearch / Not Official\b", "Investigación / no oficial"),
+    )
+    for old, new in replacements:
+        result = re.sub(old, new, result, flags=re.I)
+    return result
+
+
+def team_label(team: Any, language: str = "en") -> str:
+    text = safe_text(team)
+    if lang_code(language) != "es":
+        return text
+    return COUNTRY_ES.get(text.lower(), text)
+
+
+def event_text(value: Any, language: str = "en") -> str:
+    text = safe_text(value)
+    if lang_code(language) != "es" or not text:
+        return text
+    for sep in (" at ", " vs ", " VS ", " v ", " @ "):
+        if sep in text:
+            first, second = text.split(sep, 1)
+            return f"{team_label(first, 'es')} vs {team_label(second, 'es')}"
+    return value_text(text, "es")
 
 
 def probability(value: Any) -> float | None:
@@ -101,16 +252,14 @@ def sport_text(value: Any, language: str = "en") -> str:
     text = safe_text(value)
     if lang_code(language) != "es":
         return text
-    return {"boxing": "Boxeo", "soccer": "Fútbol", "football": "Fútbol americano", "basketball": "Baloncesto", "baseball": "Béisbol", "hockey": "Hockey", "tennis": "Tenis"}.get(text.lower(), text)
+    return SPORT_ES.get(text.lower(), text)
 
 
 def pick_text(value: Any, language: str = "en") -> str:
     text = safe_text(value)
     if lang_code(language) != "es":
         return text
-    for old, new in (("Game total:", "Total del partido:"), ("Point spread:", "Hándicap:"), ("Moneyline:", "Ganador:"), ("Team total:", "Total del equipo:"), ("Draw no bet:", "Empate no apuesta:"), ("Both teams to score:", "Ambos equipos anotan:"), ("Over ", "Más de "), ("Under ", "Menos de ")):
-        text = text.replace(old, new)
-    return text
+    return value_text(text, "es")
 
 
 def tennis_blocked(row: Mapping[str, Any]) -> bool:
@@ -172,7 +321,7 @@ def market_read(odds_ok: bool, model_prob: float | None, market_prob: float | No
 
 def game_preview(row: Mapping[str, Any], language: str = "en") -> str:
     es = lang_code(language) == "es"
-    event = safe_text(row.get("event")) or ("este partido" if es else "this matchup")
+    event = event_text(row.get("event"), language) or ("este partido" if es else "this matchup")
     sport = safe_text(row.get("sport")).lower()
     pick = pick_text(row.get("prediction") or row.get("tendency"), language)
     if "baseball" in sport or "mlb" in sport:
@@ -187,7 +336,7 @@ def game_preview(row: Mapping[str, Any], language: str = "en") -> str:
     for key, es_label, en_label in fields:
         value = safe_text(row.get(key))
         if value:
-            notes.append(f"{es_label if es else en_label}: {value}")
+            notes.append(f"{es_label if es else en_label}: {value_text(value, language)}")
     if notes:
         return " · ".join(notes[:3])
     return f"Vista previa de {event}: selección enfocada en {pick}. Datos contextuales adicionales no disponibles." if es else f"{event} preview: current lean is {pick}. Additional matchup context is unavailable."
@@ -237,6 +386,7 @@ def enrich_rows(rows: pd.DataFrame | list[Mapping[str, Any]], *, language: str =
             "recommended_action": action_label(lane, language),
             "public_pick": pick_text(item.get("prediction") or item.get("tendency"), language),
             "public_sport": sport_text(item.get("sport"), language),
+            "public_event": event_text(item.get("event"), language),
         })
         if enriched["report_lane"] != "best_play":
             enriched["publish_ready"] = False
@@ -257,8 +407,8 @@ def grouped_report(cards: pd.DataFrame) -> dict[str, pd.DataFrame]:
 
 def labels(language: str = "en") -> dict[str, str]:
     if lang_code(language) == "es":
-        return {"best": "Mejores jugadas", "watch": "Lista de seguimiento", "no_play": "No jugar / removidas", "confidence": "Confianza", "risk": "Riesgo", "market": "Lectura del mercado", "why": "Por qué importa", "action": "Acción recomendada", "analysis": "Análisis"}
-    return {"best": "Today’s Best Plays", "watch": "Watchlist / Leans", "no_play": "No Play / Removed", "confidence": "Confidence", "risk": "Risk", "market": "Market read", "why": "Why it matters", "action": "Recommended action", "analysis": "Analysis"}
+        return {"best": "Mejores jugadas", "watch": "Lista de seguimiento", "no_play": "Investigación / aprendizaje", "confidence": "Confianza", "risk": "Riesgo", "market": "Lectura del mercado", "why": "Por qué importa", "action": "Acción recomendada", "analysis": "Análisis"}
+    return {"best": "Today’s Best Plays", "watch": "Watchlist / Leans", "no_play": "Research / Learning", "confidence": "Confidence", "risk": "Risk", "market": "Market read", "why": "Why it matters", "action": "Recommended action", "analysis": "Analysis"}
 
 
 def _brand_from(value: MagazineBrand | Mapping[str, Any]) -> MagazineBrand:
@@ -270,22 +420,27 @@ def _brand_from(value: MagazineBrand | Mapping[str, Any]) -> MagazineBrand:
 
 def _card_html(row: Mapping[str, Any], language: str, *, technical: bool = False) -> str:
     lab = labels(language)
-    title = html.escape(safe_text(row.get("event")) or "Matchup")
-    sport = html.escape(safe_text(row.get("public_sport")) or safe_text(row.get("sport")) or "Sport")
-    pick = html.escape(safe_text(row.get("public_pick")) or safe_text(row.get("prediction")))
+    title = html.escape(event_text(row.get("public_event") or row.get("event") or "Matchup", language))
+    sport = html.escape(sport_text(row.get("public_sport") or row.get("sport") or "Sport", language))
+    pick = html.escape(pick_text(row.get("public_pick") or row.get("prediction"), language))
+    action = html.escape(value_text(row.get("consumer_action") or row.get("recommended_action"), language))
     parts = [
         '<article class="aba-mag-card">',
         f'<div class="aba-kicker">{sport}</div>',
         f'<h3>{title}</h3>',
         f'<p><b>{html.escape("Selección" if lang_code(language) == "es" else "Pick")}:</b> {pick}</p>',
-        f'<p><b>{html.escape(lab["action"])}:</b> {html.escape(safe_text(row.get("recommended_action")))}</p>',
-        f'<p><b>{html.escape(lab["confidence"])}:</b> {html.escape(safe_text(row.get("confidence_tier")))} · <b>{html.escape(lab["risk"])}:</b> {html.escape(safe_text(row.get("risk_tier")))}</p>',
-        f'<p><b>{html.escape(lab["market"])}:</b> {html.escape(safe_text(row.get("market_read")))}</p>',
-        f'<p><b>{html.escape(lab["why"])}:</b> {html.escape(safe_text(row.get("why_it_matters")))}</p>',
-        f'<p>{html.escape(safe_text(row.get("game_preview")))}</p>',
+        f'<p><b>{html.escape(lab["action"])}:</b> {action}</p>',
+        f'<p><b>{html.escape(lab["confidence"])}:</b> {html.escape(value_text(row.get("confidence_tier"), language))} · <b>{html.escape(lab["risk"])}:</b> {html.escape(value_text(row.get("risk_tier"), language))}</p>',
+        f'<p><b>{html.escape(lab["market"])}:</b> {html.escape(value_text(row.get("market_read"), language))}</p>',
+        f'<p><b>{html.escape(lab["why"])}:</b> {html.escape(value_text(row.get("why_it_matters"), language))}</p>',
+        f'<p>{html.escape(value_text(row.get("game_preview"), language))}</p>',
     ]
     if technical:
-        parts.append("<div class='aba-tech'>" f"Model: {pct(row.get('model_probability'))} | Market: {pct(row.get('market_probability'))} | Edge: {pct(row.get('model_market_edge'), signed=True)} | EV: {pct(row.get('expected_value_per_unit'), signed=True)} | Odds: {html.escape(str(row.get('decimal_price') or 'N/A'))} | Source: {html.escape(market_source(row))} | Proof: {html.escape(safe_text(row.get('proof_id')) or safe_text(row.get('locked_at_utc')) or 'N/A')}" "</div>")
+        tech_label = "Modelo" if lang_code(language) == "es" else "Model"
+        market_label = "Mercado" if lang_code(language) == "es" else "Market"
+        source_label = "Fuente" if lang_code(language) == "es" else "Source"
+        proof_label = "Prueba" if lang_code(language) == "es" else "Proof"
+        parts.append("<div class='aba-tech'>" f"{tech_label}: {pct(row.get('model_probability'))} | {market_label}: {pct(row.get('market_probability'))} | Edge: {pct(row.get('model_market_edge'), signed=True)} | EV: {pct(row.get('expected_value_per_unit'), signed=True)} | Odds: {html.escape(str(row.get('decimal_price') or 'N/A'))} | {source_label}: {html.escape(market_source(row))} | {proof_label}: {html.escape(safe_text(row.get('proof_id')) or safe_text(row.get('locked_at_utc')) or 'N/A')}" "</div>")
     parts.append("</article>")
     return "\n".join(parts)
 
@@ -301,7 +456,9 @@ def render_consumer_magazine_html(cards: pd.DataFrame, brand: MagazineBrand | Ma
     parts = [css, '<div class="aba-mag">', '<section class="aba-hero">']
     if brand.logo_url:
         parts.append(f'<img src="{html.escape(brand.logo_url)}" alt="logo" style="max-height:56px">')
-    parts += [f"<h1>{html.escape(brand.report_title)}</h1>", f"<p><b>{html.escape(brand.brand_name)}</b> — {html.escape(brand.tagline)}</p>", "</section>"]
+    title = value_text(brand.report_title, language)
+    tagline = value_text(brand.tagline, language)
+    parts += [f"<h1>{html.escape(title)}</h1>", f"<p><b>{html.escape(brand.brand_name)}</b> — {html.escape(tagline)}</p>", "</section>"]
     technical = mode in {"analyst", "proof"}
     for key, title_key in (("best_plays", "best"), ("watchlist", "watch"), ("no_play", "no_play")):
         section = groups[key]
@@ -316,7 +473,7 @@ def render_consumer_magazine_html(cards: pd.DataFrame, brand: MagazineBrand | Ma
                 parts.append(_card_html(row.to_dict(), language, technical=technical))
         parts.append("</div></section>")
     if brand.disclaimer:
-        parts.append(f'<p style="opacity:.7;font-size:.86rem">{html.escape(brand.disclaimer)}</p>')
+        parts.append(f'<p style="opacity:.7;font-size:.86rem">{html.escape(value_text(brand.disclaimer, language))}</p>')
     parts.append("</div>")
     return "\n".join(parts)
 
@@ -326,14 +483,18 @@ def render_markdown_summary(cards: pd.DataFrame, brand: MagazineBrand | Mapping[
     language = lang_code(brand.language)
     lab = labels(language)
     groups = grouped_report(cards)
-    lines = [f"# {brand.report_title}", f"{brand.brand_name} — {brand.tagline}", ""]
+    lines = [f"# {value_text(brand.report_title, language)}", f"{brand.brand_name} — {value_text(brand.tagline, language)}", ""]
     for key, title_key in (("best_plays", "best"), ("watchlist", "watch"), ("no_play", "no_play")):
         section = groups[key]
         lines += [f"## {lab[title_key]}"]
         if section.empty:
             lines += ["No approved plays." if language == "en" else "No hay jugadas aprobadas."]
         for _, row in section.iterrows():
-            lines += [f"- **{safe_text(row.get('event'))}** — {safe_text(row.get('public_pick'))}", f"  - {lab['action']}: {safe_text(row.get('recommended_action'))}", f"  - {lab['market']}: {safe_text(row.get('market_read'))}"]
+            lines += [
+                f"- **{event_text(row.get('public_event') or row.get('event'), language)}** — {pick_text(row.get('public_pick') or row.get('prediction'), language)}",
+                f"  - {lab['action']}: {value_text(row.get('consumer_action') or row.get('recommended_action'), language)}",
+                f"  - {lab['market']}: {value_text(row.get('market_read'), language)}",
+            ]
         lines.append("")
     return "\n".join(lines)
 
