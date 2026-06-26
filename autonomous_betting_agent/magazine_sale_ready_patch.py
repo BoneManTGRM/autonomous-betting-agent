@@ -6,6 +6,7 @@ from typing import Any, Iterable, Mapping
 from autonomous_betting_agent import magazine_api_sources as api_sources
 
 _APPLIED_FLAG = "_ABA_SALE_READY_MAGAZINE_PATCHED"
+_RENDER_FLAG = "_ABA_SALE_READY_RENDER_WRAPPED"
 
 
 def _row(value: Any) -> Mapping[str, Any]:
@@ -156,7 +157,10 @@ def _items_from_context(row: Any, keys: Iterable[str], fallback: list[str], limi
 
 
 def _patch_visuals(module: Any) -> None:
-    original_render = module.render_full_pick_magazine_page
+    current_render = getattr(module, "render_full_pick_magazine_page", None)
+    if getattr(current_render, _RENDER_FLAG, False):
+        return
+    original_render = current_render
     original_hero = getattr(module, "_hero", None)
     original_headlines = getattr(module, "_draw_matchup_headlines", None)
     original_bullets = getattr(module, "_bullets_auto", None)
@@ -209,13 +213,13 @@ def _patch_visuals(module: Any) -> None:
         if callable(original_bullets):
             original_bullets(draw, x, y, compact_items, width, height, color, start, max(minimum, 9), limit, lang)
 
-    def repaint_evidence_strip(module: Any, draw: Any) -> None:
+    def repaint_evidence_strip(draw: Any) -> None:
         left_x, left_w = 20, 320
         draw.rectangle((left_x + 8, 1088, left_x + left_w - 8, 1120), fill=module.CREAM)
         draw.line((left_x + 12, 1088, left_x + left_w - 12, 1088), fill=module.BLACK + (135,), width=1)
         module._txt_auto(draw, left_x + 22, 1094, "Price check required before entry.", left_w - 44, 22, 13, 9, module.BLACK, True, 1)
 
-    def repaint_final(module: Any, img: Any, row: Any, lang: str) -> None:
+    def repaint_final(img: Any, row: Any, lang: str) -> None:
         draw = module.ImageDraw.Draw(img, "RGBA")
         action, explanation, playable = sale_ready_recommendation(row)
         pick_text = module._tr(module._clean(module._pick(row), True), lang).upper()
@@ -236,22 +240,25 @@ def _patch_visuals(module: Any) -> None:
         img = original_render(pick, *args, **kwargs)
         lang = module._lang(pick, kwargs.get("language") if "language" in kwargs else (args[10] if len(args) >= 11 else None))
         draw = module.ImageDraw.Draw(img, "RGBA")
-        repaint_evidence_strip(module, draw)
-        repaint_final(module, img, pick, lang)
+        repaint_evidence_strip(draw)
+        repaint_final(img, pick, lang)
         return img
 
+    def patched_png(pick: Any, background_image: Any = None, report_name: str | None = None, page_number: int = 1, total_pages: int = 1, logo_image: Any = None, background_mode: str = "hero_right", logo_mode: str = "header", background_opacity: float = 0.9, logo_opacity: float = 1.0, use_team_logo: bool = True, language: str | None = None) -> bytes:
+        return module._png(module.render_full_pick_magazine_page(pick, background_image, report_name, page_number, total_pages, logo_image, background_mode, logo_mode, background_opacity, logo_opacity, use_team_logo, language))
+
+    setattr(patched_render, _RENDER_FLAG, True)
+    setattr(patched_png, _RENDER_FLAG, True)
     module._hero = patched_hero
     module._headline_context_lines = patched_headline_context_lines
     module._draw_matchup_headlines = patched_headlines
     module._bullets_auto = patched_bullets
     module.render_full_pick_magazine_page = patched_render
-    module.render_full_pick_magazine_page_png = lambda pick, background_image=None, report_name=None, page_number=1, total_pages=1, logo_image=None, background_mode="hero_right", logo_mode="header", background_opacity=0.9, logo_opacity=1.0, use_team_logo=True, language=None: module._png(module.render_full_pick_magazine_page(pick, background_image, report_name, page_number, total_pages, logo_image, background_mode, logo_mode, background_opacity, logo_opacity, use_team_logo, language))
+    module.render_full_pick_magazine_page_png = patched_png
 
 
 def apply_magazine_sale_ready_patch(module: Any) -> Any:
     api_sources.apply_magazine_api_patch(module)
-    if getattr(module, _APPLIED_FLAG, False):
-        return module
     module.team_items = sale_ready_team_items
     module.injury_items = sale_ready_injury_items
     module.matchup_items = sale_ready_matchup_items
@@ -261,6 +268,7 @@ def apply_magazine_sale_ready_patch(module: Any) -> Any:
     module._items = _items_from_context
     module.sale_ready_recommendation = sale_ready_recommendation
     _patch_visuals(module)
-    module.MAGAZINE_STYLE_VERSION = f"{module.MAGAZINE_STYLE_VERSION}_sale_ready_layout_v1"
+    if not str(getattr(module, "MAGAZINE_STYLE_VERSION", "")).endswith("_sale_ready_layout_v2"):
+        module.MAGAZINE_STYLE_VERSION = f"{module.MAGAZINE_STYLE_VERSION}_sale_ready_layout_v2"
     setattr(module, _APPLIED_FLAG, True)
     return module
