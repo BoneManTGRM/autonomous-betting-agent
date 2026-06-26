@@ -171,6 +171,7 @@ def compute_data_quality(
     coverage: Mapping[str, Mapping[str, Any]],
     duplicate_rows: int,
     duplicate_event_names: int,
+    mixed_outcome_events: int = 0,
 ) -> dict[str, Any]:
     total = max(len(rows), 1)
     score = 100.0
@@ -201,6 +202,11 @@ def compute_data_quality(
         penalty = min(10.0, (duplicate_event_names / total) * 10.0)
         score -= penalty
         penalties.append(f"{duplicate_event_names} duplicate event name(s) require event-level review (-{penalty:.1f})")
+
+    if mixed_outcome_events:
+        penalty = min(10.0, (mixed_outcome_events / total) * 20.0)
+        score -= penalty
+        penalties.append(f"{mixed_outcome_events} mixed-outcome unique event(s) excluded from pure event win rate (-{penalty:.1f})")
 
     if not coverage["odds"]["matched_column"]:
         score -= 5.0
@@ -265,6 +271,7 @@ def build_enhanced_diagnostics(rows: list[Mapping[str, Any]], dataset_name: str 
         coverage=coverage,
         duplicate_rows=duplicate_rows,
         duplicate_event_names=base.duplicate_event_names,
+        mixed_outcome_events=mixed_outcome_events,
     )
     return EnhancedSimulationDiagnostics(
         base_report=base.to_dict(),
