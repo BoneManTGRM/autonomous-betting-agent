@@ -7,7 +7,7 @@ from typing import Any
 APP_TAGLINE = 'Powered by Reparodynamics'
 APP_TAGLINE_ES = 'Impulsado por Reparodynamics'
 GLOBAL_LANGUAGE_KEY = 'aba_global_language'
-LANGUAGE_KEYS = ['global_language','signal_board_language','pro_predictor_language','odds_lock_pro_language','report_studio_language','proof_center_language','local_control_center_language','learning_memory_language','reparodynamics_language','storage_diagnostics_language','reset_storage_language']
+LANGUAGE_KEYS = ['global_language','signal_board_language','pro_predictor_language','odds_lock_pro_language','report_studio_language','proof_center_language','local_control_center_language','learning_memory_language','storage_diagnostics_language','reset_storage_language']
 TOOLS: tuple[tuple[str, str, str], ...] = (
     ('Signal Board', 'Panel de Señales', 'pages/signal_board.py'),
     ('Pro Predictor', 'Predictor Pro', 'pages/pro_predictor_volume.py'),
@@ -16,10 +16,10 @@ TOOLS: tuple[tuple[str, str, str], ...] = (
     ('Proof Center', 'Centro de Prueba', 'pages/proof_center.py'),
     ('Local Control Center', 'Centro de Control Local', 'pages/local_control_center.py'),
     ('Learning Memory', 'Memoria de Aprendizaje', 'pages/learn_memory_safe.py'),
-    ('Reparodynamics', 'Reparodynamics', 'pages/reparodynamics.py'),
     ('Storage Diagnostics', 'Diagnóstico de Almacenamiento', 'pages/storage_diagnostics.py'),
     ('Reset Storage', 'Reiniciar almacenamiento', 'pages/reset_storage.py'),
 )
+REPARODYNAMICS_PAGE = ('Reparodynamics', 'Reparodynamics', 'pages/reparodynamics.py')
 PRO_PREDICTOR_LARGE_LIST_70_DEFAULTS = {'baseline_accuracy_min_books': 1,'baseline_accuracy_min_model_prob': 0.58,'baseline_accuracy_min_edge': -0.03,'baseline_accuracy_strong_edge': 0.04,'baseline_accuracy_min_strength': 38.0,'baseline_accuracy_use_high_conf': True,'baseline_accuracy_max_high_conf': 700,'baseline_accuracy_min_high_prob': 0.58,'baseline_accuracy_min_high_edge': -0.03,'baseline_accuracy_min_high_strength': 38.0,'baseline_accuracy_min_high_agent': 35.0}
 SIDEBAR_CSS = '''
 <style>
@@ -97,6 +97,16 @@ def _label(item: tuple[str, str, str], language: str) -> str:
     return item[1] if normalize_language(language) == 'es' else item[0]
 
 
+def _render_page_link(st: Any, item: tuple[str, str, str], language: str, current_page: str) -> None:
+    label = _label(item, language)
+    path = item[2]
+    safe_label = html.escape(label)
+    if current_page and current_page in path:
+        st.markdown(f'**● {safe_label}**')
+    else:
+        st.page_link(path, label=label)
+
+
 def render_app_sidebar(current_page: str, *, language_key: str = 'global_language', selector: str = 'radio') -> str:
     import streamlit as st
     language = _language_label(_current_language(st))
@@ -116,13 +126,8 @@ def render_app_sidebar(current_page: str, *, language_key: str = 'global_languag
             st.markdown(GLOBAL_UPLOAD_ES_CSS, unsafe_allow_html=True)
         st.markdown('---')
         for item in TOOLS:
-            label = _label(item, language)
-            path = item[2]
-            safe_label = html.escape(label)
-            if current_page and current_page in path:
-                st.markdown(f'**● {safe_label}**')
-            else:
-                st.page_link(path, label=label)
+            _render_page_link(st, item, language, current_page)
+        _render_page_link(st, REPARODYNAMICS_PAGE, language, current_page)
     return normalize_language(language)
 
 
