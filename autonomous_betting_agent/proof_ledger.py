@@ -116,9 +116,8 @@ def load_ledger(user_id: str = DEFAULT_USER_ID) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame(columns=LEDGER_COLUMNS)
     try:
-        # The ledger is small, local, and string-heavy. Use the Python CSV engine
-        # here to avoid intermittent pandas C-parser crashes observed in the
-        # GitHub Actions smoke suite while preserving DataFrame output behavior.
+        # The proof ledger is small and local. Use the Python CSV engine to avoid
+        # intermittent pandas C-parser crashes seen in GitHub Actions smoke tests.
         frame = pd.read_csv(path, engine='python')
     except Exception:
         return pd.DataFrame(columns=LEDGER_COLUMNS)
@@ -227,9 +226,19 @@ def ledger_summary(frame: pd.DataFrame) -> dict[str, Any]:
         'voids': voids,
         'pending': pending,
         'review_needed': review,
-        'win_rate': (wins / (wins + losses)) if (wins + losses) else None,
-        'units': units,
-        'roi_percent': (units / staked * 100) if staked else None,
-        'a_plus': int((frame.get('confidence_tier', pd.Series(dtype=str)).fillna('').astype(str).str.upper() == 'A+').sum()),
-        'avg_decimal_price': float(prices.dropna().mean()) if not prices.dropna().empty else None,
+        'win_rate': None if wins + losses == 0 else round(wins / (wins + losses), 6),
+        'units': round(units, 6),
+        'roi_percent': None if staked <= 0 else round((units / staked) * 100.0, 2),
+        'a_plus': int(frame.get('confidence_tier', pd.Series(dtype=str)).fillna('').astype(str).eq('A+ High Confidence').sum()),
+        'avg_decimal_price': None if prices.dropna().empty else round(float(prices.dropna().mean()), 4),
     }
+
+
+def sport_breakdown(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame is None or frame.empty or 'sport' not in frame.columns:
+        return pd.DataFrame(columns=['sport', 'picks', 'wins', 'losses', 'win_rate', 'units'])
+    rows: list[dict[str, Any]] = []
+    for sport, group in frame.groupby(frame['sport'].fillna('unknown').astype(str)):
+        summary = ledger_summary(group)
+        rows.append({'sport': sport or 'unknown', 'picks': summary['total_picks'], 'wins': summary['wins'], 'losses': summary['losses'], 'win_rate': summary['win_rate'], 'units': summary['units']})
+    return pd.DataFrame(rows).sort_values(['picks', 'units'], ascending=[False, False])
