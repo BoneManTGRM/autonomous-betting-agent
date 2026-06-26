@@ -4,7 +4,9 @@ from dataclasses import asdict, is_dataclass
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
+import builtins
 import math
+import os
 import random
 import re
 from typing import Any, Iterable, Mapping
@@ -14,12 +16,11 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 PAGE_WIDTH = 1080
 PAGE_HEIGHT = 1620
-MAGAZINE_STYLE_VERSION = "premium_v4_reference_compact_no_market_v7_headline_autosize"
+MAGAZINE_STYLE_VERSION = "premium_v4_reference_compact_no_market_v8_base_api_data"
 NO_MARKET_EXPORT_VERSION = "no_market_metric_v6"
 SAFETY_FOOTER = "No guarantees. Bet responsibly. This analysis is for informational purposes only."
-ASSET_DIRS = (Path("assets/team_logos"), Path("assets/report_logos"), Path("assets/licensed_logos"))
-TEAM_DATA_FALLBACK = "Data not available from uploaded row"
-PLAYER_DATA_FALLBACK = "Player data not available in uploaded row"
+TEAM_DATA_FALLBACK = "Data not returned for this event"
+PLAYER_DATA_FALLBACK = "Player data not returned for this event"
 
 RED = (190, 30, 28)
 BLUE = (19, 66, 108)
@@ -41,11 +42,25 @@ CONTEXT_LINE_BOX = (42, 394, 600, 450)
 HERO_IMAGE_BOX = (620, 105, 1050, 455)
 METRIC_STRIP_BOX = (20, 456, 1060, 562)
 
+API_SECRET_DEFS = {
+    "Odds API": ("ODDS_API_KEY", "THE_ODDS_API_KEY"),
+    "SportsDataIO": ("SPORTSDATAIO_API_KEY", "SPORTS_DATA_IO_API_KEY", "SPORTSDATA_API_KEY"),
+    "WeatherAPI": ("WEATHERAPI_KEY", "WEATHER_API_KEY"),
+    "API-Football": ("API_FOOTBALL_KEY", "APIFOOTBALL_KEY"),
+    "Perplexity": ("PERPLEXITY_API_KEY", "PPLX_API_KEY"),
+    "NewsAPI": ("NEWSAPI_KEY", "NEWS_API_KEY"),
+}
+API_SOURCE_DEFS = (
+    ("Odds API", ("odds_api_live", "the_odds_api_live", "odds_api_enabled"), ("odds_api_summary", "live_odds_summary", "odds_api_context"), ("odds_source", "bookmaker", "sportsbook", "decimal_price", "odds", "best_price", "market_probability"), True),
+    ("SportsDataIO", ("sportsdataio_live", "sportsdataio_enabled"), ("sportsdataio_team_summary", "sportsdataio_context", "sportsdataio_injury_summary", "sportsdataio_game_summary"), (), False),
+    ("WeatherAPI", ("weatherapi_live", "weather_live", "weather_enabled"), ("weather_summary", "weather_location", "weather_risk", "venue_weather"), (), False),
+    ("API-Football", ("api_football_live", "api_football_enabled"), ("api_football_summary", "api_football_context", "api_football_team_summary", "api_football_lineup_summary"), (), False),
+    ("Perplexity", ("perplexity_live", "perplexity_enabled"), ("perplexity_summary", "perplexity_context", "perplexity_news_context"), (), True),
+    ("NewsAPI", ("newsapi_live", "newsapi_enabled"), ("newsapi_summary", "news_summary", "news_injury_summary", "breaking_news_summary"), (), False),
+)
+
 _FONT_CACHE: dict[tuple[int, bool], ImageFont.ImageFont] = {}
-FONT_ROOTS = tuple(Path(p) for p in (
-    "/usr/share/fonts", "/usr/local/share/fonts", "/opt/render/project/.apt/usr/share/fonts",
-    "/app/.apt/usr/share/fonts", "~/.local/share/fonts",
-))
+FONT_ROOTS = tuple(Path(p) for p in ("/usr/share/fonts", "/usr/local/share/fonts", "/opt/render/project/.apt/usr/share/fonts", "/app/.apt/usr/share/fonts", "~/.local/share/fonts"))
 BOLD_NAMES = ("DejaVuSansCondensed-Bold.ttf", "DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf", "Arial Bold.ttf")
 REG_NAMES = ("DejaVuSansCondensed.ttf", "DejaVuSans.ttf", "LiberationSans-Regular.ttf", "Arial.ttf")
 
@@ -56,25 +71,13 @@ ES = {
     "PRO BETTOR EVIDENCE": "EVIDENCIA PRO", "TEAM SNAPSHOTS": "RESUMEN EQUIPOS",
     "PLAYER / INJURY NOTES": "JUGADORES / LESIONES", "RISK DESK": "RIESGO",
     "MATCHUP NOTES": "NOTAS DEL PARTIDO", "CHAIN BETTING NOTES": "NOTAS PARLAY",
-    "FINAL": "FINAL", "RECOMMENDATION": "RECOMENDACIÓN", "SOURCE": "FUENTE", "BOOK": "CASA",
-    "LINE": "LÍNEA", "PUBLIC": "PÚBLICO", "PRO": "PRO", "LOW": "BAJO", "MEDIUM": "MEDIO",
-    "HIGH": "ALTO", "VOLUME OK": "VOLUMEN OK", "VOLUME_OK": "VOLUMEN OK",
-    "PLAY SMALL": "JUGAR PEQUEÑO", "PLAY STANDARD": "JUGAR NORMAL", "NO PLAY": "NO JUGAR",
+    "FINAL": "FINAL", "RECOMMENDATION": "RECOMENDACIÓN", "BOOK": "CASA", "LINE": "LÍNEA",
+    "ODDS ROW": "FILA DE MOMIO", "ACTIVE APIS": "APIS ACTIVAS", "INACTIVE": "INACTIVAS",
+    "VOLUME OK": "VOLUMEN OK", "VOLUME_OK": "VOLUMEN OK", "PLAY SMALL": "JUGAR PEQUEÑO",
+    "PLAY STANDARD": "JUGAR NORMAL", "NO PLAY": "NO JUGAR",
     SAFETY_FOOTER: "No garantizamos resultados. Apuesta responsablemente. Este análisis es solo informativo.",
 }
-
-COUNTRY_ES = {
-    "iraq": "Irak", "iran": "Irán", "france": "Francia", "germany": "Alemania",
-    "ecuador": "Ecuador", "australia": "Australia", "paraguay": "Paraguay",
-    "netherlands": "Países Bajos", "tunisia": "Túnez", "egypt": "Egipto",
-    "ivory coast": "Costa de Marfil", "curacao": "Curazao", "curaçao": "Curazao",
-    "senegal": "Senegal", "norway": "Noruega", "algeria": "Argelia", "jordan": "Jordania",
-    "argentina": "Argentina", "spain": "España", "england": "Inglaterra",
-    "united states": "Estados Unidos", "usa": "Estados Unidos", "us": "Estados Unidos",
-    "mexico": "México", "italy": "Italia", "brazil": "Brasil", "portugal": "Portugal",
-    "canada": "Canadá", "japan": "Japón", "south korea": "Corea del Sur",
-    "new zealand": "Nueva Zelanda", "czech republic": "República Checa",
-}
+COUNTRY_ES = {"iraq": "Irak", "iran": "Irán", "france": "Francia", "germany": "Alemania", "ecuador": "Ecuador", "australia": "Australia", "paraguay": "Paraguay", "netherlands": "Países Bajos", "tunisia": "Túnez", "egypt": "Egipto", "ivory coast": "Costa de Marfil", "curacao": "Curazao", "curaçao": "Curazao", "senegal": "Senegal", "norway": "Noruega", "algeria": "Argelia", "jordan": "Jordania", "argentina": "Argentina", "spain": "España", "england": "Inglaterra", "mexico": "México", "italy": "Italia", "brazil": "Brasil", "portugal": "Portugal", "canada": "Canadá", "japan": "Japón", "south korea": "Corea del Sur", "new zealand": "Nueva Zelanda", "czech republic": "República Checa"}
 
 
 def _row(value: Any) -> Mapping[str, Any]:
@@ -90,6 +93,15 @@ def _row(value: Any) -> Mapping[str, Any]:
 
 def _bad(value: Any) -> bool:
     return value is None or (isinstance(value, float) and math.isnan(value)) or str(value).strip().lower() in {"", "nan", "none", "null", "n/a", "na", "nat", "--"}
+
+
+def _useful(value: Any) -> bool:
+    if _bad(value):
+        return False
+    text = str(value).strip().lower()
+    if text in {"false", "0", "no", "not available", "unavailable", "data unavailable", "none available"}:
+        return False
+    return not any(token in text for token in ("not returned", "not available", "no data", "api key missing", "payment required"))
 
 
 def _get(row: Any, *keys: str, default: str = "") -> str:
@@ -182,6 +194,195 @@ def _edge(num: float | None) -> str:
     return f"{num:+.1%}"
 
 
+def _split(value: Any) -> list[str]:
+    if _bad(value):
+        return []
+    return [part.strip(" -•") for part in str(value).replace("•", "\n").replace(";", "\n").replace("|", "\n").splitlines() if part.strip(" -•")]
+
+
+def _dedupe(items: Iterable[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        text = str(item).strip()
+        key = text.lower().replace("the ", "")
+        if text and key not in seen:
+            out.append(text)
+            seen.add(key)
+    return out
+
+
+def _secret_lookup(names: Iterable[str]) -> str:
+    names = tuple(names)
+    getter = getattr(builtins, "get_secret", None)
+    if callable(getter):
+        try:
+            value = str(getter(*names) or "").strip()
+            if value:
+                return value
+        except Exception:
+            pass
+    try:
+        import streamlit as st  # type: ignore
+        secrets = getattr(st, "secrets", {})
+        for name in names:
+            try:
+                value = str(secrets.get(name, "") or "").strip()
+            except Exception:
+                value = ""
+            if value:
+                return value
+    except Exception:
+        pass
+    for name in names:
+        value = str(os.getenv(name, "") or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def configured_api_sources() -> list[str]:
+    return [name for name in API_SECRET_DEFS if _secret_lookup(API_SECRET_DEFS[name])]
+
+
+def _truthy(value: Any) -> bool | None:
+    if _bad(value):
+        return None
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "y", "live", "active", "enabled", "ok", "available"}:
+        return True
+    if text in {"0", "false", "no", "n", "inactive", "disabled", "failed", "unavailable", "missing", "unpaid"}:
+        return False
+    return None
+
+
+def _any_useful(row: Any, keys: Iterable[str]) -> bool:
+    data = _row(row)
+    return any(_useful(data.get(key)) for key in keys)
+
+
+def _name_matches(name: str, values: Iterable[str]) -> bool:
+    target = name.lower().replace("the ", "")
+    return any(target in value.lower().replace("the ", "") for value in values)
+
+
+def api_provenance(row: Any) -> dict[str, list[str]]:
+    data = _row(row)
+    explicit_active = _split(data.get("api_sources_active") or data.get("api_sources_used"))
+    explicit_inactive = _split(data.get("api_sources_inactive"))
+    active: list[str] = []
+    no_data: list[str] = []
+    inactive: list[str] = []
+    for name, live_keys, data_keys, support_keys, requires_live in API_SOURCE_DEFS:
+        live_values = [_truthy(data.get(key)) for key in live_keys if key in data]
+        live = next((value for value in live_values if value is not None), None)
+        primary = _any_useful(row, data_keys)
+        support = _any_useful(row, support_keys)
+        configured = bool(_secret_lookup(API_SECRET_DEFS.get(name, ())))
+        if _name_matches(name, explicit_inactive) or live is False:
+            inactive.append(name)
+        elif _name_matches(name, explicit_active) or primary or configured or (live is True and (primary or support)):
+            active.append(name)
+        elif live is True:
+            no_data.append(name)
+        elif requires_live and support:
+            inactive.append(name)
+        else:
+            inactive.append(name)
+    active = _dedupe(active)
+    no_data = _dedupe(name for name in no_data if name not in active)
+    inactive = _dedupe(name for name in inactive if name not in active and name not in no_data)
+    return {"active_sources": active, "available_no_data_sources": no_data, "inactive_sources": inactive}
+
+
+def api_provenance_lines(row: Any) -> list[str]:
+    prov = api_provenance(row)
+    lines: list[str] = []
+    if prov["active_sources"]:
+        lines.append("Active APIs: " + " · ".join(prov["active_sources"]))
+    if prov["inactive_sources"]:
+        lines.append("Inactive: " + " · ".join(prov["inactive_sources"]))
+    return lines
+
+
+def _sport_kind(row: Any) -> str:
+    data = _row(row)
+    text = " ".join(str(data.get(key, "")) for key in ("sport", "league", "event", "game", "matchup", "event_name")).lower()
+    if any(token in text for token in ("mma", "ufc", "boxing", "fighter")):
+        return "combat"
+    if any(token in text for token in ("soccer", "fifa", "football", "world cup", "uefa", "liga")):
+        return "soccer"
+    if any(token in text for token in ("mlb", "baseball", "dodgers", "twins", "yankees")):
+        return "baseball"
+    return "generic"
+
+
+def _blocked_terms() -> tuple[str, ...]:
+    return ("api-" + "mma", "fight" + " news", "weight" + " cut", "camp" + " updates")
+
+
+def _filter_sport_text(items: Iterable[str], row: Any) -> list[str]:
+    if _sport_kind(row) == "combat":
+        return [str(item) for item in items if _useful(item)]
+    return [str(item) for item in items if _useful(item) and not any(term in str(item).lower() for term in _blocked_terms())]
+
+
+def _items_from_keys(row: Any, keys: Iterable[str], fallback: list[str], limit: int) -> list[str]:
+    data = _row(row)
+    out: list[str] = []
+    for key in keys:
+        out += _split(data.get(key))
+    return (_filter_sport_text(out, row) or fallback)[:limit]
+
+
+def _active_note(row: Any) -> str:
+    active = " · ".join(api_provenance(row)["active_sources"])
+    return f"Active APIs checked: {active}." if active else "No active API source was detected for this row."
+
+
+def _team_items(row: Any, side: str = "") -> list[str]:
+    keys = (f"{side}_team_form", f"{side}_team_record", f"{side}_recent_results", f"{side}_sportsdataio_team_summary", f"{side}_api_football_team_summary", "sportsdataio_team_summary", "sportsdataio_context", "api_football_team_summary", "api_football_context", "team_stats_summary", "home_team_form", "away_team_form", "recent_results", "news_summary", "newsapi_summary")
+    kind = _sport_kind(row)
+    if kind == "soccer":
+        fallback = ["Team form data was not returned for this soccer event.", _active_note(row), "Check lineup and news updates before publishing."]
+    elif kind == "baseball":
+        fallback = ["Team form data was not returned for this baseball event.", _active_note(row), "Check lineup, bullpen, and news updates before publishing."]
+    elif kind == "combat":
+        fallback = ["Combat profile data was not returned by active sources.", _active_note(row), "Confirm combat news before publishing."]
+    else:
+        fallback = [TEAM_DATA_FALLBACK, _active_note(row), "Use team form, injuries, and price movement before publishing."]
+    return _items_from_keys(row, keys, fallback, 4)
+
+
+def _injury_items(row: Any, prefix: str) -> list[str]:
+    keys = (f"{prefix}_injuries", f"{prefix}_injury_report", f"{prefix}_lineup_status", f"{prefix}_player_notes", "injury_report", "injuries", "lineup_status", "key_players", "home_injuries", "away_injuries", "sportsdataio_injury_summary", "api_football_lineup_summary", "news_injury_summary")
+    kind = _sport_kind(row)
+    if kind == "soccer":
+        fallback = ["Lineup and injury data were not returned for this soccer event.", _active_note(row)]
+    elif kind == "baseball":
+        fallback = ["Lineup and injury data were not returned for this baseball event.", _active_note(row)]
+    elif kind == "combat":
+        fallback = ["Combat injury/news data was not returned by active sources.", _active_note(row)]
+    else:
+        fallback = [PLAYER_DATA_FALLBACK, _active_note(row), "Confirm lineup/injury news before placing the bet."]
+    return _items_from_keys(row, keys, fallback, 3)
+
+
+def _matchup_items(row: Any) -> list[str]:
+    keys = ("weather_summary", "venue_note", "weather_location", "weather_risk", "news_summary", "newsapi_summary", "api_football_context", "api_football_summary", "sportsdataio_context", "sportsdataio_game_summary", "sports_context_summary", "matchup_note", "matchup_notes", "perplexity_context", "perplexity_summary")
+    return _items_from_keys(row, keys, ["Context was not returned for this event.", _active_note(row), "Recheck price before publishing."], 3)
+
+
+def _odds_row_label(row: Any) -> str:
+    if "Odds API" in api_provenance(row)["active_sources"]:
+        source = _row(row).get("odds_source") or _row(row).get("data_source")
+        return str(source or "Odds API")
+    source = str(_row(row).get("odds_source") or _row(row).get("data_source") or "").strip()
+    if source and "odds api" not in source.lower():
+        return source
+    return "uploaded/cached row"
+
+
 def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
     key = (max(1, int(size)), bool(bold))
     if key in _FONT_CACHE:
@@ -206,7 +407,7 @@ def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
                     return font
                 except Exception:
                     pass
-    raise RuntimeError("No scalable TTF font found for magazine rendering. Install DejaVu or Liberation fonts; refusing PIL default tiny bitmap font.")
+    raise RuntimeError("No scalable TTF font found for magazine rendering. Install DejaVu or Liberation fonts.")
 
 
 def _fit(text: str, width: int, start: int, minimum: int = 12, bold: bool = True) -> ImageFont.ImageFont:
@@ -308,11 +509,7 @@ def _fit_lines_to_box(draw: ImageDraw.ImageDraw, text: str, box: tuple[int, int,
         line_sets = [[label]] if _text_width(draw, label, font) <= _rect_w(box) else []
         line_sets.append(_wrap_text_to_box(draw, label, font, _rect_w(box), max_lines))
         for lines in line_sets:
-            if not lines or len(lines) > max_lines:
-                continue
-            if len(lines) * _line_height(font) > _rect_h(box):
-                continue
-            if all(_text_width(draw, line, font) <= _rect_w(box) for line in lines):
+            if lines and len(lines) <= max_lines and len(lines) * _line_height(font) <= _rect_h(box) and all(_text_width(draw, line, font) <= _rect_w(box) for line in lines):
                 return font, lines
     font = _font(max(1, int(min_font)), bold)
     lines = _wrap_text_to_box(draw, label, font, _rect_w(box), max_lines)
@@ -393,12 +590,6 @@ def _txt_auto(draw: ImageDraw.ImageDraw, x: int, y: int, text: str, width: int, 
         draw.text((x, y), _ellipsize_to_width(draw, line, font, width), font=font, fill=fill)
         y += _line_height(font)
     return y
-
-
-def _split(value: Any) -> list[str]:
-    if _bad(value):
-        return []
-    return [part.strip(" -•") for part in str(value).replace("•", "\n").replace(";", "\n").replace("|", "\n").splitlines() if part.strip(" -•")]
 
 
 def _game(row: Any) -> str:
@@ -542,10 +733,7 @@ def _bullets_auto(draw: ImageDraw.ImageDraw, x: int, y: int, items: list[str], w
 
 
 def _items(row: Any, keys: Iterable[str], fallback: list[str], limit: int) -> list[str]:
-    out: list[str] = []
-    for key in keys:
-        out += _split(_row(row).get(key))
-    return (out or fallback)[:limit]
+    return _items_from_keys(row, keys, fallback, limit)
 
 
 def _why(row: Any, lang: str) -> list[str]:
@@ -565,44 +753,26 @@ def _why(row: Any, lang: str) -> list[str]:
 
 
 def _pairs(row: Any, lang: str) -> list[tuple[str, str]]:
-    rows = [
-        ("SOURCE", _get(row, "odds_source", "data_source", default=NO_VERIFIED)),
-        ("BOOK", _get(row, "bookmaker", "sportsbook", default=NO_VERIFIED)),
-        ("LINE", _get(row, "line_movement", "price_movement", "price_move", default=NO_VERIFIED)),
-        ("PUBLIC", _pct(_num(row, "public_percent", "public_bet_percent", "public_pct"))),
-        ("PRO", _pct(_num(row, "pro_percent", "sharp_percent", "smart_money_percent"))),
-    ]
+    prov = api_provenance(row)
+    rows = [("ODDS ROW", _odds_row_label(row)), ("BOOK", _get(row, "bookmaker", "sportsbook", default=NO_VERIFIED)), ("LINE", _get(row, "line_movement", "price_movement", "price_move", default=NO_VERIFIED))]
+    if prov["active_sources"]:
+        rows.append(("ACTIVE APIS", " · ".join(prov["active_sources"])))
+    if prov["inactive_sources"]:
+        rows.append(("INACTIVE", " · ".join(prov["inactive_sources"])))
     return [(_tr(label, lang), _tr(_clean(value), lang)) for label, value in rows if value != NO_VERIFIED][:5]
 
 
-def _team_snapshot(img: Image.Image, draw: ImageDraw.ImageDraw, x: int, y: int, width: int, team: str, color: tuple[int, int, int], lang: str) -> None:
+def _team_snapshot(img: Image.Image, draw: ImageDraw.ImageDraw, x: int, y: int, width: int, team: str, color: tuple[int, int, int], lang: str, row: Any | None = None, side: str = "") -> None:
     label = _team_label(team, lang)
     _badge(img, draw, label, x, y, 50, 50, color)
     draw.text((x + 66, y + 9), label.upper(), font=_fit(label.upper(), width - 70, 25, 7, True), fill=color)
-    _bullets_auto(draw, x, y + 76, [TEAM_DATA_FALLBACK, "Use team form, injuries, and price movement before publishing."], width - 10, 165, color, 18, 8, 4, lang)
-
-
-def _looks_like_combat_measurement(text: str) -> bool:
-    low = str(text or "").lower()
-    measurement_terms = ("stance:", "reach:", "height:", "orthodox", "southpaw", "switch")
-    team_terms = ("injur", "lineup", "out", "doubtful", "questionable", "probable", "day-to-day", "suspended")
-    return any(term in low for term in measurement_terms) and not any(term in low for term in team_terms)
-
-
-def _player_items(row: Any, prefix: str) -> list[str]:
-    keys = (f"{prefix}_injuries", f"{prefix}_injury_report", f"{prefix}_lineup_status", f"{prefix}_player_notes", "injury_report", "injuries", "lineup_status", "key_players")
-    out: list[str] = []
-    for key in keys:
-        for item in _split(_row(row).get(key)):
-            if not _looks_like_combat_measurement(item):
-                out.append(item)
-    return out[:3] if out else [PLAYER_DATA_FALLBACK, "Confirm lineup/injury news before placing the bet."]
+    _bullets_auto(draw, x, y + 76, _team_items(row or {}, side), width - 10, 165, color, 18, 8, 4, lang)
 
 
 def _player_notes(draw: ImageDraw.ImageDraw, x: int, y: int, width: int, team: str, prefix: str, color: tuple[int, int, int], row: Any, lang: str) -> None:
     label = _team_label(team, lang)
     draw.text((x, y), label.upper(), font=_fit(label.upper(), width, 21, 7, True), fill=color)
-    _bullets_auto(draw, x, y + 32, _player_items(row, prefix), width, 106, color, 16, 7, 3, lang)
+    _bullets_auto(draw, x, y + 32, _injury_items(row, prefix), width, 106, color, 16, 7, 3, lang)
 
 
 def _metric(draw: ImageDraw.ImageDraw, x: int, y: int, width: int, label: str, value: str, color: tuple[int, int, int], lang: str) -> None:
@@ -611,6 +781,12 @@ def _metric(draw: ImageDraw.ImageDraw, x: int, y: int, width: int, label: str, v
     draw.rectangle((x, y, x + width, y + 94), fill=BLACK, outline=(230, 224, 204), width=1)
     draw.text((x + 7, y + 10), label, font=_fit(label, width - 14, 17, 7, True), fill=(232, 230, 220))
     _txt_auto(draw, x + 7, y + 43, _clean(value, True), width - 14, 38, 36, 7, color, True, 1)
+
+
+def magazine_metric_cells(odds: str, conf: str, edge: str, ev: str, units: str, risk: str) -> list[tuple[str, str, tuple[int, int, int], int, int]]:
+    edge_color = DANGER if str(edge).startswith("-") else GREEN
+    ev_color = DANGER if str(ev).startswith("-") else GREEN
+    return [("ODDS", odds, CREAM, 345, 98), ("CONFIDENCE", conf, GREEN, 443, 145), ("EDGE", edge, edge_color, 588, 112), ("EV", ev, ev_color, 700, 112), ("UNITS", units, CREAM, 812, 100), ("RISK", risk, GREEN, 912, 148)]
 
 
 def _headline_boxes(row: Any, language: str = "en") -> dict[str, list[tuple[int, int, int, int]]]:
@@ -685,17 +861,7 @@ def render_full_pick_magazine_page(pick: Any, background_image: Any = None, repo
     ev = _fmt(_get(pick, "expected_value_per_unit", "profit_expected_value", "expected_value", "ev"), "ev")
     units = _fmt(_get(pick, "recommended_stake_units", "suggested_stake_units", "units", default="1.0"), "unit")
     risk = _tr(_clean(_get(pick, "risk", "risk_level", "risk_label", "profit_guard_status", default=NO_VERIFIED), True), lang)
-    edge_color = DANGER if edge.startswith("-") else GREEN
-    ev_color = DANGER if ev.startswith("-") else GREEN
-    metric_cells = [
-        ("ODDS", odds, CREAM, 345, 98),
-        ("CONFIDENCE", conf, GREEN, 443, 145),
-        ("EDGE", edge, edge_color, 588, 112),
-        ("EV", ev, ev_color, 700, 112),
-        ("UNITS", units, CREAM, 812, 100),
-        ("RISK", risk, GREEN, 912, 148),
-    ]
-    for label, value, color, x, width in metric_cells:
+    for label, value, color, x, width in magazine_metric_cells(odds, conf, edge, ev, units, risk):
         _metric(draw, x, sy + 6, width, label, value, color, lang)
     draw.line((1060, sy + 7, 1060, sy + 99), fill=(230, 224, 204), width=1)
 
@@ -704,19 +870,20 @@ def render_full_pick_magazine_page(pick: Any, background_image: Any = None, repo
     _bullets_auto(draw, left_x + 24, 655, _why(pick, lang), left_w - 44, 210, RED, 22, 8, 4, lang)
     _section(draw, left_x, 905, left_w, 225, "PRO BETTOR EVIDENCE", BLUE, lang)
     y = 974
-    for label, value in (_pairs(pick, lang) or [(_tr("SOURCE", lang), _tr(_get(pick, "odds_source", default="Agent row"), lang)), (_tr("BOOK", lang), NO_VERIFIED)])[:5]:
-        draw.text((left_x + 24, y), f"{label}:", font=_fit(f"{label}:", 82, 17, 7, True), fill=BLACK)
-        _txt_auto(draw, left_x + 112, y, value, left_w - 128, 22, 17, 7, BLACK, True, 1)
-        y += 31
+    for label, value in (_pairs(pick, lang) or [(_tr("ODDS ROW", lang), "uploaded/cached row")])[:5]:
+        draw.text((left_x + 24, y), f"{label}:", font=_fit(f"{label}:", 92, 16, 7, True), fill=BLACK)
+        _txt_auto(draw, left_x + 122, y, value, left_w - 138, 22, 16, 7, BLACK, True, 1)
+        y += 29
     draw.rectangle((left_x + 8, 1088, left_x + left_w - 8, 1120), fill=BLUE)
-    _txt_auto(draw, left_x + 22, 1093, _tr(_get(pick, "evidence_summary", default="Market and model evidence support this read."), lang), left_w - 44, 26, 16, 6, CREAM, True, None)
+    evidence = (api_provenance_lines(pick) or [_active_note(pick)])[0]
+    _txt_auto(draw, left_x + 22, 1093, _tr(evidence, lang), left_w - 44, 26, 14, 6, CREAM, True, None)
 
     _section(draw, right_x, 585, right_w, 365, "TEAM SNAPSHOTS", BLUE, lang)
     divider = right_x + right_w // 2
     draw.line((divider, 660, divider, 922), fill=BLACK + (170,), width=1)
     snap_w = right_w // 2 - 52
-    _team_snapshot(img, draw, right_x + 24, 675, snap_w, away, RED, lang)
-    _team_snapshot(img, draw, divider + 24, 675, snap_w, home, BLUE, lang)
+    _team_snapshot(img, draw, right_x + 24, 675, snap_w, away, RED, lang, pick, "away")
+    _team_snapshot(img, draw, divider + 24, 675, snap_w, home, BLUE, lang, pick, "home")
 
     player_y, player_h = 952, 208
     _section(draw, right_x, player_y, right_w, player_h, "PLAYER / INJURY NOTES", BLUE, lang)
@@ -728,7 +895,7 @@ def render_full_pick_magazine_page(pick: Any, background_image: Any = None, repo
     _section(draw, 20, low_y, 320, low_h, "RISK DESK", RED, lang)
     _bullets_auto(draw, 44, low_y + 70, _items(pick, ("why_lose", "risk_reason", "hidden_risk", "risk_notes"), [f"Risk status: {risk}", "Recheck odds before entry.", "Avoid if key news changes"], 3), 272, low_h - 88, RED, 16, 7, 3, lang)
     _section(draw, 354, low_y, 344, low_h, "MATCHUP NOTES", BLUE, lang)
-    _bullets_auto(draw, 378, low_y + 70, _items(pick, ("matchup_note", "matchup_notes", "head_to_head", "h2h", "venue_note", "weather_location", "sports_context_summary"), ["Context unavailable.", "Confirm venue and start time.", "Recheck price before publishing."], 3), 296, low_h - 88, BLUE, 16, 7, 3, lang)
+    _bullets_auto(draw, 378, low_y + 70, _matchup_items(pick), 296, low_h - 88, BLUE, 14, 6, 3, lang)
     _section(draw, 712, low_y, 348, low_h, "CHAIN BETTING NOTES", BLUE, lang)
     _bullets_auto(draw, 736, low_y + 70, _items(pick, ("chain_notes", "main_read", "add_on_legs", "parlay_notes"), ["Straight only: research", "Do not combine without official verification", "Wait for better context or price"], 3), 300, low_h - 88, BLUE, 16, 7, 3, lang)
 
