@@ -130,7 +130,7 @@ def _card_dedupe_key(row: Mapping[str, Any]) -> str:
     event = _canonical_part(row.get("public_event") or row.get("event") or row.get("event_name") or row.get("matchup"))
     action = _row_action_text(row)
     if event and _is_research_or_watch_row(row):
-        return f"research-event|{event}|{action}"
+        return f"research-event|{event}"
     fields = (
         event,
         _canonical_part(row.get("public_pick") or row.get("prediction") or row.get("pick") or row.get("selection")),
