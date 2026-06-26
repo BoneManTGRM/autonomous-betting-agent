@@ -210,16 +210,32 @@ def _title_fit_start(text: str, width: int, start: int, minimum: int) -> tuple[i
             return 88, 40
         if length <= 14:
             return 72, 36
-        return 56, 32
+        return 56, 28
     if width == 560 and start >= 100 and minimum >= 60:
         if length <= 6:
             return 86, 38
         if length <= 11:
             return 72, 34
         if length <= 17:
-            return 58, 32
-        return 46, 28
+            return 58, 30
+        return 46, 24
     return None
+
+
+def _language_from_args(module: Any, pick: Any, args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> str:
+    language = kwargs.get("language")
+    if language is None and len(args) >= 11:
+        language = args[10]
+    return module._lang(pick, language)
+
+
+def _repaint_units_risk(module: Any, img: Any, pick: Any, lang: str) -> None:
+    draw = module.ImageDraw.Draw(img, "RGBA")
+    draw.rectangle((812, 462, 1060, 556), fill=module.BLACK)
+    units = module._fmt(module._get(pick, "recommended_stake_units", "suggested_stake_units", "units", default="1.0"), "unit")
+    risk = module._tr(module._clean(module._get(pick, "risk", "risk_level", "risk_label", "profit_guard_status", default=module.NO_VERIFIED), True), lang)
+    module._metric(draw, 812, 462, 100, "UNITS", units, module.CREAM, lang)
+    module._metric(draw, 912, 462, 148, "RISK", risk, module.GREEN, lang)
 
 
 def apply_magazine_api_patch(module: Any) -> Any:
@@ -237,6 +253,9 @@ def apply_magazine_api_patch(module: Any) -> Any:
     original_team_label = module._team_label
     original_teams = module._teams
 
+    def compatible_badge(img: Any, draw: Any, label: str, x: int, y: int, width: int, height: int, color: Any, *_args: Any, **_kwargs: Any) -> None:
+        original_badge(img, draw, label, x, y, width, height, color)
+
     def patched_fit(text: str, width: int, start: int, minimum: int = 12, bold: bool = True):
         capped = _title_fit_start(text, width, start, minimum)
         if bold and capped is not None:
@@ -248,8 +267,11 @@ def apply_magazine_api_patch(module: Any) -> Any:
         global _CURRENT_ROW
         previous = _CURRENT_ROW
         _CURRENT_ROW = _row(pick)
+        module._badge = compatible_badge
         try:
-            return original_render(pick, *args, **kwargs)
+            img = original_render(pick, *args, **kwargs)
+            _repaint_units_risk(module, img, pick, _language_from_args(module, pick, args, kwargs))
+            return img
         finally:
             _CURRENT_ROW = previous
 
@@ -270,8 +292,8 @@ def apply_magazine_api_patch(module: Any) -> Any:
         away, _home = original_teams(row)
         side = "away" if str(team).strip().lower() == str(away).strip().lower() else "home"
         label = original_team_label(team, lang)
-        original_badge(img, draw, label, x, y, 50, 50, color)
-        draw.text((x + 66, y + 9), label.upper(), font=original_fit(label.upper(), width - 70, 25, 14, True), fill=color)
+        compatible_badge(img, draw, label, x, y, 50, 50, color)
+        draw.text((x + 66, y + 9), label.upper(), font=original_fit(label.upper(), width - 70, 25, 7, True), fill=color)
         original_bullets(draw, x, y + 76, team_items(row, side), width - 10, 165, color, 18, 10, 4, lang)
 
     def patched_items(row: Any, keys: Iterable[str], fallback: list[str], limit: int) -> list[str]:
@@ -288,6 +310,7 @@ def apply_magazine_api_patch(module: Any) -> Any:
     module.render_full_pick_magazine_page = patched_render
     module.render_full_pick_magazine_page_png = patched_png
     module._fit = patched_fit
+    module._badge = compatible_badge
     module._pairs = patched_pairs
     module._team_snapshot = patched_team_snapshot
     module._player_items = injury_items
@@ -296,6 +319,6 @@ def apply_magazine_api_patch(module: Any) -> Any:
     module.api_provenance = api_provenance
     module.api_provenance_lines = api_provenance_lines
     module.magazine_metric_cells = lambda odds, conf, edge, ev, units, risk: magazine_metric_cells(odds, conf, edge, ev, units, risk, {"DANGER": module.DANGER, "GREEN": module.GREEN, "CREAM": module.CREAM})
-    module.MAGAZINE_STYLE_VERSION = f"{module.MAGAZINE_STYLE_VERSION}_dynamic_api_sources_v1_title_autosize"
+    module.MAGAZINE_STYLE_VERSION = f"{module.MAGAZINE_STYLE_VERSION}_dynamic_api_sources_v2_title_autosize_no_market_restore"
     module._DYNAMIC_API_SOURCE_PATCHED = True
     return module
