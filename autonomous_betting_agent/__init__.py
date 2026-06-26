@@ -224,10 +224,14 @@ def _install_magazine_dynamic_sources_and_autosizer() -> None:
         from .magazine_api_sources import apply_magazine_api_patch
         from .magazine_auto_sizer import apply_magazine_auto_sizer
         from .magazine_headline_safety import install as install_headline_safety
+        from .magazine_live_api_enrichment import install as install_live_api_enrichment
     except Exception:
         return
     try:
-        install_headline_safety(apply_magazine_auto_sizer(apply_magazine_api_patch(m)))
+        m = apply_magazine_api_patch(m)
+        m = install_live_api_enrichment(m)
+        m = apply_magazine_auto_sizer(m)
+        install_headline_safety(m)
     except Exception:
         return
 
