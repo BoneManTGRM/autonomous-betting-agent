@@ -1,4 +1,7 @@
-from autonomous_betting_agent.magazine_live_api_enrichment import enrich_row_with_live_api_data
+import importlib
+
+import autonomous_betting_agent.magazine_book_export as magazine_book_export
+from autonomous_betting_agent.magazine_live_api_enrichment import enrich_row_with_live_api_data, enrich_rows_with_live_api_data
 
 
 def test_spanish_report_enrichment_translates_dynamic_text_fields():
@@ -27,3 +30,17 @@ def test_spanish_report_enrichment_translates_dynamic_text_fields():
     assert "La probabilidad implícita" in combined
     assert "No encadenar señales" in combined
     assert "No jugar con la cuota listada" in combined
+
+
+def test_spanish_renderer_translation_is_installed_after_row_enrichment():
+    module = importlib.reload(magazine_book_export)
+    assert module._tr("PAGE 1 OF 75", "es") == "PAGE 1 OF 75"
+
+    enrich_rows_with_live_api_data([{"report_language": "es", "event": "Iraq at France"}])
+
+    assert module._tr("PAGE 1 OF 75", "es") == "PÁGINA 1 DE 75"
+    assert module._tr("WATCHLIST", "es") == "LISTA DE SEGUIMIENTO"
+    assert module._tr("Model projects 71% probability for TOTAL DEL PARTIDO: MÁS DE 2.5.", "es").startswith("El modelo proyecta")
+    assert module._tr("No SDIO event ID.", "es") == "Sin ID de evento SDIO."
+    assert module._tr("API-FB: no fixture match.", "es") == "API-FB: sin coincidencia de partido."
+    assert "No encadenar" in module._tr("Do not chain negative-EV picks.", "es")
