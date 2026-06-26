@@ -11,6 +11,7 @@ from autonomous_betting_agent.local_access import require_streamlit_access
 from autonomous_betting_agent.row_normalizer import safe_text
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 from autonomous_betting_agent.storage import LocalStorage
+from autonomous_betting_agent.ui_i18n import localize_dataframe, localize_value
 
 st.set_page_config(page_title="Proof Center", layout="wide")
 LANG = render_app_sidebar("proof_center", language_key="proof_center_language")
@@ -153,7 +154,7 @@ with tabs[0]:
         public_rows = [row for row in rows if public_metric_allowed(row)]
         st.metric(t("public_safe_rows"), len(public_rows))
         st.metric(t("research_review_rows"), max(0, len(rows) - len(public_rows)))
-        st.dataframe(pd.DataFrame([{"scope": "row_level", **row_summary}, {"scope": "event_level", **event_summary}]), use_container_width=True)
+        st.dataframe(localize_dataframe(pd.DataFrame([{"scope": "row_level", **row_summary}, {"scope": "event_level", **event_summary}]), LANG), use_container_width=True)
     st.page_link("pages/public_proof_dashboard.py", label=t("legacy_dashboard"))
     st.page_link("pages/proof_control_center.py", label=t("legacy_control"))
 
@@ -168,23 +169,23 @@ with tabs[1]:
             st.error(t("no_proof_id"))
         else:
             row = matches[0]
-            ledger_type = classify_ledger_type(row)
+            ledger_type = localize_value(classify_ledger_type(row), LANG)
             future_locked = is_future_locked(row)
             public_safe = public_metric_allowed(row)
             c1, c2, c3, c4 = st.columns(4)
             c1.metric(t("ledger_type"), ledger_type)
             c2.metric(t("forward_locked"), t("yes") if future_locked else t("no"))
             c3.metric(t("public_safe"), t("yes") if public_safe else t("no"))
-            c4.metric(t("grade"), str(row.get("grade") or row.get("result") or "pending"))
+            c4.metric(t("grade"), localize_value(str(row.get("grade") or row.get("result") or "pending"), LANG))
             st.write({
-                "proof_id": row.get("proof_id"),
-                "proof_hash": row.get("proof_hash"),
-                "locked_at_utc": row.get("locked_at_utc"),
-                "event_start_time": row.get("event_start_time") or row.get("commence_time"),
-                "event_name": row.get("event_name") or row.get("event") or row.get("matchup"),
-                "prediction": row.get("prediction") or row.get("pick") or row.get("selection"),
-                "market": row.get("market") or row.get("market_type"),
-                "odds_audit_status": row.get("odds_audit_status") or row.get("audit_status"),
+                t("proof_id"): row.get("proof_id"),
+                "hash_prueba" if LANG == "es" else "proof_hash": row.get("proof_hash"),
+                "bloqueado_utc" if LANG == "es" else "locked_at_utc": row.get("locked_at_utc"),
+                "inicio_evento" if LANG == "es" else "event_start_time": row.get("event_start_time") or row.get("commence_time"),
+                "evento" if LANG == "es" else "event_name": row.get("event_name") or row.get("event") or row.get("matchup"),
+                "selección" if LANG == "es" else "prediction": row.get("prediction") or row.get("pick") or row.get("selection"),
+                "mercado" if LANG == "es" else "market": row.get("market") or row.get("market_type"),
+                "estado_auditoría_cuotas" if LANG == "es" else "odds_audit_status": row.get("odds_audit_status") or row.get("audit_status"),
             })
             st.info(build_client_safe_pick_summary(row))
 
@@ -204,24 +205,24 @@ with tabs[2]:
                 "grade": row.get("grade") or row.get("result") or "pending",
                 "event": row.get("event_name") or row.get("event") or row.get("matchup"),
             })
-        st.dataframe(pd.DataFrame(audit_rows), use_container_width=True)
+        st.dataframe(localize_dataframe(pd.DataFrame(audit_rows), LANG), use_container_width=True)
 
 with tabs[3]:
     st.subheader(t("row_vs_event"))
     left, right = st.columns(2)
     with left:
         st.markdown(f"**{t('row_summary')}**")
-        st.dataframe(pd.DataFrame([row_summary]), use_container_width=True)
+        st.dataframe(localize_dataframe(pd.DataFrame([row_summary]), LANG), use_container_width=True)
     with right:
         st.markdown(f"**{t('event_summary')}**")
-        st.dataframe(pd.DataFrame([event_summary]), use_container_width=True)
+        st.dataframe(localize_dataframe(pd.DataFrame([event_summary]), LANG), use_container_width=True)
     st.caption(t("event_caption"))
 
 with tabs[4]:
     st.subheader(t("local_proof_rows"))
     if rows:
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(localize_dataframe(df, LANG), use_container_width=True)
         st.download_button(t("download_rows"), df.to_csv(index=False).encode("utf-8"), file_name="local_proof_rows.csv", mime="text/csv")
     else:
         st.info(t("no_rows"))
