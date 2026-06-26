@@ -67,6 +67,7 @@ def test_matchup_weather_location_and_api_fb_are_compact():
     text = "\n".join(items)
 
     assert "Weather: 23.3°C, partly cloudy, wind 5.8 kph." in items
+    assert "Weather: 23.3°C, partly cloudy, wind 5.8 kph. Partly cloudy." not in text
     assert "Location: Philadelphia, PA, USA." in items
     assert "API-FB lookup checked; no fixture match." in items
     assert text.count("Partly cloudy") <= 1
