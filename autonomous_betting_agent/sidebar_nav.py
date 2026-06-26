@@ -7,7 +7,7 @@ from typing import Any
 APP_TAGLINE = 'Powered by Reparodynamics'
 APP_TAGLINE_ES = 'Impulsado por Reparodynamics'
 GLOBAL_LANGUAGE_KEY = 'aba_global_language'
-LANGUAGE_KEYS = ['global_language','signal_board_language','pro_predictor_language','odds_lock_pro_language','report_studio_language','proof_center_language','local_control_center_language','learning_memory_language','storage_diagnostics_language','reset_storage_language']
+LANGUAGE_KEYS = ['global_language','signal_board_language','pro_predictor_language','odds_lock_pro_language','report_studio_language','proof_center_language','local_control_center_language','learning_memory_language','reparodynamics_language','storage_diagnostics_language','reset_storage_language']
 TOOLS: tuple[tuple[str, str, str], ...] = (
     ('Signal Board', 'Panel de Señales', 'pages/signal_board.py'),
     ('Pro Predictor', 'Predictor Pro', 'pages/pro_predictor_volume.py'),
@@ -16,6 +16,7 @@ TOOLS: tuple[tuple[str, str, str], ...] = (
     ('Proof Center', 'Centro de Prueba', 'pages/proof_center.py'),
     ('Local Control Center', 'Centro de Control Local', 'pages/local_control_center.py'),
     ('Learning Memory', 'Memoria de Aprendizaje', 'pages/learn_memory_safe.py'),
+    ('Reparodynamics', 'Reparodynamics', 'pages/reparodynamics.py'),
     ('Storage Diagnostics', 'Diagnóstico de Almacenamiento', 'pages/storage_diagnostics.py'),
     ('Reset Storage', 'Reiniciar almacenamiento', 'pages/reset_storage.py'),
 )
