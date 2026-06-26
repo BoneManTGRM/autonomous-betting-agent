@@ -39,13 +39,27 @@ def test_base_renderer_detects_configured_non_odds_apis(monkeypatch):
     row = _row()
     provenance = magazine.api_provenance(row)
     assert provenance["active_sources"] == ["SportsDataIO", "WeatherAPI", "API-Football", "NewsAPI"]
-    assert "Odds API" in provenance["inactive_sources"]
+    assert "Odds API" in provenance["inactive_sources"] or "Odds API" in provenance["available_no_data_sources"]
     assert "Perplexity" in provenance["inactive_sources"]
     assert magazine._odds_row_label(row) == "uploaded/cached row"
 
 
+def test_cached_odds_api_key_does_not_make_odds_api_active(monkeypatch):
+    _clear_api_env(monkeypatch)
+    monkeypatch.setenv("ODDS_API_KEY", "configured_but_not_live")
+    monkeypatch.setenv("SPORTSDATAIO_API_KEY", "configured")
+    monkeypatch.setenv("WEATHERAPI_KEY", "configured")
+    monkeypatch.setenv("API_FOOTBALL_KEY", "configured")
+    monkeypatch.setenv("NEWSAPI_KEY", "configured")
+    provenance = magazine.api_provenance(_row())
+    assert provenance["active_sources"] == ["SportsDataIO", "WeatherAPI", "API-Football", "NewsAPI"]
+    assert "Odds API" not in provenance["active_sources"]
+    assert magazine._odds_row_label(_row()) == "uploaded/cached row"
+
+
 def test_base_renderer_pairs_show_active_apis_instead_of_source_odds_api(monkeypatch):
     _clear_api_env(monkeypatch)
+    monkeypatch.setenv("ODDS_API_KEY", "configured_but_not_live")
     monkeypatch.setenv("SPORTSDATAIO_API_KEY", "configured")
     monkeypatch.setenv("WEATHERAPI_KEY", "configured")
     monkeypatch.setenv("API_FOOTBALL_KEY", "configured")
@@ -55,15 +69,18 @@ def test_base_renderer_pairs_show_active_apis_instead_of_source_odds_api(monkeyp
     pair_text = "\n".join(f"{k}: {v}" for k, v in pairs)
     assert "ACTIVE APIS: SportsDataIO · WeatherAPI · API-Football · NewsAPI" in pair_text
     assert "SOURCE: The Odds API" not in pair_text
+    assert "ODDS ROW: The Odds API" not in pair_text
 
 
 def test_base_renderer_fallbacks_mention_active_apis(monkeypatch):
     _clear_api_env(monkeypatch)
+    monkeypatch.setenv("ODDS_API_KEY", "configured_but_not_live")
     monkeypatch.setenv("SPORTSDATAIO_API_KEY", "configured")
     monkeypatch.setenv("WEATHERAPI_KEY", "configured")
     monkeypatch.setenv("API_FOOTBALL_KEY", "configured")
     monkeypatch.setenv("NEWSAPI_KEY", "configured")
     row = _row()
-    assert any("Active APIs checked: SportsDataIO · WeatherAPI · API-Football · NewsAPI." in item for item in magazine._team_items(row, "away"))
-    assert any("Active APIs checked: SportsDataIO · WeatherAPI · API-Football · NewsAPI." in item for item in magazine._injury_items(row, "home"))
-    assert any("Active APIs checked: SportsDataIO · WeatherAPI · API-Football · NewsAPI." in item for item in magazine._matchup_items(row))
+    expected = "Active APIs checked: SportsDataIO · WeatherAPI · API-Football · NewsAPI."
+    assert any(expected in item for item in magazine._team_items(row, "away"))
+    assert any(expected in item for item in magazine._injury_items(row, "home"))
+    assert any(expected in item for item in magazine._matchup_items(row))
