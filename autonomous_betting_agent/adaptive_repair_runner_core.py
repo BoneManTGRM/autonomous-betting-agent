@@ -19,6 +19,7 @@ from autonomous_betting_agent.reparodynamics_doctrine import get_reparodynamics_
 from autonomous_betting_agent.security import file_sha256, redact_secret_text, sanitize_filename
 
 SIMULATION_RUNS_DIR = Path("data/adaptive_repair/simulation_runs")
+RUNNER_SCHEMA_VERSION = "adaptive_repair_runner_phase_3a_v2"
 MIN_RYE_SAMPLE_SIZE = 30
 MIN_SHADOW_SAMPLE_SIZE = 30
 MIN_READY_QUALITY_SCORE = 70.0
@@ -43,6 +44,24 @@ FALSE_FLAGS = {
 
 
 @dataclass
+class SourceFileResult:
+    path: str
+    available: bool
+    row_count: int = 0
+    error: str = ""
+    source_hash: str = ""
+
+    def summary(self) -> dict[str, Any]:
+        return {
+            "path": redact_text(self.path),
+            "available": self.available,
+            "row_count": self.row_count,
+            "error": redact_text(self.error),
+            "source_hash": self.source_hash,
+        }
+
+
+@dataclass
 class SourceScanResult:
     name: str
     available: bool
@@ -50,10 +69,19 @@ class SourceScanResult:
     error: str = ""
     source_hash: str = ""
     source_path: str = ""
+    file_results: list[SourceFileResult] = field(default_factory=list)
 
     @property
     def row_count(self) -> int:
         return len(self.rows)
+
+    @property
+    def loaded_files(self) -> int:
+        return sum(1 for item in self.file_results if item.available)
+
+    @property
+    def failed_files(self) -> int:
+        return sum(1 for item in self.file_results if item.error)
 
     def summary(self) -> dict[str, Any]:
         return {
@@ -63,6 +91,9 @@ class SourceScanResult:
             "error": redact_text(self.error),
             "source_hash": self.source_hash,
             "source_path": redact_text(self.source_path),
+            "loaded_files": self.loaded_files,
+            "failed_files": self.failed_files,
+            "file_results": [item.summary() for item in self.file_results],
         }
 
 
@@ -70,6 +101,7 @@ class SourceScanResult:
 class AdaptiveRunnerReport:
     run_id: str
     timestamp: str
+    schema_version: str
     safety_state: dict[str, str]
     reparodynamics_doctrine: dict[str, Any]
     sources: list[dict[str, Any]]
@@ -77,6 +109,7 @@ class AdaptiveRunnerReport:
     diagnostics: dict[str, Any]
     pattern_candidates: list[dict[str, Any]]
     readiness: dict[str, Any]
+    activation_gate: dict[str, Any]
     unavailable_data: list[str]
     production_repairs_active: bool = False
     shadow_mode_active: bool = False
@@ -124,6 +157,11 @@ def create_run_id(*, timestamp: str, source_hash: str, total_rows: int, source_c
     return hashlib.sha256(basis.encode("utf-8")).hexdigest()[:20]
 
 
+def stable_candidate_id(*, pattern_name: str, pattern_type: str, source: str, affected_scope: str, evidence: str) -> str:
+    basis = "|".join([pattern_name, pattern_type, source, affected_scope, redact_text(evidence)])
+    return hashlib.sha256(basis.encode("utf-8")).hexdigest()[:16]
+
+
 def safe_csv_rows_from_path(path: Path) -> list[dict[str, Any]]:
     return read_csv_rows(path)
 
@@ -138,18 +176,39 @@ def load_proof_ledger_rows() -> list[dict[str, Any]]:
 
 
 def _load_csvs_from_dir(directory: Path, label: str, max_files: int = 20) -> list[dict[str, Any]]:
+    return _load_csv_dir_source(directory, label, max_files=max_files).rows
+
+
+def _load_csv_dir_source(directory: Path, label: str, max_files: int = 20) -> SourceScanResult:
     rows: list[dict[str, Any]] = []
+    file_results: list[SourceFileResult] = []
     if not directory.exists():
-        return rows
+        return SourceScanResult(name=label, available=False, rows=[], source_path=str(directory))
     for path in sorted(directory.glob("*.csv"))[:max_files]:
         if "adaptive_repair" in str(path):
             continue
-        for row in safe_csv_rows_from_path(path):
-            row = dict(row)
-            row.setdefault("source_file", str(path))
-            row.setdefault("source_label", label)
-            rows.append(row)
-    return rows
+        try:
+            file_rows = safe_csv_rows_from_path(path)
+            file_hash = hash_rows(file_rows) if file_rows else ""
+            file_results.append(SourceFileResult(path=str(path), available=bool(file_rows), row_count=len(file_rows), source_hash=file_hash))
+            for row in file_rows:
+                clean = dict(row)
+                clean.setdefault("source_file", str(path))
+                clean.setdefault("source_label", label)
+                rows.append(clean)
+        except Exception as exc:
+            file_results.append(SourceFileResult(path=str(path), available=False, row_count=0, error=f"{type(exc).__name__}: {exc}"))
+    source_hash = hash_rows(rows) if rows else ""
+    errors = [item.error for item in file_results if item.error]
+    return SourceScanResult(
+        name=label,
+        available=bool(rows),
+        rows=rows,
+        error="; ".join(errors[:3]),
+        source_hash=source_hash,
+        source_path=str(directory),
+        file_results=file_results,
+    )
 
 
 def _scan_source(name: str, loader: Callable[[], list[dict[str, Any]]], *, source_path: str = "") -> SourceScanResult:
@@ -162,14 +221,13 @@ def _scan_source(name: str, loader: Callable[[], list[dict[str, Any]]], *, sourc
 
 
 def system_source_adapters(data_root: Path = Path("data")) -> list[SourceScanResult]:
-    adapters: list[tuple[str, Callable[[], list[dict[str, Any]]], str]] = [
-        ("local_proof_ledger", load_proof_ledger_rows, "proof_ledger.load_ledger"),
-        ("local_csv_ledgers", lambda: _load_csvs_from_dir(data_root / "ledgers", "local_csv_ledgers"), str(data_root / "ledgers")),
-        ("graded_prediction_exports", lambda: _load_csvs_from_dir(data_root / "exports", "graded_prediction_exports"), str(data_root / "exports")),
-        ("learning_page_compatible_rows", lambda: _load_csvs_from_dir(data_root / "learning", "learning_page_compatible_rows"), str(data_root / "learning")),
-        ("public_proof_dashboard_rows", lambda: _load_csvs_from_dir(data_root / "proof_dashboard", "public_proof_dashboard_rows"), str(data_root / "proof_dashboard")),
+    return [
+        _scan_source("local_proof_ledger", load_proof_ledger_rows, source_path="proof_ledger.load_ledger"),
+        _load_csv_dir_source(data_root / "ledgers", "local_csv_ledgers"),
+        _load_csv_dir_source(data_root / "exports", "graded_prediction_exports"),
+        _load_csv_dir_source(data_root / "learning", "learning_page_compatible_rows"),
+        _load_csv_dir_source(data_root / "proof_dashboard", "public_proof_dashboard_rows"),
     ]
-    return [_scan_source(name, loader, source_path=path) for name, loader, path in adapters]
 
 
 def uploaded_source(name: str, rows: Sequence[Mapping[str, Any]], *, source_hash: str = "", source_path: str = "") -> SourceScanResult:
@@ -183,6 +241,9 @@ def source_summary(sources: Sequence[SourceScanResult]) -> dict[str, Any]:
         "available_sources": [source.name for source in sources if source.available],
         "unavailable_sources": [source.name for source in sources if not source.available and not source.error],
         "failed_sources": [source.name for source in sources if source.error],
+        "sources_with_warnings": [source.name for source in sources if source.available and source.error],
+        "loaded_files": sum(source.loaded_files for source in sources),
+        "failed_files": sum(source.failed_files for source in sources),
         "total_rows_found": sum(source.row_count for source in sources),
     }
 
@@ -259,8 +320,38 @@ def readiness_report(diagnostics: Mapping[str, Any], unavailable_data: Sequence[
     }
 
 
+def activation_gate_report(diagnostics: Mapping[str, Any], readiness: Mapping[str, Any]) -> dict[str, Any]:
+    base = diagnostics.get("base_report", {})
+    row_level = base.get("row_level", {})
+    quality = diagnostics.get("data_quality", {})
+    coverage = diagnostics.get("column_coverage", {})
+    duplicate_count = int(base.get("duplicate_event_names", 0) or 0) + int(diagnostics.get("duplicate_rows", 0) or 0)
+    mixed_count = int(diagnostics.get("mixed_outcome_events", 0) or 0)
+    completed = int(row_level.get("completed", 0) or 0)
+    score = float(quality.get("score", 0.0) or 0.0)
+    checks = {
+        "minimum_sample_size_met": completed >= MIN_RYE_SAMPLE_SIZE,
+        "data_quality_sufficient": score >= MIN_READY_QUALITY_SCORE,
+        "odds_coverage_sufficient": _coverage_ready(coverage, "odds"),
+        "closing_odds_coverage_sufficient": _coverage_ready(coverage, "closing_odds"),
+        "confidence_coverage_sufficient": _coverage_ready(coverage, "confidence"),
+        "duplicate_risk_acceptable": duplicate_count == 0,
+        "mixed_event_risk_acceptable": mixed_count == 0,
+        "rye_ready": bool(readiness.get("RYE_ready")),
+        "shadow_mode_ready": bool(readiness.get("Shadow_Mode_ready")),
+        "live_repair_allowed": False,
+    }
+    return {
+        "gate_status": "CLOSED",
+        "repair_activation": "OFF",
+        "reason": "Phase 3A is observation-only. Readiness checks do not activate live behavior.",
+        "checks": checks,
+    }
+
+
 def _pattern(name: str, pattern_type: str, source: str, sample_size: int, affected_scope: str, evidence: str) -> dict[str, Any]:
     return {
+        "candidate_id": stable_candidate_id(pattern_name=name, pattern_type=pattern_type, source=source, affected_scope=affected_scope, evidence=evidence),
         "pattern_name": name,
         "pattern_type": pattern_type,
         "source": source,
@@ -301,10 +392,11 @@ def build_runner_report(rows: Sequence[Mapping[str, Any]], *, sources: Sequence[
     unavailable = column_limitations(diagnostics.get("column_coverage", {}))
     candidates = pattern_candidates({}, diagnostics, unavailable)
     readiness = readiness_report(diagnostics, unavailable)
+    activation_gate = activation_gate_report(diagnostics, readiness)
     timestamp = timestamp or utc_timestamp()
     source_hash = hash_rows(safe_rows)
     run_id = create_run_id(timestamp=timestamp, source_hash=source_hash, total_rows=len(safe_rows), source_count=len(sources))
-    return AdaptiveRunnerReport(run_id=run_id, timestamp=timestamp, safety_state=dict(SAFETY_STATE), reparodynamics_doctrine=get_reparodynamics_doctrine(), sources=[source.summary() for source in sources], source_summary=source_summary(sources), diagnostics=diagnostics, pattern_candidates=candidates, readiness=readiness, unavailable_data=list(unavailable), **FALSE_FLAGS)
+    return AdaptiveRunnerReport(run_id=run_id, timestamp=timestamp, schema_version=RUNNER_SCHEMA_VERSION, safety_state=dict(SAFETY_STATE), reparodynamics_doctrine=get_reparodynamics_doctrine(), sources=[source.summary() for source in sources], source_summary=source_summary(sources), diagnostics=diagnostics, pattern_candidates=candidates, readiness=readiness, activation_gate=activation_gate, unavailable_data=list(unavailable), **FALSE_FLAGS)
 
 
 def run_adaptive_repair_scan(*, uploaded_rows: Sequence[Mapping[str, Any]] | None = None, uploaded_filename: str = "uploaded_rows.csv", uploaded_bytes: bytes | None = None, include_system_sources: bool = True, data_root: Path = Path("data"), timestamp: str | None = None) -> AdaptiveRunnerReport:
@@ -337,10 +429,11 @@ def runner_report_to_markdown(report: AdaptiveRunnerReport) -> str:
     diagnostics.multi_market_events = int(data["diagnostics"].get("multi_market_events", 0) or 0)
     diagnostics.same_event_groups = data["diagnostics"].get("same_event_groups", [])
     diagnostics.missing_required_field_examples = data["diagnostics"].get("missing_required_field_examples", [])
-    lines = [f"# ABA Adaptive Repair Runner Scan: {data['run_id']}", "", f"Timestamp: {data['timestamp']}", "", "## Safety state", ""]
+    lines = [f"# ABA Adaptive Repair Runner Scan: {data['run_id']}", "", f"Timestamp: {data['timestamp']}", f"Schema version: {data['schema_version']}", "", "## Safety state", ""]
     lines.extend(f"- {key}: {value}" for key, value in data["safety_state"].items())
     lines.extend(["", "## Reparodynamics Doctrine", "", str(doctrine.get("motive", "Reparodynamics is the operating doctrine of measured self-repair.")), ""])
     lines.extend([
+        f"- Doctrine version: {doctrine.get('doctrine_version', 'phase_3a_v1')}",
         f"- Current phase: {doctrine.get('current_phase', 'Phase 3A')}",
         f"- Operating mode: {doctrine.get('operating_mode', 'Observation-only')}",
         f"- Repair philosophy: {doctrine.get('repair_philosophy', 'Evidence-gated targeted repair')}",
@@ -356,12 +449,33 @@ def runner_report_to_markdown(report: AdaptiveRunnerReport) -> str:
         "- Shadow Mode readiness is not Shadow Mode activation.",
         "- ABA observes first and repairs later.",
         f"- Final rule: {doctrine.get('final_rule', 'ABA should learn automatically, but repair cautiously.')}",
-        "", "## Source summary", "",
+        "", "## Activation gate", "",
     ])
+    gate = data["activation_gate"]
+    lines.extend([f"- Gate status: {gate['gate_status']}", f"- Repair activation: {gate['repair_activation']}", f"- Reason: {gate['reason']}"])
+    for key, value in gate.get("checks", {}).items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Source summary", ""])
     summary = data["source_summary"]
-    lines.extend([f"- Sources scanned: {summary['sources_scanned']}", f"- Available sources: {', '.join(summary['available_sources']) or 'none'}", f"- Unavailable sources: {', '.join(summary['unavailable_sources']) or 'none'}", f"- Failed sources: {', '.join(summary['failed_sources']) or 'none'}", f"- Total rows found: {summary['total_rows_found']}", "", "## Phase 0-2 diagnostics", "", diagnostics_to_markdown(diagnostics).strip(), "", "## RYE / Shadow readiness", "", f"- RYE_ready: {data['readiness']['RYE_ready']}", f"- Shadow_Mode_ready: {data['readiness']['Shadow_Mode_ready']}", f"- RYE activation: {data['readiness']['RYE_activation']}", f"- Shadow Mode activation: {data['readiness']['Shadow_Mode_activation']}", f"- Reasons not ready: {', '.join(data['readiness']['reason_not_ready']) or 'none'}", "", "## Watchlist-only pattern candidates", ""])
+    lines.extend([
+        f"- Sources scanned: {summary['sources_scanned']}",
+        f"- Available sources: {', '.join(summary['available_sources']) or 'none'}",
+        f"- Unavailable sources: {', '.join(summary['unavailable_sources']) or 'none'}",
+        f"- Failed sources: {', '.join(summary['failed_sources']) or 'none'}",
+        f"- Sources with warnings: {', '.join(summary.get('sources_with_warnings', [])) or 'none'}",
+        f"- Loaded files: {summary.get('loaded_files', 0)}",
+        f"- Failed files: {summary.get('failed_files', 0)}",
+        f"- Total rows found: {summary['total_rows_found']}",
+        "", "## Phase 0-2 diagnostics", "", diagnostics_to_markdown(diagnostics).strip(), "", "## RYE / Shadow readiness", "",
+        f"- RYE_ready: {data['readiness']['RYE_ready']}",
+        f"- Shadow_Mode_ready: {data['readiness']['Shadow_Mode_ready']}",
+        f"- RYE activation: {data['readiness']['RYE_activation']}",
+        f"- Shadow Mode activation: {data['readiness']['Shadow_Mode_activation']}",
+        f"- Reasons not ready: {', '.join(data['readiness']['reason_not_ready']) or 'none'}",
+        "", "## Watchlist-only pattern candidates", "",
+    ])
     if data["pattern_candidates"]:
-        lines.extend(f"- {item['pattern_name']}: {item['evidence_summary']}" for item in data["pattern_candidates"])
+        lines.extend(f"- {item['candidate_id']} | {item['pattern_name']}: {item['evidence_summary']}" for item in data["pattern_candidates"])
     else:
         lines.append("- none")
     lines.extend(["", "## Safety conclusion", "", "No live repairs, live confidence changes, live filters, bet-tier changes, bankroll changes, or production model mutations were activated."])
@@ -386,7 +500,7 @@ def list_recent_simulation_runs(output_dir: Path = SIMULATION_RUNS_DIR, limit: i
     for path in sorted(output_dir.glob("*/simulation_report.json"), key=lambda item: item.stat().st_mtime, reverse=True)[:limit]:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            runs.append({"run_id": data.get("run_id", path.parent.name), "timestamp": data.get("timestamp", ""), "json_path": str(path), "markdown_path": str(path.with_name("simulation_report.md")), "total_rows": data.get("source_summary", {}).get("total_rows_found", 0), "data_quality_score": data.get("diagnostics", {}).get("data_quality", {}).get("score")})
+            runs.append({"run_id": data.get("run_id", path.parent.name), "timestamp": data.get("timestamp", ""), "json_path": str(path), "markdown_path": str(path.with_name("simulation_report.md")), "schema_version": data.get("schema_version", ""), "total_rows": data.get("source_summary", {}).get("total_rows_found", 0), "data_quality_score": data.get("diagnostics", {}).get("data_quality", {}).get("score")})
         except Exception:
             continue
     return runs
