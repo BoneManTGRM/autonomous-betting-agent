@@ -17,7 +17,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 PAGE_WIDTH = 1080
 PAGE_HEIGHT = 1620
 MAGAZINE_STYLE_VERSION = "premium_v4_reference_compact_no_market_v8_base_api_data"
-NO_MARKET_EXPORT_VERSION = "no_market_metric_v6"
+NO_MARKET_EXPORT_VERSION = "no_market_metric_v8"
 SAFETY_FOOTER = "No guarantees. Bet responsibly. This analysis is for informational purposes only."
 TEAM_DATA_FALLBACK = "Data not returned for this event"
 PLAYER_DATA_FALLBACK = "Player data not returned for this event"
@@ -75,6 +75,14 @@ ES = {
     "ODDS ROW": "FILA DE MOMIO", "ACTIVE APIS": "APIS ACTIVAS", "INACTIVE": "INACTIVAS",
     "VOLUME OK": "VOLUMEN OK", "VOLUME_OK": "VOLUMEN OK", "PLAY SMALL": "JUGAR PEQUEÑO",
     "PLAY STANDARD": "JUGAR NORMAL", "NO PLAY": "NO JUGAR",
+    'Negative edge at current price.': 'Ventaja negativa con la cuota actual.',
+    'Do not play unless price improves.': 'No jugar salvo que la cuota mejore.',
+    'Recheck odds and key news.': 'Revisar cuotas y noticias clave.',
+    'Do not chain negative-EV picks.': 'No encadenar señales con VE negativo.',
+    'Avoid parlays unless edge turns positive.': 'Evitar parlays salvo que la ventaja sea positiva.',
+    'Recheck price before including.': 'Revisar la cuota antes de incluir.',
+    'Price check required before entry.': 'Revisar cuota antes de entrar.',
+    'Use only if the line remains playable and key news does not change.': 'Revisar si mejora la línea.',
     SAFETY_FOOTER: "No garantizamos resultados. Apuesta responsablemente. Este análisis es solo informativo.",
 }
 COUNTRY_ES = {"iraq": "Irak", "iran": "Irán", "france": "Francia", "germany": "Alemania", "ecuador": "Ecuador", "australia": "Australia", "paraguay": "Paraguay", "netherlands": "Países Bajos", "tunisia": "Túnez", "egypt": "Egipto", "ivory coast": "Costa de Marfil", "curacao": "Curazao", "curaçao": "Curazao", "senegal": "Senegal", "norway": "Noruega", "algeria": "Argelia", "jordan": "Jordania", "argentina": "Argentina", "spain": "España", "england": "Inglaterra", "mexico": "México", "italy": "Italia", "brazil": "Brasil", "portugal": "Portugal", "canada": "Canadá", "japan": "Japón", "south korea": "Corea del Sur", "new zealand": "Nueva Zelanda", "czech republic": "República Checa"}
@@ -901,6 +909,8 @@ def render_full_pick_magazine_page(pick: Any, background_image: Any = None, repo
 
     action = _tr(_clean(_get(pick, "final_decision", "agent_decision", "recommendation", "consumer_action", "recommended_action", default="PLAY STANDARD"), True), lang)
     explanation = _tr(_get(pick, "final_explanation", "action_reason", "recommendation_reason", "decision_reasons", default="Use only if the line remains playable and key news does not change."), lang)
+    if lang == "es" and ("nueva información" in explanation or len(explanation) > 72):
+        explanation = "Revisar si mejora la línea."
     fy, fb = 1374, 1532
     draw.rounded_rectangle((20, fy, 1060, fb), radius=14, fill=BLACK, outline=RED, width=3)
     draw.rectangle((20, fy, 250, fb), fill=RED)
@@ -916,7 +926,7 @@ def render_full_pick_magazine_page(pick: Any, background_image: Any = None, repo
     footer = _tr(SAFETY_FOOTER, lang)
     font = _fit(footer, PAGE_WIDTH - 190, 16, 10, False)
     draw.text((42, footer_y + 10), _ellipsize_to_width(draw, footer, font, PAGE_WIDTH - 190), font=font, fill=CREAM)
-    version = "v6 no-market"
+    version = "v8 no-market"
     vfont = _font(14, True)
     vbox = draw.textbbox((0, 0), version, font=vfont)
     draw.text((1048 - (vbox[2] - vbox[0]), footer_y + 10), version, font=vfont, fill=GREEN)
