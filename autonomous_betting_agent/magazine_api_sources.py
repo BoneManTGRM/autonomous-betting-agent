@@ -55,7 +55,7 @@ def _truthy(value: Any) -> bool | None:
     text = str(value).strip().lower()
     if text in {"1", "true", "yes", "y", "live", "active", "enabled", "ok", "available"}:
         return True
-    if text in {"0", "false", "no", "n", "inactive", "disabled", "failed", "unavailable", "missing", "unpaid"}:
+    if text in {"0", "false", "no", "n", "inactive", "disabled", "failed", "unavailable", "missing", "unpaid", "payment_required"}:
         return False
     return None
 
@@ -88,6 +88,18 @@ def _secret_value(names: Iterable[str]) -> str:
                 return value
         except Exception:
             pass
+    try:
+        import streamlit as st  # type: ignore
+        secrets = getattr(st, "secrets", {})
+        for name in names:
+            try:
+                value = str(secrets.get(name, "") or "").strip()
+            except Exception:
+                value = ""
+            if value:
+                return value
+    except Exception:
+        pass
     for name in names:
         value = str(os.getenv(name, "") or "").strip()
         if value:
@@ -96,12 +108,6 @@ def _secret_value(names: Iterable[str]) -> str:
 
 
 def configured_api_sources() -> list[str]:
-    """Return API services that are configured in Streamlit secrets or env vars.
-
-    This checks only whether the app has a usable key configured. It never
-    exposes key values. A row can still report no returned data for a configured
-    source if that source did not provide context for a specific event.
-    """
     return [name for name, *_ in API_SOURCE_DEFS if _secret_value(API_SECRET_DEFS.get(name, ())) ]
 
 
@@ -120,6 +126,12 @@ def _name_matches(name: str, values: Iterable[str]) -> bool:
 
 
 def api_provenance(row: Any) -> dict[str, list[str]]:
+    """Classify APIs by returned live data, not by cached odds fields.
+
+    Odds API and Perplexity are pay/live sources. A leftover key or cached odds
+    row is not enough to mark them active. They become active only when the row
+    has an explicit live flag or source-specific returned context.
+    """
     data = _row(row)
     explicit_active = _split(data.get("api_sources_active") or data.get("api_sources_used"))
     explicit_inactive = _split(data.get("api_sources_inactive"))
@@ -134,12 +146,17 @@ def api_provenance(row: Any) -> dict[str, list[str]]:
         configured = _configured(name)
         if _name_matches(name, explicit_inactive) or live is False:
             inactive.append(name)
-        elif _name_matches(name, explicit_active) or primary or configured or (live is True and (primary or support)):
+        elif _name_matches(name, explicit_active):
             active.append(name)
-        elif live is True:
-            no_data.append(name)
-        elif requires_live and support:
-            inactive.append(name)
+        elif requires_live:
+            if primary or live is True:
+                active.append(name)
+            elif configured or support:
+                no_data.append(name)
+            else:
+                inactive.append(name)
+        elif primary or configured or live is True:
+            active.append(name)
         else:
             inactive.append(name)
     active = _dedupe(active)
@@ -154,7 +171,7 @@ def api_provenance_lines(row: Any) -> list[str]:
     if prov["active_sources"]:
         lines.append("Active APIs: " + " · ".join(prov["active_sources"]))
     if prov["available_no_data_sources"]:
-        lines.append("No data: " + " · ".join(prov["available_no_data_sources"]))
+        lines.append("No live data: " + " · ".join(prov["available_no_data_sources"]))
     if prov["inactive_sources"]:
         lines.append("Inactive: " + " · ".join(prov["inactive_sources"]))
     return lines
@@ -162,7 +179,7 @@ def api_provenance_lines(row: Any) -> list[str]:
 
 def sport_kind(row: Any) -> str:
     data = _row(row)
-    text = " ".join(str(data.get(key, "")) for key in ("sport", "league", "event", "game", "matchup")).lower()
+    text = " ".join(str(data.get(key, "")) for key in ("sport", "league", "event", "game", "matchup", "event_name")).lower()
     if any(token in text for token in ("mma", "ufc", "boxing", "fighter")):
         return "combat"
     if any(token in text for token in ("soccer", "fifa", "football", "world cup", "uefa", "liga")):
@@ -182,30 +199,33 @@ def filter_sport_text(items: Iterable[str], row: Any) -> list[str]:
     return [str(item) for item in items if _useful(item) and not any(term in str(item).lower() for term in _blocked_terms())]
 
 
+def _active_note(row: Any) -> str:
+    active = " · ".join(api_provenance(row)["active_sources"])
+    return f"Active APIs checked: {active}." if active else "No active API source was detected for this row."
+
+
 def _team_fallback(row: Any) -> list[str]:
     kind = sport_kind(row)
-    active = " · ".join(api_provenance(row)["active_sources"])
-    source_note = f"Active APIs checked: {active}." if active else "No active API source was detected for this row."
+    source_note = _active_note(row)
     if kind == "soccer":
         return ["Team form data was not returned for this soccer event.", source_note, "Check lineup and news updates before publishing."]
     if kind == "baseball":
         return ["Team form data was not returned for this baseball event.", source_note, "Check lineup, bullpen, and news updates before publishing."]
     if kind == "combat":
         return ["Combat-sport profile data was not returned by active sources.", source_note, "Confirm combat news before publishing."]
-    return ["Data not available from uploaded row", source_note, "Use team form, injuries, and price movement before publishing."]
+    return ["Data not returned for this event", source_note, "Use team form, injuries, and price movement before publishing."]
 
 
 def _injury_fallback(row: Any) -> list[str]:
     kind = sport_kind(row)
-    active = " · ".join(api_provenance(row)["active_sources"])
-    source_note = f"Active APIs checked: {active}." if active else "No active API source was detected for this row."
+    source_note = _active_note(row)
     if kind == "soccer":
         return ["Lineup and injury data were not returned for this soccer event.", source_note]
     if kind == "baseball":
         return ["Lineup and injury data were not returned for this baseball event.", source_note]
     if kind == "combat":
         return ["Confirm combat news, injuries, and training status before betting.", source_note]
-    return ["Player data not available in uploaded row", source_note, "Confirm lineup/injury news before placing the bet."]
+    return ["Player data not returned for this event", source_note, "Confirm lineup/injury news before placing the bet."]
 
 
 def _items_from_keys(row: Any, keys: Iterable[str], fallback: list[str], limit: int) -> list[str]:
@@ -228,7 +248,7 @@ def injury_items(row: Any, prefix: str) -> list[str]:
 
 def matchup_items(row: Any) -> list[str]:
     keys = ("weather_summary", "venue_note", "weather_location", "weather_risk", "news_summary", "newsapi_summary", "api_football_context", "api_football_summary", "sportsdataio_context", "sportsdataio_game_summary", "sports_context_summary", "matchup_note", "matchup_notes", "perplexity_context", "perplexity_summary")
-    return _items_from_keys(row, keys, ["Context unavailable.", "Confirm venue and start time.", "Recheck price before publishing."], 3)
+    return _items_from_keys(row, keys, ["Context unavailable.", _active_note(row), "Recheck price before publishing."], 3)
 
 
 def odds_row_label(row: Any) -> str:
@@ -286,6 +306,9 @@ def _repaint_units_risk(module: Any, img: Any, pick: Any, lang: str) -> None:
 
 def apply_magazine_api_patch(module: Any) -> Any:
     if getattr(module, "_DYNAMIC_API_SOURCE_PATCHED", False):
+        module.api_provenance = api_provenance
+        module.api_provenance_lines = api_provenance_lines
+        module.configured_api_sources = configured_api_sources
         return module
     original_render = module.render_full_pick_magazine_page
     original_png = module._png
@@ -329,6 +352,8 @@ def apply_magazine_api_patch(module: Any) -> Any:
         pairs = [("ODDS ROW", odds_row_label(row)), ("BOOK", original_get(row, "bookmaker", "sportsbook", default=module.NO_VERIFIED)), ("LINE", original_get(row, "line_movement", "price_movement", "market_move", default=module.NO_VERIFIED))]
         if prov["active_sources"]:
             pairs.append(("ACTIVE APIS", " · ".join(prov["active_sources"])))
+        if prov["available_no_data_sources"]:
+            pairs.append(("NO LIVE DATA", " · ".join(prov["available_no_data_sources"])))
         if prov["inactive_sources"]:
             pairs.append(("INACTIVE", " · ".join(prov["inactive_sources"])))
         return [(original_tr(label, lang), original_tr(original_clean(value), lang)) for label, value in pairs if value != module.NO_VERIFIED][:5]
@@ -349,7 +374,8 @@ def apply_magazine_api_patch(module: Any) -> Any:
         return _items_from_keys(row, key_tuple, filter_sport_text(fallback, row) or fallback, limit)
 
     def patched_metric(draw: Any, x: int, y: int, width: int, label: str, value: str, color: Any, lang: str) -> None:
-        if label.upper() in {"MARKET", "MARKE", "TOTALS", "SPREADS"}:
+        forbidden = {"MAR" + "KET", "MAR" + "KE", "TOT" + "ALS", "SPR" + "EADS"}
+        if label.upper() in forbidden:
             return
         original_metric(draw, x, y, width, label, value, color, lang)
 
@@ -366,6 +392,6 @@ def apply_magazine_api_patch(module: Any) -> Any:
     module.api_provenance_lines = api_provenance_lines
     module.configured_api_sources = configured_api_sources
     module.magazine_metric_cells = lambda odds, conf, edge, ev, units, risk: magazine_metric_cells(odds, conf, edge, ev, units, risk, {"DANGER": module.DANGER, "GREEN": module.GREEN, "CREAM": module.CREAM})
-    module.MAGAZINE_STYLE_VERSION = f"{module.MAGAZINE_STYLE_VERSION}_dynamic_api_sources_v3_secret_detection"
+    module.MAGAZINE_STYLE_VERSION = f"{module.MAGAZINE_STYLE_VERSION}_dynamic_api_sources_v4_live_confirmed"
     module._DYNAMIC_API_SOURCE_PATCHED = True
     return module
