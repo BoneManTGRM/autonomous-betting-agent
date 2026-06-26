@@ -49,6 +49,11 @@ def test_matchup_items_show_weather_location_and_lookup_label() -> None:
 def test_pro_bettor_pairs_use_short_api_labels() -> None:
     class Module:
         NO_VERIFIED = "Data unavailable"
+        MAGAZINE_STYLE_VERSION = "test"
+        DANGER = "danger"
+        GREEN = "green"
+        CREAM = "cream"
+        BLACK = "black"
 
         @staticmethod
         def _tr(value, lang):
@@ -64,6 +69,14 @@ def test_pro_bettor_pairs_use_short_api_labels() -> None:
                 if row.get(key):
                     return row[key]
             return default
+
+        @staticmethod
+        def _lang(row, language=None):
+            return language or "en"
+
+        @staticmethod
+        def _fmt(value, _kind):
+            return str(value)
 
         @staticmethod
         def render_full_pick_magazine_page(row, *args, **kwargs):
