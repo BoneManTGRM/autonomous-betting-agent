@@ -23,6 +23,14 @@ API_SECRET_DEFS = {
     "Perplexity": ("PERPLEXITY_API_KEY", "PPLX_API_KEY"),
     "NewsAPI": ("NEWSAPI_KEY", "NEWS_API_KEY"),
 }
+API_SHORT_LABELS = {
+    "Odds API": "Odds",
+    "SportsDataIO": "SDIO",
+    "WeatherAPI": "Weather",
+    "API-Football": "API-FB",
+    "Perplexity": "PPLX",
+    "NewsAPI": "News",
+}
 _CURRENT_ROW: Mapping[str, Any] | None = None
 
 
@@ -71,12 +79,20 @@ def _dedupe(items: Iterable[str]) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
     for item in items:
-        text = str(item).strip()
+        text = re.sub(r"\s+", " ", str(item or "").strip())
         key = text.lower().replace("the ", "")
         if text and key not in seen:
             out.append(text)
             seen.add(key)
     return out
+
+
+def short_api_name(name: str) -> str:
+    return API_SHORT_LABELS.get(str(name), str(name))
+
+
+def short_api_list(names: Iterable[str]) -> str:
+    return " · ".join(short_api_name(name) for name in names)
 
 
 def _secret_value(names: Iterable[str]) -> str:
@@ -164,11 +180,11 @@ def api_provenance_lines(row: Any) -> list[str]:
     prov = api_provenance(row)
     lines: list[str] = []
     if prov["active_sources"]:
-        lines.append("Active APIs: " + " · ".join(prov["active_sources"]))
+        lines.append("Active: " + short_api_list(prov["active_sources"]))
     if prov["available_no_data_sources"]:
-        lines.append("No live data: " + " · ".join(prov["available_no_data_sources"]))
+        lines.append("No live: " + short_api_list(prov["available_no_data_sources"]))
     if prov["inactive_sources"]:
-        lines.append("Inactive: " + " · ".join(prov["inactive_sources"]))
+        lines.append("Inactive: " + short_api_list(prov["inactive_sources"]))
     return lines
 
 
@@ -222,8 +238,8 @@ def _candidate_location(row: Any) -> str:
         return explicit
     joined = " | ".join(str(_row(row).get(key, "")) for key in ("venue_note", "matchup_note", "matchup_notes", "sports_context_summary", "weather_summary", "event", "event_name"))
     patterns = (
-        r"([A-Z][A-Za-z .'-]+,\s*[A-Z][A-Za-z .'-]+,\s*(?:USA|United States|Mexico|Canada))",
-        r"([A-Z][A-Za-z .'-]+,\s*(?:USA|United States|Mexico|Canada))",
+        r"([A-Z][A-Za-z .'-]+,\s*[A-Z][A-Za-z .'-]+,\s*(?:USA|United States|United States of America|Mexico|Canada))",
+        r"([A-Z][A-Za-z .'-]+,\s*(?:USA|United States|United States of America|Mexico|Canada))",
     )
     for pattern in patterns:
         match = re.search(pattern, joined)
@@ -239,99 +255,130 @@ def _news_query(row: Any) -> str:
     return " ".join(part for part in (away, home, sport, terms) if part).strip()
 
 
+def _api_fb_lookup_text(row: Any, matched: bool) -> str:
+    away, home = _teams(row)
+    if matched:
+        return f"API-FB team lookup matched {away} / {home}; fixture not verified."
+    return f"API-FB team lookup checked {away} / {home}; no match returned."
+
+
+def _compact_weather_message(text: str) -> list[str]:
+    value = re.sub(r"\s+", " ", text).strip()
+    if value.startswith("WeatherAPI:"):
+        body = value.split(":", 1)[1].strip()
+        location = ""
+        if " Location: " in body:
+            body, location = body.split(" Location: ", 1)
+            location = location.rstrip(".")
+        bits = [part.strip(" .") for part in body.split(";") if part.strip(" .")]
+        weather = "Weather: " + ", ".join(bits[:3]) + "."
+        out = [weather]
+        if location:
+            out.append("Location: " + location + ".")
+        return out
+    if value.startswith("WeatherAPI checked"):
+        location = value.replace("WeatherAPI checked", "", 1).split(";", 1)[0].strip()
+        return [f"Weather checked: {location}; no live payload."] if location else ["Weather checked; no live payload."]
+    if value.startswith("WeatherAPI configured"):
+        return ["Weather checked; no venue/location in row."]
+    return [value]
+
+
+def compact_api_message(text: Any, row: Any, area: str = "team") -> list[str]:
+    value = re.sub(r"\s+", " ", str(text or "").strip())
+    if not value:
+        return []
+    low = value.lower()
+    if low.startswith("sportsdataio configured"):
+        return ["SDIO checked; no provider event ID in row."]
+    if low.startswith("api-football:"):
+        return [_api_fb_lookup_text(row, matched=True)]
+    if low.startswith("api-football checked"):
+        return [_api_fb_lookup_text(row, matched=False)]
+    if low.startswith("weatherapi"):
+        return _compact_weather_message(value)
+    if low.startswith("newsapi:"):
+        title = value.split(":", 1)[1].strip().split(" | ", 1)[0]
+        title = title[:88].rstrip() + ("…" if len(title) > 88 else "")
+        return ["News: " + title] if title else ["News checked; no recent matching articles."]
+    if low.startswith("newsapi checked") or low.startswith("news checked"):
+        if area in {"team", "injury"} or "injury" in low or "lineup" in low:
+            return ["News checked; no injury/lineup headline."]
+        return ["News checked; no recent matching articles."]
+    return [value]
+
+
+def _compact_items(items: Iterable[str], row: Any, area: str, limit: int) -> list[str]:
+    compacted: list[str] = []
+    for item in items:
+        compacted.extend(compact_api_message(item, row, area))
+    return _dedupe(filter_sport_text(compacted, row))[:limit]
+
+
 def _api_checked_details(row: Any, area: str) -> list[str]:
     prov = api_provenance(row)
     active = set(prov["active_sources"])
     kind = sport_kind(row)
-    away, home = _teams(row)
     details: list[str] = []
     if "SportsDataIO" in active:
-        if kind == "soccer":
-            details.append("SportsDataIO configured; soccer team/event endpoint data was not available for this row.")
-        elif kind == "baseball":
-            details.append("SportsDataIO configured; MLB provider id was not available for this row.")
-        elif kind == "combat":
-            details.append("SportsDataIO configured; combat event endpoint data was not available for this row.")
-        else:
-            details.append("SportsDataIO configured; event-specific provider id was not available for this row.")
+        details.append("SDIO checked; no provider event ID in row.")
     if "API-Football" in active and kind == "soccer":
-        details.append(f"API-Football checked team lookup for {away} and {home}; no matching team payload was returned.")
+        details.append(_api_fb_lookup_text(row, matched=False))
     if "WeatherAPI" in active and area == "matchup":
         location = _candidate_location(row)
         if location:
-            details.append(f"WeatherAPI checked {location}; live weather payload was not returned.")
+            details.append(f"Weather checked: {location}; no live payload.")
         else:
-            details.append("WeatherAPI configured; no venue/location field was available for this row.")
+            details.append("Weather checked; no venue/location in row.")
     if "NewsAPI" in active:
-        query = _news_query(row)
-        if area == "injury":
-            details.append(f"NewsAPI checked '{query}'; no injury/lineup headline was returned.")
+        if area in {"team", "injury"}:
+            details.append("News checked; no injury/lineup headline.")
         else:
-            details.append(f"NewsAPI checked '{query}'; no recent matching articles were returned.")
+            details.append("News checked; no recent matching articles.")
     return _dedupe(details)
 
 
 def _active_note(row: Any) -> str:
-    active = " · ".join(api_provenance(row)["active_sources"])
+    active = short_api_list(api_provenance(row)["active_sources"])
     return f"Active APIs checked: {active}." if active else "No active API source was detected for this row."
 
 
 def _team_fallback(row: Any) -> list[str]:
     checked = _api_checked_details(row, "team")
-    if checked:
-        return checked + ["Team form payload was not returned by active APIs."]
-    kind = sport_kind(row)
-    source_note = _active_note(row)
-    if kind == "soccer":
-        return ["Team form data was not returned for this soccer event.", source_note, "Check lineup and news updates before publishing."]
-    if kind == "baseball":
-        return ["Team form data was not returned for this baseball event.", source_note, "Check lineup, bullpen, and news updates before publishing."]
-    if kind == "combat":
-        return ["Combat-sport profile data was not returned by active sources.", source_note, "Confirm combat news before publishing."]
-    return ["Data not returned for this event", source_note, "Use team form, injuries, and price movement before publishing."]
+    return (checked + ["Team form payload not returned by active APIs."]) if checked else ["Data not returned for this event", _active_note(row)]
 
 
 def _injury_fallback(row: Any) -> list[str]:
     checked = _api_checked_details(row, "injury")
-    if checked:
-        return checked + ["Lineup/injury payload was not returned by active APIs."]
-    kind = sport_kind(row)
-    source_note = _active_note(row)
-    if kind == "soccer":
-        return ["Lineup and injury data were not returned for this soccer event.", source_note]
-    if kind == "baseball":
-        return ["Lineup and injury data were not returned for this baseball event.", source_note]
-    if kind == "combat":
-        return ["Confirm combat news, injuries, and training status before betting.", source_note]
-    return ["Player data not returned for this event", source_note, "Confirm lineup/injury news before placing the bet."]
+    return (checked + ["Lineup payload not returned by active APIs."]) if checked else ["Player data not returned for this event", _active_note(row)]
 
 
 def _matchup_fallback(row: Any) -> list[str]:
     checked = _api_checked_details(row, "matchup")
-    return (checked or ["Context unavailable.", _active_note(row), "Recheck price before publishing."])
+    return checked or ["Context unavailable.", _active_note(row), "Recheck price before publishing."]
 
 
-def _items_from_keys(row: Any, keys: Iterable[str], fallback: list[str], limit: int) -> list[str]:
+def _items_from_keys(row: Any, keys: Iterable[str], fallback: list[str], limit: int, area: str = "team") -> list[str]:
     data = _row(row)
     out: list[str] = []
     for key in keys:
         out += _split(data.get(key))
-    return (filter_sport_text(out, row) or fallback)[:limit]
+    return _compact_items(out, row, area, limit) or _compact_items(fallback, row, area, limit)
 
 
 def team_items(row: Any, side: str = "") -> list[str]:
     keys = (f"{side}_team_form", f"{side}_team_record", f"{side}_recent_results", f"{side}_sportsdataio_team_summary", f"{side}_api_football_team_summary", "sportsdataio_team_summary", "sportsdataio_context", "api_football_team_summary", "api_football_context", "team_stats_summary", "home_team_form", "away_team_form", "recent_results", "news_summary", "newsapi_summary")
-    return _items_from_keys(row, keys, _team_fallback(row), 4)
+    return _items_from_keys(row, keys, _team_fallback(row), 4, "team")
 
 
 def injury_items(row: Any, prefix: str) -> list[str]:
     keys = (f"{prefix}_injuries", f"{prefix}_injury_report", f"{prefix}_lineup_status", f"{prefix}_player_notes", "injury_report", "injuries", "lineup_status", "key_players", "home_injuries", "away_injuries", "sportsdataio_injury_summary", "api_football_lineup_summary", "news_injury_summary")
-    return _items_from_keys(row, keys, _injury_fallback(row), 3)
+    return _items_from_keys(row, keys, _injury_fallback(row), 3, "injury")
 
 
 def matchup_items(row: Any) -> list[str]:
-    keys = ("weather_summary", "weather_location", "weather_risk", "news_summary", "newsapi_summary", "api_football_context", "api_football_summary", "sportsdataio_context", "sportsdataio_game_summary", "perplexity_context", "perplexity_summary")
-    return _items_from_keys(row, keys, _matchup_fallback(row), 3)
+    keys = ("weather_summary", "api_football_summary", "api_football_context", "newsapi_summary", "news_summary", "sportsdataio_game_summary", "sportsdataio_context", "perplexity_context", "perplexity_summary")
+    return _items_from_keys(row, keys, _matchup_fallback(row), 3, "matchup")
 
 
 def odds_row_label(row: Any) -> str:
@@ -395,12 +442,16 @@ def apply_magazine_api_patch(module: Any) -> Any:
         module.team_items = team_items
         module.injury_items = injury_items
         module.matchup_items = matchup_items
+        module._team_items = team_items
+        module._injury_items = injury_items
+        module._matchup_items = matchup_items
         return module
     original_render = module.render_full_pick_magazine_page
     original_png = module._png
     original_badge = module._badge
     original_bullets = module._bullets_auto
     original_fit = module._fit
+    original_metric = module._metric
     original_tr = module._tr
     original_clean = module._clean
     original_get = module._get
@@ -436,17 +487,17 @@ def apply_magazine_api_patch(module: Any) -> Any:
         prov = api_provenance(row)
         pairs = [("ODDS ROW", odds_row_label(row)), ("BOOK", original_get(row, "bookmaker", "sportsbook", default=module.NO_VERIFIED)), ("LINE", original_get(row, "line_movement", "price_movement", "market_move", default=module.NO_VERIFIED))]
         if prov["active_sources"]:
-            pairs.append(("ACTIVE APIS", " · ".join(prov["active_sources"])))
+            pairs.append(("ACTIVE", short_api_list(prov["active_sources"])))
         if prov["available_no_data_sources"]:
-            pairs.append(("NO LIVE DATA", " · ".join(prov["available_no_data_sources"])))
+            pairs.append(("NO LIVE", short_api_list(prov["available_no_data_sources"])))
         if prov["inactive_sources"]:
-            pairs.append(("INACTIVE", " · ".join(prov["inactive_sources"])))
+            pairs.append(("INACTIVE", short_api_list(prov["inactive_sources"])))
         return [(original_tr(label, lang), original_tr(original_clean(value), lang)) for label, value in pairs if value != module.NO_VERIFIED][:5]
 
-    def patched_team_snapshot(img: Any, draw: Any, x: int, y: int, width: int, team: str, color: Any, lang: str) -> None:
-        row = _CURRENT_ROW or {}
+    def patched_team_snapshot(img: Any, draw: Any, x: int, y: int, width: int, team: str, color: Any, lang: str, row_arg: Any | None = None, side_arg: str = "", *extra: Any, **kwargs: Any) -> None:
+        row = _row(row_arg) if row_arg else (_CURRENT_ROW or {})
         away, _home = original_teams(row)
-        side = "away" if str(team).strip().lower() == str(away).strip().lower() else "home"
+        side = side_arg or ("away" if str(team).strip().lower() == str(away).strip().lower() else "home")
         label = original_team_label(team, lang)
         compatible_badge(img, draw, label, x, y, 50, 50, color)
         draw.text((x + 66, y + 9), label.upper(), font=original_fit(label.upper(), width - 70, 25, 7, True), fill=color)
@@ -456,15 +507,16 @@ def apply_magazine_api_patch(module: Any) -> Any:
         key_tuple = tuple(keys)
         if "matchup_note" in key_tuple or "sports_context_summary" in key_tuple:
             return matchup_items(row)[:limit]
-        return _items_from_keys(row, key_tuple, filter_sport_text(fallback, row) or fallback, limit)
+        if "injury_report" in key_tuple or "lineup_status" in key_tuple:
+            return injury_items(row, "away")[:limit]
+        return _items_from_keys(row, key_tuple, fallback, limit, "team")
 
     def patched_metric(draw: Any, x: int, y: int, width: int, label: str, value: str, color: Any, lang: str) -> None:
         forbidden = {"MAR" + "KET", "MAR" + "KE", "TOT" + "ALS", "SPR" + "EADS"}
         if label.upper() in forbidden:
             return
-        module._metric.__wrapped__(draw, x, y, width, label, value, color, lang) if hasattr(module._metric, "__wrapped__") else original_metric(draw, x, y, width, label, value, color, lang)
+        original_metric(draw, x, y, width, label, value, color, lang)
 
-    original_metric = module._metric
     module.render_full_pick_magazine_page = patched_render
     module.render_full_pick_magazine_page_png = patched_png
     module._fit = patched_fit
@@ -480,7 +532,10 @@ def apply_magazine_api_patch(module: Any) -> Any:
     module.team_items = team_items
     module.injury_items = injury_items
     module.matchup_items = matchup_items
+    module._team_items = team_items
+    module._injury_items = injury_items
+    module._matchup_items = matchup_items
     module.magazine_metric_cells = lambda odds, conf, edge, ev, units, risk: magazine_metric_cells(odds, conf, edge, ev, units, risk, {"DANGER": module.DANGER, "GREEN": module.GREEN, "CREAM": module.CREAM})
-    module.MAGAZINE_STYLE_VERSION = f"{module.MAGAZINE_STYLE_VERSION}_dynamic_api_sources_v5_checked_details"
+    module.MAGAZINE_STYLE_VERSION = f"{module.MAGAZINE_STYLE_VERSION}_dynamic_api_sources_v6_compact_display"
     module._DYNAMIC_API_SOURCE_PATCHED = True
     return module
