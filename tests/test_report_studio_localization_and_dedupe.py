@@ -1,3 +1,5 @@
+# Covers Report Studio localization and duplicate-page protection.
+
 import pandas as pd
 
 from autonomous_betting_agent.report_product_layer import event_text, value_text
