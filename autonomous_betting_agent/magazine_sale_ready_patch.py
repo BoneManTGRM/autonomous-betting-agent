@@ -42,19 +42,24 @@ def _num(row: Any, *keys: str) -> float | None:
     return None
 
 
-def sale_ready_recommendation(row: Any) -> tuple[str, str, bool]:
+def _edge_state(row: Any) -> tuple[float | None, float | None, bool, bool]:
     edge = _num(row, "model_market_edge", "edge")
     ev = _num(row, "expected_value_per_unit", "profit_expected_value", "expected_value", "ev")
-    requested = _get(row, "final_decision", "agent_decision", "recommendation", "consumer_action", "recommended_action", default="").strip().upper()
     negative = (edge is not None and edge < 0) or (ev is not None and ev < 0)
     missing = edge is None or ev is None
+    return edge, ev, negative, missing
+
+
+def sale_ready_recommendation(row: Any) -> tuple[str, str, bool]:
+    edge, ev, negative, missing = _edge_state(row)
+    requested = _get(row, "final_decision", "agent_decision", "recommendation", "consumer_action", "recommended_action", default="").strip().upper()
     if negative:
         return "WATCHLIST", "Do not play at the listed price. Recheck only if the line improves or new information changes the edge.", False
     if missing:
         return "RESEARCH ONLY", "Critical price or edge context is missing. Confirm the line, injury/news context, and value before publishing.", False
     if requested and not any(word in requested for word in ("PLAY", "BET", "SMALL", "STANDARD")):
         return requested, _get(row, "final_explanation", "action_reason", "recommendation_reason", default="Use only after independent review."), False
-    if edge < 0.015 or ev < 0.02:
+    if edge is not None and ev is not None and (edge < 0.015 or ev < 0.02):
         return "PLAY SMALL", "Thin positive edge. Use only if the line remains playable and key news does not change.", True
     return "PLAY", "Positive edge confirmed at the listed price. Recheck odds and key news before entry.", True
 
@@ -134,7 +139,12 @@ def _clean_matchup_item(text: str) -> str:
 
 
 def sale_ready_team_items(row: Any, side: str = "") -> list[str]:
-    return _dedupe(_clean_provider_item(item) for item in api_sources.team_items(row, side))[:3]
+    items = [_clean_provider_item(item) for item in api_sources.team_items(row, side)]
+    compact = {
+        "No SDIO event ID returned.": "No SDIO event ID.",
+        "API-FB lookup checked; no fixture match.": "API-FB: no fixture match.",
+    }
+    return _dedupe(compact.get(item, item) for item in items)[:3]
 
 
 def sale_ready_injury_items(row: Any, prefix: str = "") -> list[str]:
@@ -147,8 +157,55 @@ def sale_ready_matchup_items(row: Any) -> list[str]:
     return _dedupe(items)[:3]
 
 
+def sale_ready_risk_items(row: Any) -> list[str]:
+    _edge, _ev, negative, missing = _edge_state(row)
+    if negative:
+        return [
+            "Negative edge at current price.",
+            "Do not play unless price improves.",
+            "Recheck odds and key news.",
+        ]
+    if missing:
+        return [
+            "Research only: edge incomplete.",
+            "Confirm price before entry.",
+            "Wait for verified context.",
+        ]
+    risk = _get(row, "risk", "risk_level", "risk_label", "profit_guard_status", default="VOLUME OK").replace("_", " ").upper()
+    return [
+        f"Risk status: {risk}.",
+        "Recheck odds before entry.",
+        "Avoid if key news changes.",
+    ]
+
+
+def sale_ready_chain_items(row: Any) -> list[str]:
+    _edge, _ev, negative, missing = _edge_state(row)
+    if negative:
+        return [
+            "Do not chain negative-EV picks.",
+            "Avoid parlays unless edge turns positive.",
+            "Recheck price before including.",
+        ]
+    if missing:
+        return [
+            "Do not combine unverified picks.",
+            "Wait for complete edge data.",
+            "Straight-only review.",
+        ]
+    return [
+        "Straight only: research.",
+        "Do not combine without verification.",
+        "Wait for better context or price.",
+    ]
+
+
 def _items_from_context(row: Any, keys: Iterable[str], fallback: list[str], limit: int) -> list[str]:
     key_tuple = tuple(keys)
+    if any(key in key_tuple for key in ("risk", "risk_level", "risk_label", "profit_guard_status", "risk_note", "risk_notes")):
+        return sale_ready_risk_items(row)[:limit]
+    if any(key in key_tuple for key in ("chain_note", "chain_notes", "parlay_note", "parlay_notes", "combo_note")):
+        return sale_ready_chain_items(row)[:limit]
     if "matchup_note" in key_tuple or "sports_context_summary" in key_tuple or "weather_summary" in key_tuple:
         return sale_ready_matchup_items(row)[:limit]
     if "injury_report" in key_tuple or "lineup_status" in key_tuple or "key_players" in key_tuple:
@@ -211,13 +268,25 @@ def _patch_visuals(module: Any) -> None:
     def patched_bullets(draw: Any, x: int, y: int, items: list[str], width: int, height: int, color: Any, start: int = 22, minimum: int = 10, limit: int | None = None, lang: str = "en") -> None:
         compact_items = _dedupe(items)
         if callable(original_bullets):
-            original_bullets(draw, x, y, compact_items, width, height, color, start, max(minimum, 9), limit, lang)
+            original_bullets(draw, x, y, compact_items, width, height, color, start, max(minimum, 10), limit, lang)
 
     def repaint_evidence_strip(draw: Any) -> None:
         left_x, left_w = 20, 320
         draw.rectangle((left_x + 8, 1088, left_x + left_w - 8, 1120), fill=module.CREAM)
         draw.line((left_x + 12, 1088, left_x + left_w - 12, 1088), fill=module.BLACK + (135,), width=1)
         module._txt_auto(draw, left_x + 22, 1094, "Price check required before entry.", left_w - 44, 22, 13, 9, module.BLACK, True, 1)
+
+    def draw_guidance_body(draw: Any, box: tuple[int, int, int, int], items: list[str], color: Any) -> None:
+        draw.rectangle(box, fill=module.CREAM)
+        y = box[1] + 10
+        for item in items[:3]:
+            draw.ellipse((box[0] + 12, y + 5, box[0] + 24, y + 17), fill=color)
+            module._txt_auto(draw, box[0] + 32, y, item, box[2] - box[0] - 46, 30, 15, 11, module.TEXT, False, 2)
+            y += 30
+
+    def repaint_bottom_guidance(draw: Any, row: Any) -> None:
+        draw_guidance_body(draw, (34, 1234, 326, 1348), sale_ready_risk_items(row), module.RED)
+        draw_guidance_body(draw, (724, 1234, 1050, 1348), sale_ready_chain_items(row), module.BLUE)
 
     def repaint_final(img: Any, row: Any, lang: str) -> None:
         draw = module.ImageDraw.Draw(img, "RGBA")
@@ -241,6 +310,7 @@ def _patch_visuals(module: Any) -> None:
         lang = module._lang(pick, kwargs.get("language") if "language" in kwargs else (args[10] if len(args) >= 11 else None))
         draw = module.ImageDraw.Draw(img, "RGBA")
         repaint_evidence_strip(draw)
+        repaint_bottom_guidance(draw, pick)
         repaint_final(img, pick, lang)
         return img
 
@@ -262,13 +332,17 @@ def apply_magazine_sale_ready_patch(module: Any) -> Any:
     module.team_items = sale_ready_team_items
     module.injury_items = sale_ready_injury_items
     module.matchup_items = sale_ready_matchup_items
+    module.risk_items = sale_ready_risk_items
+    module.chain_items = sale_ready_chain_items
     module._team_items = sale_ready_team_items
     module._injury_items = sale_ready_injury_items
     module._matchup_items = sale_ready_matchup_items
+    module._risk_items = sale_ready_risk_items
+    module._chain_items = sale_ready_chain_items
     module._items = _items_from_context
     module.sale_ready_recommendation = sale_ready_recommendation
     _patch_visuals(module)
-    if not str(getattr(module, "MAGAZINE_STYLE_VERSION", "")).endswith("_sale_ready_layout_v2"):
-        module.MAGAZINE_STYLE_VERSION = f"{module.MAGAZINE_STYLE_VERSION}_sale_ready_layout_v2"
+    if not str(getattr(module, "MAGAZINE_STYLE_VERSION", "")).endswith("_sale_ready_risk_chain_v1"):
+        module.MAGAZINE_STYLE_VERSION = f"{module.MAGAZINE_STYLE_VERSION}_sale_ready_risk_chain_v1"
     setattr(module, _APPLIED_FLAG, True)
     return module
