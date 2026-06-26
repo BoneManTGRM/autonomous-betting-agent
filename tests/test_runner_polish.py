@@ -35,6 +35,7 @@ def test_partial_csv_source_failure_is_reported_without_losing_good_rows(tmp_pat
     assert source["loaded_files"] == 1
     assert source["failed_files"] == 1
     assert source["file_results"]
+    assert "local_csv_ledgers" not in report.source_summary["failed_sources"]
     assert "local_csv_ledgers" in report.source_summary["sources_with_warnings"]
     assert report.source_summary["loaded_files"] == 1
     assert report.source_summary["failed_files"] == 1
