@@ -23,6 +23,8 @@ COUNTRY_ES = {
     "tunisia": "Túnez",
     "egypt": "Egipto",
     "ivory coast": "Costa de Marfil",
+    "cote d'ivoire": "Costa de Marfil",
+    "côte d’ivoire": "Costa de Marfil",
     "curacao": "Curazao",
     "curaçao": "Curazao",
     "senegal": "Senegal",
@@ -34,6 +36,7 @@ COUNTRY_ES = {
     "spain": "España",
     "england": "Inglaterra",
     "united states": "Estados Unidos",
+    "united states of america": "Estados Unidos",
     "usa": "Estados Unidos",
     "us": "Estados Unidos",
     "mexico": "México",
@@ -43,6 +46,36 @@ COUNTRY_ES = {
     "japan": "Japón",
     "south korea": "Corea del Sur",
     "new zealand": "Nueva Zelanda",
+    "switzerland": "Suiza",
+    "belgium": "Bélgica",
+    "czech republic": "República Checa",
+    "czechia": "Chequia",
+    "cape verde": "Cabo Verde",
+    "saudi arabia": "Arabia Saudita",
+    "morocco": "Marruecos",
+    "croatia": "Croacia",
+    "poland": "Polonia",
+    "denmark": "Dinamarca",
+    "sweden": "Suecia",
+    "finland": "Finlandia",
+    "china": "China",
+    "turkey": "Turquía",
+    "uruguay": "Uruguay",
+    "colombia": "Colombia",
+    "chile": "Chile",
+    "peru": "Perú",
+    "venezuela": "Venezuela",
+    "bolivia": "Bolivia",
+    "panama": "Panamá",
+    "costa rica": "Costa Rica",
+    "jamaica": "Jamaica",
+    "qatar": "Catar",
+    "uae": "Emiratos Árabes Unidos",
+    "united arab emirates": "Emiratos Árabes Unidos",
+    "south africa": "Sudáfrica",
+    "nigeria": "Nigeria",
+    "ghana": "Ghana",
+    "cameroon": "Camerún",
 }
 
 SPORT_ES = {
@@ -195,10 +228,11 @@ def event_text(value: Any, language: str = "en") -> str:
     text = safe_text(value)
     if lang_code(language) != "es" or not text:
         return text
-    for sep in (" at ", " vs ", " VS ", " v ", " @ "):
-        if sep in text:
-            first, second = text.split(sep, 1)
-            return f"{team_label(first, 'es')} vs {team_label(second, 'es')}"
+    match = re.search(r"\s+(?:at|vs|v|@)\s+", text, flags=re.I)
+    if match:
+        first = text[: match.start()].strip()
+        second = text[match.end() :].strip()
+        return f"{team_label(first, 'es')} vs {team_label(second, 'es')}"
     return value_text(text, "es")
 
 
