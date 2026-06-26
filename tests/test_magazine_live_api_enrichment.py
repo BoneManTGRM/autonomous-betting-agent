@@ -43,11 +43,11 @@ def test_weather_news_api_football_and_sportsdataio_checked_details(monkeypatch)
     row = enrich.enrich_row_with_live_api_data(_row())
     row_text = "\n".join(str(value) for value in row.values())
 
-    assert "WeatherAPI: Clear" in row["weather_summary"]
-    assert "NewsAPI checked" in row["newsapi_summary"]
-    assert "no recent matching articles" in row["newsapi_summary"]
-    assert "API-Football checked team lookup for Iraq and France" in row["api_football_summary"]
-    assert "SportsDataIO configured" in row["sportsdataio_context"]
+    assert "Weather: Clear, 22.0°C, wind 8.0 kph." in row["weather_summary"]
+    assert "News checked; no recent matching articles." == row["newsapi_summary"]
+    assert "News checked; no injury/lineup headline." == row["news_injury_summary"]
+    assert "API-FB team lookup checked Iraq / France; no match returned." == row["api_football_summary"]
+    assert "SDIO checked; no provider event ID in row." == row["sportsdataio_context"]
     assert row["_live_api_enriched"] == enrich.ENRICHMENT_VERSION
     assert "weather-secret" not in row_text
     assert "news-secret" not in row_text
@@ -55,11 +55,25 @@ def test_weather_news_api_football_and_sportsdataio_checked_details(monkeypatch)
     assert "sdio-secret" not in row_text
 
 
+def test_api_football_lookup_is_not_labeled_as_verified_fixture(monkeypatch) -> None:
+    _clear(monkeypatch)
+    monkeypatch.setenv("API_FOOTBALL_KEY", "football-secret")
+
+    def fake_request(url, *, headers=None, cache_key=None, timeout=3.0):
+        team = "Iraq" if cache_key and "iraq" in cache_key[1] else "France"
+        return {"response": [{"team": {"name": team}}]}
+
+    monkeypatch.setattr(enrich, "_request_json", fake_request)
+    row = enrich.enrich_row_with_live_api_data(_row())
+    assert row["api_football_summary"] == "API-FB team lookup matched Iraq / France; fixture not verified."
+    assert "verified fixture" not in row["api_football_summary"].lower()
+
+
 def test_weather_checked_message_when_location_is_missing(monkeypatch) -> None:
     _clear(monkeypatch)
     monkeypatch.setenv("WEATHERAPI_KEY", "weather-secret")
     row = enrich.enrich_row_with_live_api_data({"event_name": "Iraq vs France", "sport": "FIFA WORLD CUP"})
-    assert row["weather_summary"] == "WeatherAPI configured; no venue/location field was available for this row."
+    assert row["weather_summary"] == "Weather checked; no venue/location in row."
 
 
 def test_install_wraps_magazine_renderer_without_network(monkeypatch) -> None:
