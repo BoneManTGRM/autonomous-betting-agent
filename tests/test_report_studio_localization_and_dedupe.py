@@ -33,9 +33,30 @@ def test_report_studio_cards_dedupe_duplicate_event_pick_market_rows():
             "event": "Iraq vs France",
             "prediction": "Iraq",
             "market": "team_total",
+            "line_point": 2.5,
             "odds_source": "verified_book",
             "decimal_price": 2.1,
             "model_probability": 0.52,
+        },
+        {
+            "sport": "Soccer",
+            "event": "Iraq vs France",
+            "prediction": "Iraq",
+            "market": "spread",
+            "line_point": 1.5,
+            "odds_source": "verified_book",
+            "decimal_price": 1.91,
+            "model_probability": 0.54,
+        },
+        {
+            "sport": "Soccer",
+            "event": "Iraq vs France",
+            "prediction": "Iraq",
+            "market": "spread",
+            "line_point": 2.5,
+            "odds_source": "verified_book",
+            "decimal_price": 1.91,
+            "model_probability": 0.54,
         },
     ]
 
@@ -44,6 +65,7 @@ def test_report_studio_cards_dedupe_duplicate_event_pick_market_rows():
         filters=ReportStudioFilters(language="es", include_sports_context=False),
     )
 
-    assert len(cards) == 2
-    assert cards["public_event"].tolist() == ["Irak vs Francia", "Irak vs Francia"]
-    assert set(cards["market"].tolist()) == {"moneyline", "team_total"}
+    assert len(cards) == 4
+    assert cards["public_event"].tolist() == ["Irak vs Francia"] * 4
+    assert set(cards["market"].tolist()) == {"moneyline", "team_total", "spread"}
+    assert cards[cards["market"].eq("spread")]["line_point"].tolist() == [1.5, 2.5]
