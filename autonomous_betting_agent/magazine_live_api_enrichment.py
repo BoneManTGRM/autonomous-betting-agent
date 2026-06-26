@@ -256,8 +256,48 @@ def enrich_row_with_live_api_data(row_like: Any) -> dict[str, Any]:
     return row
 
 
+def _report_page_event_key(row: Mapping[str, Any]) -> str:
+    event = _get(row, "public_event", "event", "event_name", "matchup")
+    if not event:
+        return ""
+    key = event.lower()
+    key = re.sub(r"\s+(?:at|vs|v|@)\s+", " vs ", key)
+    key = re.sub(r"[^a-z0-9áéíóúüñ]+", " ", key)
+    return re.sub(r"\s+", " ", key).strip()
+
+
+def _report_page_priority(row: Mapping[str, Any]) -> int:
+    lane = _get(row, "report_lane", "report_lane_v2").lower()
+    action = _get(row, "consumer_action", "recommended_action", "public_action").lower()
+    publish_ready = _get(row, "official_publish_ready", "publish_ready").lower() in {"true", "1", "yes"}
+    return 0 if publish_ready or "official" in action or lane in {"best_play", "best play"} else 1
+
+
+def _dedupe_report_page_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not any(_get(row, "report_language", "language", "lang") for row in rows):
+        return rows
+    unique: list[dict[str, Any]] = []
+    index_by_key: dict[str, int] = {}
+    priority_by_key: dict[str, int] = {}
+    for row in rows:
+        key = _report_page_event_key(row)
+        if not key:
+            unique.append(row)
+            continue
+        priority = _report_page_priority(row)
+        if key in index_by_key:
+            if priority < priority_by_key[key]:
+                unique[index_by_key[key]] = row
+                priority_by_key[key] = priority
+            continue
+        index_by_key[key] = len(unique)
+        priority_by_key[key] = priority
+        unique.append(row)
+    return unique
+
+
 def enrich_rows_with_live_api_data(rows: list[Any] | tuple[Any, ...]) -> list[dict[str, Any]]:
-    return [enrich_row_with_live_api_data(row) for row in rows]
+    return _dedupe_report_page_rows([enrich_row_with_live_api_data(row) for row in rows])
 
 
 def install(module: Any) -> Any:
