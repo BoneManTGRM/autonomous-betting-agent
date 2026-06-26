@@ -2,7 +2,8 @@
 
 **Powered by Reparodynamics**
 
-[![CI](https://github.com/BoneManTGRM/autonomous-betting-agent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/BoneManTGRM/autonomous-betting-agent/actions/workflows/ci.yml)
+[![CI](https://github.com/BoneManTGRM/autonomous-betting-assistant/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/BoneManTGRM/autonomous-betting-assistant/actions/workflows/ci.yml)
+[![Sale Readiness](https://github.com/BoneManTGRM/autonomous-betting-assistant/actions/workflows/sale-readiness.yml/badge.svg?branch=main)](https://github.com/BoneManTGRM/autonomous-betting-assistant/actions/workflows/sale-readiness.yml)
 
 ABA Signal Pro is a proprietary, source-available sports analytics, proof-tracking, and prediction-review platform. It is designed to help operators scan data, review signals, lock proof rows, grade results, export reports, and evaluate calibration.
 
@@ -15,6 +16,18 @@ Pro Predictor Volume -> Odds Lock Pro -> LocalStorage -> Public Proof Dashboard 
 ```
 
 No cloud server is required for the local-first layer. The app keeps no-login mode as the default and can run locally or on Streamlit.
+
+## Current sale-readiness gates
+
+The repository now has two buyer-facing validation layers:
+
+1. `CI` runs compile checks and the full unit-test suite.
+2. `Sale Readiness` runs the critical magazine/report checks required for the API-enriched Full Pick Magazine flow:
+   - `python -m py_compile autonomous_betting_agent/magazine_api_sources.py autonomous_betting_agent/magazine_live_api_enrichment.py pages/report_studio.py`
+   - `python -m pytest -q tests/test_magazine_api_sources_display.py`
+   - `python -m scripts.report_studio_regression_check`
+   - `python scripts/magazine_autofit_stress_test.py`
+   - `python -m pytest -q`
 
 ## Main tools and pages
 
@@ -179,10 +192,13 @@ Do not put real API keys, private access codes, secrets, screenshots with secret
 
 ```bash
 python -m compileall autonomous_betting_agent pages tests
-python -m pytest tests -q
+python -m py_compile autonomous_betting_agent/magazine_api_sources.py autonomous_betting_agent/magazine_live_api_enrichment.py pages/report_studio.py
+python -m scripts.report_studio_regression_check
+python scripts/magazine_autofit_stress_test.py
+python -m pytest -q
 ```
 
-GitHub Actions runs the CI workflow on pushes to `main`, pull requests, and manual `workflow_dispatch` runs.
+GitHub Actions runs the CI workflow and the sale-readiness workflow on pushes to `main`, pull requests, and manual `workflow_dispatch` runs.
 
 ## More details
 
@@ -190,6 +206,7 @@ See:
 
 ```text
 docs/local_first_upgrade_status.md
+docs/sale_readiness_checklist.md
 ```
 
 ## Limitations
