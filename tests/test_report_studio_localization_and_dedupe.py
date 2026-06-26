@@ -22,7 +22,7 @@ def test_core_value_text_translates_report_market_labels():
     assert value_text("totals", "es") == "totales"
     assert value_text("spreads", "es") == "hándicaps"
     assert value_text("moneyline", "es") == "ganador"
-    assert value_text("Price Watch / Research", "es") == "Seguimiento de precio / investigación"
+    assert value_text("Price Watch / Research", "es") == "Seguimiento de momio / investigación"
     assert value_text("Full magazine analysis", "es") == "Análisis completo de revista"
 
 
