@@ -11,6 +11,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+DOCTRINE_SCHEMA_VERSION = "reparodynamics_phase_3a_v1"
+
 REPARODYNAMICS_MOTIVE = (
     "Reparodynamics is the operating doctrine of measured self-repair. "
     "ABA observes first, diagnoses carefully, preserves data integrity, "
@@ -57,6 +59,7 @@ FORBIDDEN_PHASE_3A_ACTIONS = [
 ]
 
 PHASE_3A_DOCTRINE: dict[str, Any] = {
+    "doctrine_version": DOCTRINE_SCHEMA_VERSION,
     "motive": REPARODYNAMICS_MOTIVE,
     "current_phase": "Phase 3A",
     "operating_mode": "Observation-only",
