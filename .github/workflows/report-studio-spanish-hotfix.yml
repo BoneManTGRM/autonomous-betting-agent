@@ -1,0 +1,61 @@
+name: Report Studio Spanish Hotfix
+
+on:
+  push:
+    paths:
+      - '.github/workflows/report-studio-spanish-hotfix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch Report Studio renderer install
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('pages/report_studio.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              'from autonomous_betting_agent.magazine_live_api_enrichment import ENRICHMENT_VERSION, enrich_rows_with_live_api_data',
+              'from autonomous_betting_agent.magazine_live_api_enrichment import ENRICHMENT_VERSION, enrich_rows_with_live_api_data, install as install_magazine_live_api_enrichment',
+          )
+          text = text.replace(
+              'magazine_book_export = importlib.reload(magazine_book_export)',
+              'magazine_book_export = install_magazine_live_api_enrichment(importlib.reload(magazine_book_export))',
+          )
+          text = text.replace(
+              'NO_MARKET_EXPORT_VERSION = "no_market_metric_v6"',
+              'NO_MARKET_EXPORT_VERSION = "no_market_metric_v7"',
+          )
+          text = text.replace(
+              'return magazine_book_export.render_full_pick_magazine_page_png(rowd, background_image=background_bytes, report_name=report_name, page_number=page_number, total_pages=total_pages)',
+              'return magazine_book_export.render_full_pick_magazine_page_png(rowd, background_image=background_bytes, report_name=report_name, page_number=page_number, total_pages=total_pages, language=language)',
+          )
+          text = text.replace(
+              '"png": magazine_book_export.render_full_magazine_book_png(cards_as_rows, background_image=background_bytes, report_name=full_magazine_book_name),',
+              '"png": magazine_book_export.render_full_magazine_book_png(cards_as_rows, background_image=background_bytes, report_name=full_magazine_book_name, language=LANG),',
+          )
+          text = text.replace(
+              '"pdf": magazine_book_export.render_full_magazine_book_pdf(cards_as_rows, background_image=background_bytes, report_name=full_magazine_book_name),',
+              '"pdf": magazine_book_export.render_full_magazine_book_pdf(cards_as_rows, background_image=background_bytes, report_name=full_magazine_book_name, language=LANG),',
+          )
+          text = text.replace(
+              '"zip": magazine_book_export.render_full_magazine_zip(cards_as_rows, background_image=background_bytes, report_name=full_magazine_book_name),',
+              '"zip": magazine_book_export.render_full_magazine_zip(cards_as_rows, background_image=background_bytes, report_name=full_magazine_book_name, language=LANG),',
+          )
+          path.write_text(text, encoding='utf-8')
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pages/report_studio.py
+          git diff --cached --quiet && exit 0
+          git commit -m "Install Spanish magazine renderer in Report Studio"
+          git push
