@@ -12,12 +12,14 @@ from autonomous_betting_agent.adaptive_repair_runner import (
     save_runner_report,
 )
 from autonomous_betting_agent.local_access import require_streamlit_access
+from autonomous_betting_agent.reparodynamics_doctrine import get_reparodynamics_doctrine
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 from autonomous_betting_agent.ui_i18n import tr, upload_helper
 
 st.set_page_config(page_title="Adaptive Repair Simulation", layout="wide")
 LANG = render_app_sidebar("adaptive_repair_simulation", language_key="adaptive_repair_simulation_language")
 require_streamlit_access(st, allow_roles={"admin"})
+doctrine = get_reparodynamics_doctrine()
 
 st.title(tr(LANG, "ABA Adaptive Repair Runner", "Motor de Reparación Adaptativa ABA"))
 st.caption(tr(
@@ -25,6 +27,17 @@ st.caption(tr(
     "Internal runner control panel. Phase 3A observes and reports only; it does not change live picks.",
     "Panel de control del motor interno. Fase 3A solo observa e informa; no cambia picks en vivo.",
 ))
+
+st.info("Reparodynamics Doctrine: ABA observes first, repairs later. No change survives without proof.")
+DOCTRINE_COLUMNS = st.columns(4)
+DOCTRINE_COLUMNS[0].metric("Current Phase", doctrine["current_phase"])
+DOCTRINE_COLUMNS[1].metric("Operating Mode", doctrine["operating_mode"])
+DOCTRINE_COLUMNS[2].metric("Live Mutation", doctrine["live_mutation"])
+DOCTRINE_COLUMNS[3].metric("Repair Activation", doctrine["repair_activation"])
+DOCTRINE_COLUMNS_2 = st.columns(3)
+DOCTRINE_COLUMNS_2[0].metric("Shadow Mode Activation", doctrine["shadow_mode_activation"])
+DOCTRINE_COLUMNS_2[1].metric("TGRM Activation", doctrine["tgrm_activation"])
+DOCTRINE_COLUMNS_2[2].metric("RYE Activation", doctrine["rye_activation"])
 
 SAFETY_COLUMNS = st.columns(3)
 SAFETY_COLUMNS[0].metric("Repair Mode", "OFF")
@@ -68,6 +81,9 @@ if st.button("Run system-wide Adaptive Repair scan"):
 
     st.subheader("Runner safety state")
     st.json(report.safety_state)
+
+    st.subheader("Reparodynamics doctrine")
+    st.json(report.reparodynamics_doctrine)
 
     st.subheader("Source availability")
     st.dataframe(pd.DataFrame(report.sources), use_container_width=True)
