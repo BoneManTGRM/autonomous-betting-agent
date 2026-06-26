@@ -3,9 +3,12 @@ from __future__ import annotations
 import builtins
 import importlib
 import os
+import sys
 from types import ModuleType
+from typing import Any
 
 _TARGET = "autonomous_betting_agent.magazine_book_export"
+_ORIGINAL_IMPORT = builtins.__import__
 _ORIGINAL_RELOAD = importlib.reload
 
 
@@ -52,12 +55,20 @@ def _apply_if_target(module: ModuleType | None) -> ModuleType | None:
         return module
 
 
+def _patched_import(name: str, globals: dict[str, Any] | None = None, locals: dict[str, Any] | None = None, fromlist: tuple[str, ...] = (), level: int = 0) -> Any:
+    imported = _ORIGINAL_IMPORT(name, globals, locals, fromlist, level)
+    if name == _TARGET or name.startswith(f"{_TARGET}.") or (name == "autonomous_betting_agent" and "magazine_book_export" in fromlist):
+        _apply_if_target(sys.modules.get(_TARGET))
+    return imported
+
+
 def _patched_reload(module: ModuleType) -> ModuleType:
     reloaded = _ORIGINAL_RELOAD(module)
     return _apply_if_target(reloaded) or reloaded
 
 
 builtins.get_secret = get_secret
-if getattr(builtins, "_ABA_DYNAMIC_MAGAZINE_RELOAD_PATCHED", False) is not True:
+if getattr(builtins, "_ABA_MAGAZINE_IMPORT_AND_RELOAD_PATCHED", False) is not True:
+    builtins.__import__ = _patched_import
     importlib.reload = _patched_reload
-    builtins._ABA_DYNAMIC_MAGAZINE_RELOAD_PATCHED = True
+    builtins._ABA_MAGAZINE_IMPORT_AND_RELOAD_PATCHED = True
