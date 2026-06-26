@@ -16,8 +16,8 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 PAGE_WIDTH = 1080
 PAGE_HEIGHT = 1620
-MAGAZINE_STYLE_VERSION = "premium_v4_reference_compact_no_market_v8_base_api_data"
-NO_MARKET_EXPORT_VERSION = "no_market_metric_v8"
+MAGAZINE_STYLE_VERSION = "premium_v4_reference_compact_no_market_v9_base_api_data"
+NO_MARKET_EXPORT_VERSION = "no_market_metric_v9"
 SAFETY_FOOTER = "No guarantees. Bet responsibly. This analysis is for informational purposes only."
 TEAM_DATA_FALLBACK = "Data not returned for this event"
 PLAYER_DATA_FALLBACK = "Player data not returned for this event"
@@ -155,6 +155,18 @@ def _tr(value: Any, lang: str) -> str:
     low = text.strip().lower()
     if low in COUNTRY_ES:
         return COUNTRY_ES[low]
+    phrase_replacements = (
+        ("Negative edge at current " + "price", "Ventaja negativa con la cuota actual"),
+        ("Do not play unless price " + "improves", "No jugar salvo que la cuota mejore"),
+        ("Recheck odds and key " + "news", "Revisar cuotas y noticias clave"),
+        ("Do not chain negative-EV " + "picks", "No encadenar señales con VE negativo"),
+        ("Avoid parlays unless edge turns " + "positive", "Evitar parlays salvo que la ventaja sea positiva"),
+        ("Recheck price before " + "including", "Revisar la cuota antes de incluir"),
+        ("Price check required before " + "entry", "Revisar cuota antes de entrar"),
+        ("Use only if the line remains playable and key news does not " + "change", "Revisar si mejora la línea"),
+    )
+    for old, new in phrase_replacements:
+        text = re.sub(re.escape(old) + r"\.?", new + ".", text, flags=re.I)
     text = re.sub(r"\bFIFA WORLD CUP\b", "COPA MUNDIAL FIFA", text, flags=re.I)
     text = re.sub(r"\bREGULAR SEASON\b", "TEMPORADA REGULAR", text, flags=re.I)
     text = re.sub(r"\bGAME TOTAL\b", "TOTAL DEL PARTIDO", text, flags=re.I)
@@ -909,7 +921,7 @@ def render_full_pick_magazine_page(pick: Any, background_image: Any = None, repo
 
     action = _tr(_clean(_get(pick, "final_decision", "agent_decision", "recommendation", "consumer_action", "recommended_action", default="PLAY STANDARD"), True), lang)
     explanation = _tr(_get(pick, "final_explanation", "action_reason", "recommendation_reason", "decision_reasons", default="Use only if the line remains playable and key news does not change."), lang)
-    if lang == "es" and ("nueva información" in explanation or len(explanation) > 72):
+    if lang == "es" and ("LISTA DE SEGUIMIENTO" in action.upper() or "NO JUGAR" in action.upper() or "nueva información" in explanation or len(explanation) > 56):
         explanation = "Revisar si mejora la línea."
     fy, fb = 1374, 1532
     draw.rounded_rectangle((20, fy, 1060, fb), radius=14, fill=BLACK, outline=RED, width=3)
@@ -926,7 +938,7 @@ def render_full_pick_magazine_page(pick: Any, background_image: Any = None, repo
     footer = _tr(SAFETY_FOOTER, lang)
     font = _fit(footer, PAGE_WIDTH - 190, 16, 10, False)
     draw.text((42, footer_y + 10), _ellipsize_to_width(draw, footer, font, PAGE_WIDTH - 190), font=font, fill=CREAM)
-    version = "v8 no-market"
+    version = "v9 no-market"
     vfont = _font(14, True)
     vbox = draw.textbbox((0, 0), version, font=vfont)
     draw.text((1048 - (vbox[2] - vbox[0]), footer_y + 10), version, font=vfont, fill=GREEN)
