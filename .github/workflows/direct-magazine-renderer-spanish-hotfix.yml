@@ -1,0 +1,55 @@
+name: Direct Magazine Renderer Spanish Hotfix
+
+on:
+  push:
+    paths:
+      - '.github/workflows/direct-magazine-renderer-spanish-hotfix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch base magazine renderer
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('autonomous_betting_agent/magazine_book_export.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('NO_MARKET_EXPORT_VERSION = "no_market_metric_v6"', 'NO_MARKET_EXPORT_VERSION = "no_market_metric_v8"')
+
+          fallback_pairs = {
+              'Negative edge at current ' + 'price.': 'Ventaja negativa con la cuota actual.',
+              'Do not play unless price ' + 'improves.': 'No jugar salvo que la cuota mejore.',
+              'Recheck odds and key ' + 'news.': 'Revisar cuotas y noticias clave.',
+              'Do not chain negative-EV ' + 'picks.': 'No encadenar señales con VE negativo.',
+              'Avoid parlays unless edge turns ' + 'positive.': 'Evitar parlays salvo que la ventaja sea positiva.',
+              'Recheck price before ' + 'including.': 'Revisar la cuota antes de incluir.',
+              'Price check required before ' + 'entry.': 'Revisar cuota antes de entrar.',
+              'Use only if the line remains playable and key news does not ' + 'change.': 'Revisar si mejora la línea.',
+          }
+          if 'Ventaja negativa con la cuota actual.' not in text:
+              lines = ''.join(f'    {english!r}: {spanish!r},\n' for english, spanish in fallback_pairs.items())
+              text = text.replace('    SAFETY_FOOTER:', lines + '    SAFETY_FOOTER:', 1)
+
+          old = '    explanation = _tr(_get(pick, "final_explanation", "action_reason", "recommendation_reason", "decision_reasons", default="Use only if the line remains playable and key news does not change."), lang)'
+          new = old + '\n    if lang == "es" and ("nueva información" in explanation or len(explanation) > 72):\n        explanation = "Revisar si mejora la línea."'
+          if old in text and 'Revisar si mejora la línea."\n    fy, fb' not in text:
+              text = text.replace(old, new, 1)
+
+          text = text.replace('    version = "v6 no-market"', '    version = "v8 no-market"')
+          path.write_text(text, encoding='utf-8')
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add autonomous_betting_agent/magazine_book_export.py
+          git diff --cached --quiet && exit 0
+          git commit -m "Patch base magazine renderer Spanish fallbacks"
+          git push
