@@ -58,7 +58,7 @@ def _apply_if_target(module: ModuleType | None) -> ModuleType | None:
 
 
 def _patched_import(name: str, globals: dict[str, Any] | None = None, locals: dict[str, Any] | None = None, fromlist: tuple[str, ...] = (), level: int = 0) -> Any:
-    imported = _ORIGINAL_IMPORT(name, globals, fromlist=fromlist, locals=locals, level=level)
+    imported = _ORIGINAL_IMPORT(name, globals, locals, fromlist, level)
     if name == _TARGET or name.startswith(f"{_TARGET}.") or (name == "autonomous_betting_agent" and "magazine_book_export" in fromlist):
         _apply_if_target(sys.modules.get(_TARGET))
     return imported
