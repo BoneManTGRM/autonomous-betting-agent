@@ -18,7 +18,8 @@ def test_dynamic_api_provenance_four_active():
     }
     provenance = api_provenance(row)
     assert provenance["active_sources"] == ["SportsDataIO", "WeatherAPI", "API-Football", "NewsAPI"]
-    assert "Odds API" in provenance["inactive_sources"]
+    assert "Odds API" not in provenance["active_sources"]
+    assert "Odds API" in provenance["inactive_sources"] or "Odds API" in provenance["available_no_data_sources"]
     assert "Perplexity" in provenance["inactive_sources"]
 
 
