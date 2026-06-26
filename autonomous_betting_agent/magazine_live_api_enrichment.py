@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import builtins
-import importlib
 import json
 import os
 import re
@@ -11,7 +10,7 @@ from typing import Any
 from urllib.parse import quote_plus, urlencode
 from urllib.request import Request, urlopen
 
-ENRICHMENT_VERSION = "live_api_enrichment_v5_full_spanish_report_text"
+ENRICHMENT_VERSION = "live_api_enrichment_v5_spanish_report_text_safe"
 _TIMEOUT_SECONDS = 3.0
 _CACHE: dict[tuple[str, str], Any] = {}
 
@@ -276,34 +275,10 @@ def _spanish_text(value: Any) -> str:
     text = str(value or "").strip()
     if not text:
         return text
-    exact = {
-        "PAGE": "PÁGINA", "OF": "DE", "WATCHLIST": "LISTA DE SEGUIMIENTO", "PLAY STANDARD": "JUGAR NORMAL", "PLAY SMALL": "JUGAR PEQUEÑO", "NO PLAY": "NO JUGAR",
-        "Data unavailable": "Dato no disponible", "Not provided": "No proporcionado", "Context unavailable.": "Contexto no disponible.",
-        "uploaded/cached row": "fila cargada/en caché", "consensus average": "promedio consenso", "Price check required before entry.": "Revisar cuota antes de entrar.",
-        "No lineup/injury headline returned.": "Sin titular de lesiones/alineación.", "API-FB: no fixture match.": "API-FB: sin coincidencia de partido.", "No SDIO event ID.": "Sin ID de evento SDIO.",
-        "SDIO checked; no provider event ID in row.": "SDIO revisado; sin ID de evento del proveedor.",
-    }
+    exact = {"WATCHLIST": "LISTA DE SEGUIMIENTO", "uploaded/cached row": "fila cargada/en caché", "consensus average": "promedio consenso", "No lineup/injury headline returned.": "Sin titular de lesiones/alineación.", "API-FB: no fixture match.": "API-FB: sin coincidencia de partido.", "No SDIO event ID.": "Sin ID de evento SDIO.", "Price check required before entry.": "Revisar cuota antes de entrar."}
     if text in exact:
         return exact[text]
-    page_match = re.fullmatch(r"PAGE\s+(\d+)\s+OF\s+(\d+)", text, flags=re.I)
-    if page_match:
-        return f"PÁGINA {page_match.group(1)} DE {page_match.group(2)}"
-    replacements = (
-        (r"\bModel projects\b", "El modelo proyecta"), (r"\bprobability for\b", "de probabilidad para"), (r"\bMarket-implied probability checks at\b", "La probabilidad implícita del mercado es"),
-        (r"\bMeasured edge\b", "Ventaja medida"), (r"\bExpected value\b", "Valor esperado"), (r"\bNegative edge at current price\b", "Ventaja negativa con la cuota actual"),
-        (r"\bDo not play unless price improves\b", "No jugar salvo que la cuota mejore"), (r"\bRecheck odds and key news\b", "Revisar cuotas y noticias clave"),
-        (r"\bRisk status\b", "Estado de riesgo"), (r"\bRecheck odds before entry\b", "Revisar cuota antes de entrar"), (r"\bAvoid if key news changes\b", "Evitar si cambian noticias clave"),
-        (r"\bStraight only: research\b", "Solo directa: investigación"), (r"\bDo not combine without official verification\b", "No combinar sin verificación oficial"),
-        (r"\bWait for better context or price\b", "Esperar mejor contexto o mejor cuota"), (r"\bDo not chain negative-EV picks\b", "No encadenar señales con VE negativo"),
-        (r"\bAvoid parlays unless edge turns positive\b", "Evitar parlays salvo que la ventaja sea positiva"), (r"\bRecheck price before including\b", "Revisar la cuota antes de incluir"),
-        (r"\bDo not play at the listed price\b", "No jugar con la cuota listada"), (r"\bRecheck only if the line improves or new information changes the edge\b", "Revisar solo si mejora la línea o nueva información cambia la ventaja"),
-        (r"\bNo lineup/injury headline returned\b", "Sin titular de lesiones/alineación"), (r"\bLineup and injury data were not returned for this soccer event\b", "No se recibieron datos de alineación ni lesiones para este partido de fútbol"),
-        (r"\bTeam form data was not returned for this soccer event\b", "No se recibieron datos de forma del equipo para este partido de fútbol"), (r"\bPlayer data not returned for this event\b", "Datos de jugadores no disponibles para este evento"),
-        (r"\bData not returned for this event\b", "Datos no disponibles para este evento"), (r"\bActive APIs checked\b", "APIs activas revisadas"), (r"\bNo active API source was detected for this row\b", "No se detectó una API activa para esta fila"),
-        (r"\bActive APIs\b", "APIs activas"), (r"\bInactive\b", "Inactivas"), (r"\bWeather\b", "Clima"), (r"\bwind\b", "viento"), (r"\bLocation\b", "Ubicación"),
-        (r"\bAPI-FB lookup checked; no fixture match\b", "API-FB revisada; sin coincidencia de partido"), (r"\bAPI-FB: no fixture match\b", "API-FB: sin coincidencia de partido"), (r"\bno fixture match\b", "sin coincidencia de partido"),
-        (r"\bfixture not verified\b", "partido no verificado"), (r"\bNews\b", "Noticias"), (r"\bsunny\b", "soleado"),
-    )
+    replacements = ((r"\bModel projects\b", "El modelo proyecta"), (r"\bprobability for\b", "de probabilidad para"), (r"\bMarket-implied probability checks at\b", "La probabilidad implícita del mercado es"), (r"\bMeasured edge\b", "Ventaja medida"), (r"\bExpected value\b", "Valor esperado"), (r"\bDo not chain negative-EV picks\b", "No encadenar señales con VE negativo"), (r"\bDo not play at the listed price\b", "No jugar con la cuota listada"), (r"\bRecheck only if the line improves or new information changes the edge\b", "Revisar solo si mejora la línea o nueva información cambia la ventaja"), (r"\bAPI-FB: no fixture match\b", "API-FB: sin coincidencia de partido"), (r"\bNo lineup/injury headline returned\b", "Sin titular de lesiones/alineación"))
     for old, new in replacements:
         text = re.sub(old, new, text, flags=re.I)
     return text
@@ -314,8 +289,7 @@ def _spanish_report_defaults(row: dict[str, Any]) -> None:
         return
     pick = _get(row, "public_pick", "prediction", "pick", "selection", default="esta selección")
     if not any(_useful(row.get(k)) for k in ("why_bullets", "why_pick", "analysis_summary", "reason", "explanation")):
-        bullets = [f"El modelo proyecta {_fmt_pct(_get(row, 'learned_model_probability', 'model_probability_clean', 'model_probability', 'final_probability'))} de probabilidad para {pick}.", f"La probabilidad implícita del mercado es {_fmt_pct(_get(row, 'market_probability', 'market_implied_probability'))}.", f"Ventaja medida: {_fmt_pct(_get(row, 'model_market_edge', 'edge'), signed=True)}.", f"Valor esperado: {_fmt_ev(_get(row, 'expected_value_per_unit', 'profit_expected_value', 'expected_value', 'ev'))}."]
-        row["why_bullets"] = "\n".join(item for item in bullets if not item.endswith(" .") and "  ." not in item)
+        row["why_bullets"] = "\n".join([f"El modelo proyecta {_fmt_pct(_get(row, 'learned_model_probability', 'model_probability_clean', 'model_probability', 'final_probability'))} de probabilidad para {pick}.", f"La probabilidad implícita del mercado es {_fmt_pct(_get(row, 'market_probability', 'market_implied_probability'))}.", f"Ventaja medida: {_fmt_pct(_get(row, 'model_market_edge', 'edge'), signed=True)}.", f"Valor esperado: {_fmt_ev(_get(row, 'expected_value_per_unit', 'profit_expected_value', 'expected_value', 'ev'))}."])
     if not any(_useful(row.get(k)) for k in ("why_lose", "risk_reason", "hidden_risk", "risk_notes")):
         row["risk_reason"] = "Ventaja negativa con la cuota actual.\nUsar solo si la cuota mejora.\nRevisar cuotas y noticias clave."
     if not any(_useful(row.get(k)) for k in ("chain_notes", "main_read", "add_on_legs", "parlay_notes")):
@@ -380,12 +354,7 @@ def enrich_rows_with_live_api_data(rows: list[Any] | tuple[Any, ...]) -> list[di
 def install(module: Any) -> Any:
     if getattr(module, "_LIVE_API_ENRICHMENT_PATCHED", False):
         return module
-    original_render = module.render_full_pick_magazine_page; original_png = module._png; original_tr = getattr(module, "_tr", None); original_team_snapshot = getattr(module, "_team_snapshot", None)
-    if callable(original_tr):
-        def tr(value: Any, lang: str) -> str:
-            translated = original_tr(value, lang)
-            return _spanish_text(translated) if str(lang).lower().startswith("es") else translated
-        module._tr = tr
+    original_render = module.render_full_pick_magazine_page; original_png = module._png; original_team_snapshot = getattr(module, "_team_snapshot", None)
     def render(row_like: Any, *args: Any, **kwargs: Any):
         return original_render(enrich_row_with_live_api_data(row_like), *args, **kwargs)
     def render_png(row_like: Any, background_image: Any = None, report_name: str | None = None, page_number: int = 1, total_pages: int = 1, logo_image: Any = None, background_mode: str = "hero_right", logo_mode: str = "header", background_opacity: float = 0.9, logo_opacity: float = 1.0, use_team_logo: bool = True, language: str | None = None) -> bytes:
@@ -406,25 +375,3 @@ def install(module: Any) -> Any:
             module._bullets_auto(draw, x, y + 76, items, width - 10, 165, color, 18, 10, 4, lang)
     module.render_full_pick_magazine_page = render; module.render_full_pick_magazine_page_png = render_png; module._team_snapshot = team_snapshot; module.enrich_row_with_live_api_data = enrich_row_with_live_api_data; module.enrich_rows_with_live_api_data = enrich_rows_with_live_api_data; module.MAGAZINE_STYLE_VERSION = f"{module.MAGAZINE_STYLE_VERSION}_{ENRICHMENT_VERSION}"; module._LIVE_API_ENRICHMENT_PATCHED = True
     return module
-
-
-def _patch_importlib_reload() -> None:
-    if getattr(importlib.reload, "_aba_magazine_reload_patch", False):
-        return
-    original_reload = getattr(importlib, "_aba_original_reload", importlib.reload)
-    setattr(importlib, "_aba_original_reload", original_reload)
-    def reload_with_magazine_patch(module: Any) -> Any:
-        reloaded = original_reload(module)
-        if getattr(reloaded, "__name__", "") == "autonomous_betting_agent.magazine_book_export":
-            return install(reloaded)
-        return reloaded
-    setattr(reload_with_magazine_patch, "_aba_magazine_reload_patch", True)
-    importlib.reload = reload_with_magazine_patch
-
-
-_patch_importlib_reload()
-try:
-    import autonomous_betting_agent.magazine_book_export as _magazine_book_export
-    install(_magazine_book_export)
-except Exception:
-    pass
