@@ -106,7 +106,7 @@ def _row_priority(row: Mapping[str, Any]) -> int:
     action = canonical_text(row.get("consumer_action") or row.get("recommended_action") or row.get("public_action") or row.get("report_lane"))
     publish_ready = safe_text(row.get("official_publish_ready") or row.get("publish_ready")).lower() in {"true", "1", "yes"}
     proof = bool(safe_text(row.get("proof_id") or row.get("locked_at_utc") or row.get("proof_hash")))
-    if publish_ready or "official" in action or proof:
+    if publish_ready or "official" in action or "oficial" in action or proof:
         return 0
     if _has_positive_value(row):
         return 1
