@@ -1,3 +1,4 @@
+from autonomous_betting_agent.adaptive_repair_diagnostics import build_enhanced_diagnostics
 from autonomous_betting_agent.adaptive_repair_engine import build_simulation_report, normalize_result_status
 
 
@@ -36,12 +37,13 @@ def test_uploaded_tracker_baseline_shape_counts():
 
 def test_row_level_and_unique_event_tracking_split_duplicates():
     rows = [
-        {"sport": "Soccer", "event": "Team A vs Team B", "known_start_utc": "2026-06-20", "result": "Won"},
-        {"sport": "Soccer", "event": "Team A vs Team B", "known_start_utc": "2026-06-20", "result": "Lost"},
+        {"sport": "Soccer", "event": "Team A vs Team B", "known_start_utc": "2026-06-20", "result": "Won", "market": "moneyline"},
+        {"sport": "Soccer", "event": "Team A vs Team B", "known_start_utc": "2026-06-20", "result": "Lost", "market": "total"},
         {"sport": "Tennis", "event": "Player C vs Player D", "known_start_utc": "2026-06-21", "result": "Void"},
     ]
 
     report = build_simulation_report(rows, dataset_name="duplicates")
+    diagnostics = build_enhanced_diagnostics(rows, dataset_name="duplicates")
 
     assert report.row_level["rows"] == 3
     assert report.row_level["wins"] == 1
@@ -51,6 +53,8 @@ def test_row_level_and_unique_event_tracking_split_duplicates():
     assert report.unique_event_level["unique_events"] == 2
     assert report.unique_event_level["losses"] == 1
     assert report.unique_event_level["voids"] == 1
+    assert diagnostics.same_event_groups[0]["mixed_outcome"] is True
+    assert diagnostics.same_event_groups[0]["multi_market"] is True
 
 
 def test_candidate_watchlists_do_not_activate_repairs():
@@ -62,7 +66,26 @@ def test_candidate_watchlists_do_not_activate_repairs():
     ]
 
     report = build_simulation_report(rows, dataset_name="watchlists")
+    diagnostics = build_enhanced_diagnostics(rows, dataset_name="watchlists")
 
     assert report.production_repairs_active is False
     assert report.accepted_simulated_repairs == []
+    assert diagnostics.production_repairs_active is False
     assert any(pattern["status"] == "watchlist" for pattern in report.watchlist_patterns)
+
+
+def test_enhanced_data_quality_and_column_coverage_report_missing_fields():
+    rows = [
+        {"sport": "Tennis", "event": "A vs B", "result": "Won", "odds": "+120"},
+        {"sport": "Tennis", "event": "A vs B", "result": "Won", "odds": "+120"},
+        {"sport": "", "event": "", "result": "Unknown"},
+    ]
+
+    diagnostics = build_enhanced_diagnostics(rows, dataset_name="quality")
+
+    assert diagnostics.duplicate_rows == 1
+    assert diagnostics.column_coverage["odds"]["matched_column"] == "odds"
+    assert diagnostics.column_coverage["closing_odds"]["matched_column"] is None
+    assert diagnostics.data_quality["score"] < 100
+    assert diagnostics.data_quality["repairs_allowed"] is False
+    assert diagnostics.missing_required_field_examples
