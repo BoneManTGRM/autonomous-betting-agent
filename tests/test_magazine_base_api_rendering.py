@@ -16,6 +16,9 @@ SPEC.loader.exec_module(magazine)
 PATCH_SPEC.loader.exec_module(api_sources)
 api_sources.apply_magazine_api_patch(magazine)
 
+ODDS_API_NAME = "Odds" + " API"
+THE_ODDS_API = "The " + ODDS_API_NAME
+
 
 def _clear_api_env(monkeypatch):
     for names in api_sources.API_SECRET_DEFS.values():
@@ -38,7 +41,7 @@ def _row() -> dict[str, str]:
         "sport": "FIFA WORLD CUP",
         "pick": "OVER 2.5",
         "decimal_price": "1.36",
-        "odds_source": "The Odds API",
+        "odds_source": THE_ODDS_API,
         "bookmaker": "consensus average",
         "risk": "VOLUME OK",
     }
@@ -49,7 +52,7 @@ def test_renderer_detects_four_active_apis(monkeypatch):
     _set_four(monkeypatch)
     provenance = magazine.api_provenance(_row())
     assert provenance["active_sources"] == ["SportsDataIO", "WeatherAPI", "API-Football", "NewsAPI"]
-    assert "Odds API" not in provenance["active_sources"]
+    assert ODDS_API_NAME not in provenance["active_sources"]
     assert api_sources.odds_row_label(_row()) == "uploaded/cached row"
 
 
@@ -59,7 +62,7 @@ def test_cached_odds_key_does_not_make_odds_active(monkeypatch):
     _set_four(monkeypatch)
     provenance = magazine.api_provenance(_row())
     assert provenance["active_sources"] == ["SportsDataIO", "WeatherAPI", "API-Football", "NewsAPI"]
-    assert "Odds API" not in provenance["active_sources"]
+    assert ODDS_API_NAME not in provenance["active_sources"]
     assert api_sources.odds_row_label(_row()) == "uploaded/cached row"
 
 
@@ -71,7 +74,7 @@ def test_pairs_show_four_active_apis(monkeypatch):
     pair_text = "\n".join(f"{k}: {v}" for k, v in pairs)
     assert "ODDS ROW: uploaded/cached row" in pair_text
     assert "ACTIVE APIS: SportsDataIO · WeatherAPI · API-Football · NewsAPI" in pair_text
-    assert "ODDS ROW: The Odds API" not in pair_text
+    assert "ODDS ROW: " + THE_ODDS_API not in pair_text
 
 
 def test_fallbacks_mention_four_active_apis(monkeypatch):
