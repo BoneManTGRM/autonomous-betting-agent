@@ -130,7 +130,7 @@ The runner safely scans sources when available:
 - existing row/event grading helpers
 - Public Proof Dashboard compatible graded rows when present
 
-Unavailable sources are recorded as unavailable. Failed sources are recorded with a safe load error. One bad source must not crash the whole scan.
+Unavailable sources are recorded as unavailable. Failed sources are recorded with a safe load error. Partially loaded CSV source folders are recorded as warnings so good rows are preserved while bad files remain visible. One bad source must not crash the whole scan.
 
 ### Runner safety state
 
@@ -245,7 +245,7 @@ Run the app:
 streamlit run streamlit_app.py
 ```
 
-Open **Adaptive Repair Simulation**. The page can run a system-wide scan, upload a graded CSV for manual simulation, display the Reparodynamics doctrine banner, display source availability, source failures, row-level metrics, unique-event metrics, mixed events, duplicate events, data-quality score, column coverage, watchlist-only patterns, RYE readiness, Shadow Mode readiness, saved runs, and downloadable Markdown/JSON reports.
+Open **Adaptive Repair Simulation**. The page can run a system-wide scan, upload a graded CSV for manual simulation, display the Reparodynamics doctrine banner, display source availability, source failures, source warnings, row-level metrics, unique-event metrics, mixed events, duplicate events, data-quality score, column coverage, watchlist-only patterns, RYE readiness, Shadow Mode readiness, saved runs, and downloadable Markdown/JSON reports.
 
 The page is not the main engine. It is the dashboard/control panel for the internal runner.
 
@@ -256,7 +256,7 @@ The page is not the main engine. It is the dashboard/control panel for the inter
 | Phase 0: Simulation Gate | Implemented for CSV/export rows with enhanced diagnostics. |
 | Phase 1: Graded List Ingestion | Implemented for local CSV/export rows. |
 | Phase 2: Row-level vs unique-event tracking | Implemented with duplicate event, duplicate row, mixed outcome, and same-event review reporting. |
-| Phase 3A: Internal Adaptive Repair Runner | Implemented as event-triggered, simulation-only, source-adapter based runner. |
+| Phase 3A: Internal Adaptive Repair Runner | Implemented as event-triggered, simulation-only, source-adapter based runner with activation-gate reporting and stable watchlist candidate IDs. |
 | Phase 3B: Live Learning Page hook | Planned; no direct model mutation. |
 | Phase 4: Pattern Library | Planned; current candidates are watchlist-only. |
 | Phase 5: Full RYE scoring | Planned; current output is readiness-only. |
@@ -295,6 +295,7 @@ Complete or locally implemented:
 21. ABA Adaptive Repair Engine Phase 0-2 simulation gate, graded-list ingestion, row-level vs unique-event protection, and enhanced data-quality diagnostics.
 22. ABA Adaptive Repair Runner Phase 3A with source adapters, persistent simulation memory, watchlist-only candidates, and readiness-only RYE/Shadow checks.
 23. Reparodynamics doctrine layer for runner JSON, Markdown reports, dashboard display, and README documentation.
+24. Runner polish for schema versioning, activation-gate checks, stable candidate IDs, and partial CSV warning/failure reporting.
 
 Local placeholders remain for heavier future work: true generated PDF files, automated payment processing, destructive memory reset, full cooldown/drawdown automation, advanced team-level correlation modeling, Shadow Mode activation, full RYE scoring, Hidden Value Score activation, confidence calibration activation, and TGRM production repairs.
 
@@ -389,6 +390,6 @@ python -m compileall autonomous_betting_agent pages tests scripts
 python -m py_compile autonomous_betting_agent/magazine_api_sources.py autonomous_betting_agent/magazine_live_api_enrichment.py pages/report_studio.py autonomous_betting_agent/adaptive_repair_engine.py autonomous_betting_agent/adaptive_repair_diagnostics.py autonomous_betting_agent/adaptive_repair_runner.py autonomous_betting_agent/adaptive_repair_runner_core.py autonomous_betting_agent/reparodynamics_doctrine.py pages/adaptive_repair_simulation.py
 python -m scripts.report_studio_regression_check
 python scripts/magazine_autofit_stress_test.py
-python -m pytest -q tests/test_adaptive_repair_engine.py tests/test_adaptive_repair_runner.py tests/test_doctrine.py
+python -m pytest -q tests/test_adaptive_repair_engine.py tests/test_adaptive_repair_runner.py tests/test_doctrine.py tests/test_runner_polish.py
 python -m pytest -q
 ```
