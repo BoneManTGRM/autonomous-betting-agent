@@ -95,12 +95,20 @@ def _normalize_weather_line(text: str) -> str:
     if not value.lower().startswith("weather:"):
         return value
     body = value.split(":", 1)[1].strip().strip(".")
+    body = re.split(r"\bLocation\s*:", body, maxsplit=1, flags=re.I)[0].strip(" .")
     body = re.sub(r"\bWeatherAPI:\s*", "", body, flags=re.I)
-    raw_parts = [part.strip(" .") for part in re.split(r"[;,]\s*", body) if part.strip(" .")]
-    parts = _dedupe(raw_parts)
-    temp = next((part for part in parts if re.search(r"-?\d+(?:\.\d+)?\s*°\s*[CF]\b", part, re.I)), "")
-    wind = next((part for part in parts if "wind" in part.lower()), "")
-    condition = next((part for part in parts if part != temp and part != wind), "")
+    temp_match = re.search(r"-?\d+(?:\.\d+)?\s*°\s*[CF]\b", body, re.I)
+    wind_match = re.search(r"wind\s+-?\d+(?:\.\d+)?\s*(?:kph|mph|km/h|m/s)\b", body, re.I)
+    temp = temp_match.group(0).replace(" ", "") if temp_match else ""
+    wind = re.sub(r"\s+", " ", wind_match.group(0)).strip() if wind_match else ""
+    condition_source = body
+    if temp_match:
+        condition_source = condition_source.replace(temp_match.group(0), " ")
+    if wind_match:
+        condition_source = condition_source.replace(wind_match.group(0), " ")
+    condition_parts = [part.strip(" .") for part in re.split(r"[;,\.]\s*", condition_source) if part.strip(" .")]
+    conditions = _dedupe(part for part in condition_parts if not re.search(r"-?\d+(?:\.\d+)?\s*°\s*[CF]\b", part, re.I) and "wind" not in part.lower())
+    condition = conditions[0] if conditions else ""
     if condition:
         condition = condition[:1].lower() + condition[1:]
     ordered = [part for part in (temp, condition, wind) if part]
