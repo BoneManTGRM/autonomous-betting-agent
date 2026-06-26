@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -92,15 +93,52 @@ def _apply_context_preview(cards: pd.DataFrame, *, language: str) -> pd.DataFram
     return result
 
 
-def _card_dedupe_key(row: Mapping[str, Any]) -> str:
-    fields = (
-        safe_text(row.get("public_event") or row.get("event") or row.get("event_name") or row.get("matchup")),
-        safe_text(row.get("public_pick") or row.get("prediction") or row.get("pick") or row.get("selection")),
-        safe_text(row.get("market_type") or row.get("market")),
-        safe_text(row.get("line_point") or row.get("line") or row.get("handicap") or row.get("total")),
-        safe_text(row.get("consumer_action") or row.get("recommended_action") or row.get("public_action") or row.get("report_lane")),
+def _canonical_part(value: Any) -> str:
+    text = safe_text(value).lower()
+    text = re.sub(r"\s+(?:at|vs|v|@)\s+", " vs ", text)
+    text = re.sub(r"[^a-z0-9áéíóúüñ]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _row_action_text(row: Mapping[str, Any]) -> str:
+    return _canonical_part(row.get("consumer_action") or row.get("recommended_action") or row.get("public_action") or row.get("report_lane"))
+
+
+def _is_research_or_watch_row(row: Mapping[str, Any]) -> bool:
+    lane = _canonical_part(row.get("report_lane") or row.get("report_lane_v2"))
+    action = _row_action_text(row)
+    publish_ready = str(row.get("official_publish_ready") or row.get("publish_ready") or "").strip().lower() in {"true", "1", "yes"}
+    if publish_ready or lane in {"best play", "official ev", "official ev play"}:
+        return False
+    markers = (
+        "no play",
+        "research",
+        "learning",
+        "watchlist",
+        "price watch",
+        "seguimiento",
+        "investigacion",
+        "investigación",
+        "lista de seguimiento",
+        "no jugar",
+        "momio",
     )
-    key = "|".join(part.lower() for part in fields if part)
+    return any(marker in action for marker in markers) or lane in {"no play", "research", "watchlist", "lista de seguimiento", "investigacion", "investigación"}
+
+
+def _card_dedupe_key(row: Mapping[str, Any]) -> str:
+    event = _canonical_part(row.get("public_event") or row.get("event") or row.get("event_name") or row.get("matchup"))
+    action = _row_action_text(row)
+    if event and _is_research_or_watch_row(row):
+        return f"research-event|{event}|{action}"
+    fields = (
+        event,
+        _canonical_part(row.get("public_pick") or row.get("prediction") or row.get("pick") or row.get("selection")),
+        _canonical_part(row.get("market_type") or row.get("market")),
+        _canonical_part(row.get("line_point") or row.get("line") or row.get("handicap") or row.get("total")),
+        action,
+    )
+    key = "|".join(part for part in fields if part)
     return key or safe_text(row.get("proof_id") or row.get("locked_at_utc") or row.get("source_file"))
 
 
