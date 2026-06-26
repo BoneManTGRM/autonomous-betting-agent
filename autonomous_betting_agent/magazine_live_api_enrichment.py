@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+import importlib
 import json
 import os
 import re
@@ -10,9 +11,11 @@ from typing import Any
 from urllib.parse import quote_plus, urlencode
 from urllib.request import Request, urlopen
 
-ENRICHMENT_VERSION = "live_api_enrichment_v4_spanish_report_text"
+ENRICHMENT_VERSION = "live_api_enrichment_v5_full_spanish_report_text"
 _TIMEOUT_SECONDS = 3.0
 _CACHE: dict[tuple[str, str], Any] = {}
+_RELOAD_PATCHED = False
+_ORIGINAL_RELOAD: Any = None
 
 API_SECRET_DEFS = {
     "SportsDataIO": ("SPORTSDATAIO_API_KEY", "SPORTS_DATA_IO_API_KEY", "SPORTSDATA_API_KEY"),
@@ -271,6 +274,77 @@ def _fmt_ev(value: Any) -> str:
     return "" if parsed is None else f"{parsed:+.3f}"
 
 
+def _spanish_text(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return text
+    exact = {
+        "PAGE": "PÁGINA",
+        "OF": "DE",
+        "WATCHLIST": "LISTA DE SEGUIMIENTO",
+        "PLAY STANDARD": "JUGAR NORMAL",
+        "PLAY SMALL": "JUGAR PEQUEÑO",
+        "NO PLAY": "NO JUGAR",
+        "Data unavailable": "Dato no disponible",
+        "Not provided": "No proporcionado",
+        "Context unavailable.": "Contexto no disponible.",
+        "uploaded/cached row": "fila cargada/en caché",
+        "consensus average": "promedio consenso",
+        "Price check required before entry.": "Revisar cuota antes de entrar.",
+        "No lineup/injury headline returned.": "Sin titular de lesiones/alineación.",
+        "API-FB: no fixture match.": "API-FB: sin coincidencia de partido.",
+        "No SDIO event ID.": "Sin ID de evento SDIO.",
+        "SDIO checked; no provider event ID in row.": "SDIO revisado; sin ID de evento del proveedor.",
+    }
+    if text in exact:
+        return exact[text]
+    page_match = re.fullmatch(r"PAGE\s+(\d+)\s+OF\s+(\d+)", text, flags=re.I)
+    if page_match:
+        return f"PÁGINA {page_match.group(1)} DE {page_match.group(2)}"
+    replacements = (
+        (r"\bModel projects\b", "El modelo proyecta"),
+        (r"\bprobability for\b", "de probabilidad para"),
+        (r"\bMarket-implied probability checks at\b", "La probabilidad implícita del mercado es"),
+        (r"\bMeasured edge\b", "Ventaja medida"),
+        (r"\bExpected value\b", "Valor esperado"),
+        (r"\bNegative edge at current price\b", "Ventaja negativa con la cuota actual"),
+        (r"\bDo not play unless price improves\b", "No jugar salvo que la cuota mejore"),
+        (r"\bRecheck odds and key news\b", "Revisar cuotas y noticias clave"),
+        (r"\bRisk status\b", "Estado de riesgo"),
+        (r"\bRecheck odds before entry\b", "Revisar cuota antes de entrar"),
+        (r"\bAvoid if key news changes\b", "Evitar si cambian noticias clave"),
+        (r"\bStraight only: research\b", "Solo directa: investigación"),
+        (r"\bDo not combine without official verification\b", "No combinar sin verificación oficial"),
+        (r"\bWait for better context or price\b", "Esperar mejor contexto o mejor cuota"),
+        (r"\bDo not chain negative-EV picks\b", "No encadenar señales con VE negativo"),
+        (r"\bAvoid parlays unless edge turns positive\b", "Evitar parlays salvo que la ventaja sea positiva"),
+        (r"\bRecheck price before including\b", "Revisar la cuota antes de incluir"),
+        (r"\bDo not play at the listed price\b", "No jugar con la cuota listada"),
+        (r"\bRecheck only if the line improves or new information changes the edge\b", "Revisar solo si mejora la línea o nueva información cambia la ventaja"),
+        (r"\bNo lineup/injury headline returned\b", "Sin titular de lesiones/alineación"),
+        (r"\bLineup and injury data were not returned for this soccer event\b", "No se recibieron datos de alineación ni lesiones para este partido de fútbol"),
+        (r"\bTeam form data was not returned for this soccer event\b", "No se recibieron datos de forma del equipo para este partido de fútbol"),
+        (r"\bPlayer data not returned for this event\b", "Datos de jugadores no disponibles para este evento"),
+        (r"\bData not returned for this event\b", "Datos no disponibles para este evento"),
+        (r"\bActive APIs checked\b", "APIs activas revisadas"),
+        (r"\bNo active API source was detected for this row\b", "No se detectó una API activa para esta fila"),
+        (r"\bActive APIs\b", "APIs activas"),
+        (r"\bInactive\b", "Inactivas"),
+        (r"\bWeather\b", "Clima"),
+        (r"\bwind\b", "viento"),
+        (r"\bLocation\b", "Ubicación"),
+        (r"\bAPI-FB lookup checked; no fixture match\b", "API-FB revisada; sin coincidencia de partido"),
+        (r"\bAPI-FB: no fixture match\b", "API-FB: sin coincidencia de partido"),
+        (r"\bno fixture match\b", "sin coincidencia de partido"),
+        (r"\bfixture not verified\b", "partido no verificado"),
+        (r"\bNews\b", "Noticias"),
+        (r"\bsunny\b", "soleado"),
+    )
+    for old, new in replacements:
+        text = re.sub(old, new, text, flags=re.I)
+    return text
+
+
 def _spanish_report_defaults(row: dict[str, Any]) -> None:
     if not _is_spanish(row):
         return
@@ -288,20 +362,15 @@ def _spanish_report_defaults(row: dict[str, Any]) -> None:
     if not any(_useful(row.get(k)) for k in ("chain_notes", "main_read", "add_on_legs", "parlay_notes")):
         row["parlay_notes"] = "No encadenar señales con VE negativo.\nEvitar parlays salvo que la ventaja sea positiva.\nRevisar la cuota antes de incluir."
     if not any(_useful(row.get(k)) for k in ("final_explanation", "action_reason", "recommendation_reason", "decision_reasons")):
-        row["final_explanation"] = "No usar la cuota listada. Revisar solo si mejora la línea o nueva información cambia la ventaja."
+        row["final_explanation"] = "No jugar con la cuota listada. Revisar solo si mejora la línea o nueva información cambia la ventaja."
     if not _useful(row.get("data_source")) and not _useful(row.get("odds_source")):
         row["data_source"] = "fila cargada/en caché"
-    for key in ("bookmaker", "sportsbook", "book"):
-        if _get(row, key).lower() == "consensus average":
-            row[key] = "promedio consenso"
-    translations = {
-        "No lineup/injury headline returned.": "Sin titular de lesiones/alineación.",
-        "API-FB: no fixture match.": "API-FB: sin coincidencia de partido.",
-        "Price check required before entry.": "Revisar cuota antes de entrar.",
-    }
+    for key in ("bookmaker", "sportsbook", "book", "final_decision", "agent_decision", "recommendation", "consumer_action", "recommended_action"):
+        if isinstance(row.get(key), str):
+            row[key] = _spanish_text(row[key])
     for key, value in list(row.items()):
         if isinstance(value, str):
-            row[key] = translations.get(value, value)
+            row[key] = _spanish_text(value)
 
 
 def enrich_row_with_live_api_data(row_like: Any) -> dict[str, Any]:
@@ -371,7 +440,14 @@ def install(module: Any) -> Any:
         return module
     original_render = module.render_full_pick_magazine_page
     original_png = module._png
+    original_tr = getattr(module, "_tr", None)
     original_team_snapshot = getattr(module, "_team_snapshot", None)
+
+    if callable(original_tr):
+        def tr(value: Any, lang: str) -> str:
+            translated = original_tr(value, lang)
+            return _spanish_text(translated) if str(lang).lower().startswith("es") else translated
+        module._tr = tr
 
     def render(row_like: Any, *args: Any, **kwargs: Any):
         return original_render(enrich_row_with_live_api_data(row_like), *args, **kwargs)
@@ -406,3 +482,27 @@ def install(module: Any) -> Any:
     module.MAGAZINE_STYLE_VERSION = f"{module.MAGAZINE_STYLE_VERSION}_{ENRICHMENT_VERSION}"
     module._LIVE_API_ENRICHMENT_PATCHED = True
     return module
+
+
+def _patch_importlib_reload() -> None:
+    global _RELOAD_PATCHED, _ORIGINAL_RELOAD
+    if _RELOAD_PATCHED:
+        return
+    _ORIGINAL_RELOAD = importlib.reload
+
+    def reload_with_magazine_patch(module: Any) -> Any:
+        reloaded = _ORIGINAL_RELOAD(module)
+        if getattr(reloaded, "__name__", "") == "autonomous_betting_agent.magazine_book_export":
+            return install(reloaded)
+        return reloaded
+
+    importlib.reload = reload_with_magazine_patch
+    _RELOAD_PATCHED = True
+
+
+_patch_importlib_reload()
+try:
+    import autonomous_betting_agent.magazine_book_export as _magazine_book_export
+    install(_magazine_book_export)
+except Exception:
+    pass
