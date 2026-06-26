@@ -92,6 +92,31 @@ def _apply_context_preview(cards: pd.DataFrame, *, language: str) -> pd.DataFram
     return result
 
 
+def _card_dedupe_key(row: Mapping[str, Any]) -> str:
+    fields = (
+        safe_text(row.get("public_event") or row.get("event") or row.get("event_name") or row.get("matchup")),
+        safe_text(row.get("public_pick") or row.get("prediction") or row.get("pick") or row.get("selection")),
+        safe_text(row.get("market_type") or row.get("market") or row.get("line_point") or row.get("line")),
+        safe_text(row.get("consumer_action") or row.get("recommended_action") or row.get("public_action") or row.get("report_lane")),
+    )
+    key = "|".join(part.lower() for part in fields if part)
+    return key or safe_text(row.get("proof_id") or row.get("locked_at_utc") or row.get("source_file"))
+
+
+def _dedupe_cards(cards: pd.DataFrame) -> pd.DataFrame:
+    if cards.empty:
+        return cards
+    keep: list[Any] = []
+    seen: set[str] = set()
+    for index, row in cards.iterrows():
+        key = _card_dedupe_key(row.to_dict()) or f"row:{index}"
+        if key in seen:
+            continue
+        seen.add(key)
+        keep.append(index)
+    return cards.loc[keep].reset_index(drop=True)
+
+
 def _bool_count(frame: pd.DataFrame, column: str) -> int:
     if frame.empty or column not in frame.columns:
         return 0
@@ -116,6 +141,7 @@ def build_report_studio_cards(raw_rows: pd.DataFrame | Sequence[Mapping[str, Any
     enriched = enrich_rows(contextual, language=filters.language)
     cards = apply_learning_layer_compat(enriched)
     cards = _apply_context_preview(cards, language=filters.language)
+    cards = _dedupe_cards(cards)
     return raw, normalized, filtered, cards
 
 
