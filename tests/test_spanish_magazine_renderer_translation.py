@@ -17,10 +17,12 @@ def test_spanish_report_enrichment_translates_dynamic_text_fields():
         "bookmaker": "consensus average",
         "news_injury_summary": "No lineup/injury headline returned.",
         "api_football_summary": "API-FB: no fixture match.",
+        "why_lose": "Negative edge at current price.\nDo not play unless price improves.\nRecheck odds and key news.",
+        "chain_notes": "Do not chain negative-EV picks.\nAvoid parlays unless edge turns positive.\nRecheck price before including.",
     }
 
     enriched = enrich_row_with_live_api_data(row)
-    combined = "\n".join(str(enriched.get(key, "")) for key in ("why_bullets", "risk_reason", "parlay_notes", "final_explanation"))
+    combined = "\n".join(str(enriched.get(key, "")) for key in ("why_bullets", "why_lose", "risk_reason", "chain_notes", "parlay_notes", "final_explanation"))
 
     assert enriched["final_decision"] == "LISTA DE SEGUIMIENTO"
     assert enriched["bookmaker"] == "promedio consenso"
@@ -28,8 +30,15 @@ def test_spanish_report_enrichment_translates_dynamic_text_fields():
     assert enriched["api_football_summary"] == "API-FB: sin coincidencia de partido."
     assert "El modelo proyecta" in combined
     assert "La probabilidad implícita" in combined
+    assert "Ventaja negativa con la cuota actual" in combined
+    assert "No jugar salvo que la cuota mejore" in combined
+    assert "Revisar cuotas y noticias clave" in combined
     assert "No encadenar señales" in combined
+    assert "Evitar parlays" in combined
+    assert "Revisar la cuota antes de incluir" in combined
     assert "No jugar con la cuota listada" in combined
+    assert "Negative edge" not in combined
+    assert "Do not chain" not in combined
 
 
 def test_spanish_renderer_translation_is_installed_after_row_enrichment():
