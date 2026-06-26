@@ -1,15 +1,42 @@
+import pandas as pd
+
 from autonomous_betting_agent.report_product_layer import event_text
 from autonomous_betting_agent.report_studio_service import (
     ReportStudioFilters,
     _card_dedupe_key,
     build_report_studio_cards,
 )
+from autonomous_betting_agent.ui_i18n import localize_dataframe, localize_options
 
 
 def test_spanish_event_text_translates_both_country_sides():
     assert event_text("Canada vs Switzerland", "es") == "Canadá vs Suiza"
     assert event_text("Belgium vs New Zealand", "es") == "Bélgica vs Nueva Zelanda"
     assert event_text("Saudi Arabia at Cape Verde", "es") == "Arabia Saudita vs Cabo Verde"
+
+
+def test_shared_spanish_dataframe_localization_translates_screen_table_values():
+    frame = pd.DataFrame(
+        [
+            {"event": "Iran at Egypt", "sport": "FIFA World Cup", "market_type": "totals", "status": "ready_for_lock_or_learning"},
+            {"event": "Belgium at New Zealand", "sport": "FIFA World Cup", "market_type": "spreads", "status": "lock_first"},
+        ]
+    )
+
+    out = localize_dataframe(frame, "es")
+
+    assert out["evento"].tolist() == ["Irán vs Egipto", "Bélgica vs Nueva Zelanda"]
+    assert out["deporte"].tolist() == ["Copa Mundial FIFA", "Copa Mundial FIFA"]
+    assert out["tipo_mercado"].tolist() == ["totales", "hándicaps"]
+    assert out["estado"].tolist() == ["listo para bloqueo o aprendizaje", "bloquear primero"]
+
+
+def test_shared_spanish_options_localize_report_actions():
+    display, reverse = localize_options(["Price Watch / Research", "Research / Track for Learning"], "es")
+
+    assert display == ["Seguimiento de precio / investigación", "Investigación / seguimiento para aprendizaje"]
+    assert reverse["Seguimiento de precio / investigación"] == "Price Watch / Research"
+    assert reverse["Investigación / seguimiento para aprendizaje"] == "Research / Track for Learning"
 
 
 def test_report_studio_dedupe_key_ignores_price_but_preserves_line_identity():
