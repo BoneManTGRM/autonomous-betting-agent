@@ -16,6 +16,7 @@ from autonomous_betting_agent.pick_hold_store import load_first_available
 from autonomous_betting_agent.report_feed_service import save_report_feed
 from autonomous_betting_agent.report_product_layer import MagazineBrand, event_text, pick_text, safe_text, sport_text, value_text
 from autonomous_betting_agent.report_studio_service import ReportStudioFilters, build_report_studio_state, report_studio_summary
+from autonomous_betting_agent.report_studio_spanish_ui import render_sport_league_filter, sport_league_display_text
 from autonomous_betting_agent.report_studio_ui import render_premium_card_deck, render_status_dashboard
 from autonomous_betting_agent.row_normalizer import normalize_frame
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
@@ -383,7 +384,7 @@ with st.expander(t("profile"), expanded=True):
     visibility_values = ["private", "public"]
     loaded_visibility = safe_text((loaded.delivery_settings or {}).get("visibility")) or "private"
     visibility = b2.selectbox(t("visibility"), visibility_values, index=visibility_values.index(loaded_visibility) if loaded_visibility in visibility_values else 0)
-    preferred_sports = st.multiselect(t("sports"), all_sport_options, default=[sport for sport in list(loaded.preferred_sports or []) if sport in all_sport_options], key="report_profile_sports")
+    preferred_sports = render_sport_league_filter(st, label=t("sports"), options=all_sport_options, default=[sport for sport in list(loaded.preferred_sports or []) if sport in all_sport_options], language=LANG, key="report_profile_sports")
     disclaimer_default = "Informational content only. Results are not guaranteed." if LANG == "en" else "Contenido informativo. No garantiza resultados."
     disclaimer = st.text_area(t("disclaimer"), value=loaded.disclaimer or disclaimer_default, height=80)
     technical = "Analyst" in report_mode or "técnico" in report_mode.lower()
