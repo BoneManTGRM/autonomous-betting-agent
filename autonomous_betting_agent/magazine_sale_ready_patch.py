@@ -6,9 +6,9 @@ from typing import Any, Iterable, Mapping
 from autonomous_betting_agent import magazine_api_sources as api_sources
 
 _APPLIED_FLAG = "_ABA_SALE_READY_MAGAZINE_PATCHED"
-_RENDER_FLAG = "_ABA_SALE_READY_RENDER_WRAPPED"
+_RENDER_FLAG = "_ABA_SALE_READY_RENDER_WRAPPED_V4"
 _TRANSLATION_FLAG = "_ABA_SPANISH_COUNTRY_TRANSLATION_PATCHED"
-_VERSION_SUFFIX = "_sale_ready_risk_chain_v3"
+_VERSION_SUFFIX = "_sale_ready_risk_chain_v4"
 
 PROTECTED_BRANDS = (
     "The Odds API",
@@ -24,115 +24,43 @@ PROTECTED_BRANDS = (
 )
 
 COUNTRY_ES = {
-    "albania": "Albania",
-    "algeria": "Argelia",
-    "angola": "Angola",
-    "argentina": "Argentina",
-    "australia": "Australia",
-    "austria": "Austria",
-    "belgium": "Bélgica",
-    "bolivia": "Bolivia",
-    "brazil": "Brasil",
-    "bulgaria": "Bulgaria",
-    "cameroon": "Camerún",
-    "canada": "Canadá",
-    "chile": "Chile",
-    "china": "China",
-    "colombia": "Colombia",
-    "costa rica": "Costa Rica",
-    "croatia": "Croacia",
-    "curacao": "Curazao",
-    "curaçao": "Curazao",
-    "czech republic": "República Checa",
-    "czechia": "Chequia",
-    "denmark": "Dinamarca",
-    "dominican republic": "República Dominicana",
-    "ecuador": "Ecuador",
-    "egypt": "Egipto",
-    "england": "Inglaterra",
-    "finland": "Finlandia",
-    "france": "Francia",
-    "germany": "Alemania",
-    "ghana": "Ghana",
-    "greece": "Grecia",
-    "haiti": "Haití",
-    "holland": "Países Bajos",
-    "honduras": "Honduras",
-    "hungary": "Hungría",
-    "iceland": "Islandia",
-    "iran": "Irán",
-    "iraq": "Irak",
-    "ireland": "Irlanda",
-    "israel": "Israel",
-    "italy": "Italia",
-    "ivory coast": "Costa de Marfil",
-    "cote d'ivoire": "Costa de Marfil",
-    "côte d'ivoire": "Costa de Marfil",
-    "jamaica": "Jamaica",
-    "japan": "Japón",
-    "jordan": "Jordania",
-    "korea republic": "Corea del Sur",
-    "mexico": "México",
-    "morocco": "Marruecos",
-    "netherlands": "Países Bajos",
-    "new zealand": "Nueva Zelanda",
-    "nigeria": "Nigeria",
-    "northern ireland": "Irlanda del Norte",
-    "norway": "Noruega",
-    "panama": "Panamá",
-    "paraguay": "Paraguay",
-    "peru": "Perú",
-    "poland": "Polonia",
-    "portugal": "Portugal",
-    "qatar": "Qatar",
-    "romania": "Rumanía",
-    "russia": "Rusia",
-    "saudi arabia": "Arabia Saudita",
-    "scotland": "Escocia",
-    "senegal": "Senegal",
-    "serbia": "Serbia",
-    "slovakia": "Eslovaquia",
-    "slovenia": "Eslovenia",
-    "south africa": "Sudáfrica",
-    "south korea": "Corea del Sur",
-    "spain": "España",
-    "sweden": "Suecia",
-    "switzerland": "Suiza",
-    "tunisia": "Túnez",
-    "turkey": "Turquía",
-    "uae": "Emiratos Árabes Unidos",
-    "ukraine": "Ucrania",
-    "united arab emirates": "Emiratos Árabes Unidos",
-    "united states": "Estados Unidos",
-    "united states of america": "Estados Unidos",
-    "uruguay": "Uruguay",
-    "usa": "Estados Unidos",
-    "uzbekistan": "Uzbekistán",
-    "wales": "Gales",
+    "albania": "Albania", "algeria": "Argelia", "angola": "Angola", "argentina": "Argentina",
+    "australia": "Australia", "austria": "Austria", "belgium": "Bélgica", "bolivia": "Bolivia",
+    "brazil": "Brasil", "bulgaria": "Bulgaria", "cameroon": "Camerún", "canada": "Canadá",
+    "chile": "Chile", "china": "China", "colombia": "Colombia", "costa rica": "Costa Rica",
+    "croatia": "Croacia", "curacao": "Curazao", "curaçao": "Curazao",
+    "czech republic": "República Checa", "czechia": "Chequia", "denmark": "Dinamarca",
+    "dominican republic": "República Dominicana", "ecuador": "Ecuador", "egypt": "Egipto",
+    "england": "Inglaterra", "finland": "Finlandia", "france": "Francia", "germany": "Alemania",
+    "ghana": "Ghana", "greece": "Grecia", "haiti": "Haití", "holland": "Países Bajos",
+    "honduras": "Honduras", "hungary": "Hungría", "iceland": "Islandia", "iran": "Irán",
+    "iraq": "Irak", "ireland": "Irlanda", "israel": "Israel", "italy": "Italia",
+    "ivory coast": "Costa de Marfil", "cote d'ivoire": "Costa de Marfil", "côte d'ivoire": "Costa de Marfil",
+    "jamaica": "Jamaica", "japan": "Japón", "jordan": "Jordania", "korea republic": "Corea del Sur",
+    "mexico": "México", "morocco": "Marruecos", "netherlands": "Países Bajos", "new zealand": "Nueva Zelanda",
+    "nigeria": "Nigeria", "northern ireland": "Irlanda del Norte", "norway": "Noruega", "panama": "Panamá",
+    "paraguay": "Paraguay", "peru": "Perú", "poland": "Polonia", "portugal": "Portugal",
+    "qatar": "Qatar", "romania": "Rumanía", "russia": "Rusia", "saudi arabia": "Arabia Saudita",
+    "scotland": "Escocia", "senegal": "Senegal", "serbia": "Serbia", "slovakia": "Eslovaquia",
+    "slovenia": "Eslovenia", "south africa": "Sudáfrica", "south korea": "Corea del Sur",
+    "spain": "España", "sweden": "Suecia", "switzerland": "Suiza", "tunisia": "Túnez",
+    "turkey": "Turquía", "uae": "Emiratos Árabes Unidos", "ukraine": "Ucrania",
+    "united arab emirates": "Emiratos Árabes Unidos", "united states": "Estados Unidos",
+    "united states of america": "Estados Unidos", "uruguay": "Uruguay", "usa": "Estados Unidos",
+    "uzbekistan": "Uzbekistán", "wales": "Gales",
 }
 
 WEATHER_ES = (
     ("Moderate or heavy rain with thunder", "lluvia y tormenta"),
     ("moderate or heavy rain with thunder", "lluvia y tormenta"),
-    ("Patchy rain nearby", "lluvia cercana"),
-    ("patchy rain nearby", "lluvia cercana"),
-    ("Partly cloudy", "parcialmente nublado"),
-    ("partly cloudy", "parcialmente nublado"),
-    ("Light rain", "lluvia ligera"),
-    ("light rain", "lluvia ligera"),
-    ("Overcast", "nublado"),
-    ("overcast", "nublado"),
-    ("Sunny", "soleado"),
-    ("sunny", "soleado"),
-    ("Clear", "despejado"),
-    ("clear", "despejado"),
-    ("Mist", "neblina"),
-    ("mist", "neblina"),
-    ("Weather:", "Clima:"),
-    ("Location:", "Ubicación:"),
-    ("weather checked", "clima revisado"),
-    ("wind", "viento"),
-    ("Pennsylvania", "Pensilvania"),
+    ("Patchy rain nearby", "lluvia cercana"), ("patchy rain nearby", "lluvia cercana"),
+    ("Partly cloudy", "parcialmente nublado"), ("partly cloudy", "parcialmente nublado"),
+    ("Light rain", "lluvia ligera"), ("light rain", "lluvia ligera"),
+    ("Overcast", "nublado"), ("overcast", "nublado"), ("Sunny", "soleado"),
+    ("sunny", "soleado"), ("Clear", "despejado"), ("clear", "despejado"),
+    ("Mist", "neblina"), ("mist", "neblina"), ("Weather:", "Clima:"),
+    ("Location:", "Ubicación:"), ("weather checked", "clima revisado"),
+    ("wind", "viento"), ("Pennsylvania", "Pensilvania"),
 )
 
 SPANISH_VISIBLE_TEXT = {
@@ -143,13 +71,8 @@ SPANISH_VISIBLE_TEXT = {
     "No SDIO event ID returned.": "Sin ID de evento SDIO.",
     "API-FB: no fixture match.": "API-FB: sin coincidencia de partido.",
     "API-FB lookup checked; no fixture match.": "API-FB: sin coincidencia de partido.",
-    "ACTIVE": "ACTIVO",
-    "ACTIVE:": "ACTIVO:",
-    "ACTIVE APIS": "APIS ACTIVAS",
-    "NO LIVE": "SIN EN VIVO",
-    "NO LIVE:": "SIN EN VIVO:",
-    "Odds": "Cuotas",
-    "ODDS": "CUOTAS",
+    "ACTIVE": "ACTIVO", "ACTIVE:": "ACTIVO:", "ACTIVE APIS": "APIS ACTIVAS",
+    "NO LIVE": "SIN EN VIVO", "NO LIVE:": "SIN EN VIVO:", "Odds": "Cuotas", "ODDS": "CUOTAS",
     "Price check required before entry.": "Revisar cuota antes de entrar.",
     "Negative edge at current price.": "Ventaja negativa con la cuota actual.",
     "Do not play unless price improves.": "No jugar salvo que la cuota mejore.",
@@ -158,8 +81,7 @@ SPANISH_VISIBLE_TEXT = {
     "Avoid parlays unless edge turns positive.": "Evitar parlays salvo que la ventaja sea positiva.",
     "Recheck price before including.": "Revisar la cuota antes de incluir.",
     "Do not play at the listed price. Recheck only if the line improves or new information changes the edge.": "Revisar si mejora la línea.",
-    "WATCHLIST": "LISTA DE SEGUIMIENTO",
-    "RESEARCH ONLY": "SOLO INVESTIGACIÓN",
+    "WATCHLIST": "LISTA DE SEGUIMIENTO", "RESEARCH ONLY": "SOLO INVESTIGACIÓN",
 }
 
 
@@ -461,7 +383,6 @@ def _patch_translation_layer(module: Any) -> None:
         module.COUNTRY_ES.update(COUNTRY_ES)
     except Exception:
         module.COUNTRY_ES = dict(COUNTRY_ES)
-
     original_team_label = getattr(module, "_team_label", None)
     original_tr = getattr(module, "_tr", None)
 
@@ -485,11 +406,45 @@ def _patch_translation_layer(module: Any) -> None:
     setattr(module, _TRANSLATION_FLAG, True)
 
 
+def _clean_report_brand(value: Any) -> str:
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    text = re.split(r"\s+[—-]\s+", text, maxsplit=1)[0].strip()
+    if text.lower() in {"full pick magazine", "magazine report", "report"}:
+        return ""
+    return text
+
+
+def _arg(args: tuple[Any, ...], kwargs: Mapping[str, Any], index: int, name: str, default: Any) -> Any:
+    return kwargs.get(name) if name in kwargs else (args[index] if len(args) > index else default)
+
+
 def _patch_visuals(module: Any) -> None:
     current_render = getattr(module, "render_full_pick_magazine_page", None)
     if getattr(current_render, _RENDER_FLAG, False):
         return
     original_render = current_render
+
+    def repaint_masthead(draw: Any, row: Any, lang: str, report_name: Any, page_number: Any, total_pages: Any) -> None:
+        brand = _get(row, "report_brand_name", "brand_name", "tipster_name", default="") or _clean_report_brand(report_name) or "ABA Signal Pro"
+        title = _get(row, "report_title", default="") or module._tr("DAILY SPORTS ANALYSIS", lang)
+        title = module._tr(title, lang)
+        try:
+            page_no = int(page_number)
+        except Exception:
+            page_no = 1
+        try:
+            total = int(total_pages)
+        except Exception:
+            total = 1
+        draw.rectangle((18, 18, module.PAGE_WIDTH - 18, 82), fill=module.BLACK)
+        draw.rectangle((28, 24, 308, 74), fill=module.RED)
+        brand_upper = str(brand).upper()
+        title_upper = str(title).upper()
+        draw.text((43, 29), brand_upper, font=module._fit(brand_upper, 250, 38, 15, True), fill="white")
+        draw.text((330, 28), title_upper, font=module._fit(title_upper, 470, 38, 16, True), fill="white")
+        draw.rounded_rectangle((840, 24, 1050, 74), radius=5, fill=module.CREAM, outline=module.BLACK)
+        page_text = module._tr(f"PAGE {page_no} OF {total}", lang)
+        draw.text((862, 32), page_text, font=module._fit(page_text, 174, 28, 16, True), fill=module.BLACK)
 
     def repaint_vs_badge(draw: Any) -> None:
         box = module.VS_BADGE_BOX
@@ -567,8 +522,10 @@ def _patch_visuals(module: Any) -> None:
 
     def patched_render(pick: Any, *args: Any, **kwargs: Any):
         img = original_render(pick, *args, **kwargs)
-        lang = module._lang(pick, kwargs.get("language") if "language" in kwargs else (args[10] if len(args) >= 11 else None))
+        explicit_lang = kwargs.get("language") if "language" in kwargs else _arg(args, kwargs, 10, "language", None)
+        lang = module._lang(pick, explicit_lang)
         draw = module.ImageDraw.Draw(img, "RGBA")
+        repaint_masthead(draw, pick, lang, _arg(args, kwargs, 1, "report_name", None), _arg(args, kwargs, 2, "page_number", 1), _arg(args, kwargs, 3, "total_pages", 1))
         repaint_vs_badge(draw)
         repaint_evidence_body(draw, pick, lang)
         repaint_matchup_body(draw, pick, lang)
