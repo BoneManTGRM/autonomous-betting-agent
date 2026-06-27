@@ -753,7 +753,13 @@ def _bullets_auto(draw: ImageDraw.ImageDraw, x: int, y: int, items: list[str], w
 
 
 def _items(row: Any, keys: Iterable[str], fallback: list[str], limit: int, lang: str = "en") -> list[str]:
-    return [_tr(item, lang) for item in _items_from_keys(row, keys, fallback, limit)]
+    data = _row(row)
+    values: list[str] = []
+    for key in keys:
+        values.extend(_split(data.get(key)))
+    if not values:
+        values = list(fallback)
+    return [_tr(item, lang) for item in values[:limit]]
 
 
 def _why(row: Any, lang: str) -> list[str]:
