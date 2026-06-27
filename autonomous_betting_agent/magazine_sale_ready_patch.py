@@ -203,14 +203,16 @@ def sale_ready_chain_items(row: Any) -> list[str]:
 def _items_from_context(row: Any, keys: Iterable[str], fallback: list[str], limit: int, lang: str = "en") -> list[str]:
     key_tuple = tuple(keys)
     if any(key in key_tuple for key in ("risk", "risk_level", "risk_label", "profit_guard_status", "risk_note", "risk_notes")):
-        return sale_ready_risk_items(row)[:limit]
-    if any(key in key_tuple for key in ("chain_note", "chain_notes", "parlay_note", "parlay_notes", "combo_note")):
-        return sale_ready_chain_items(row)[:limit]
-    if "matchup_note" in key_tuple or "sports_context_summary" in key_tuple or "weather_summary" in key_tuple:
-        return sale_ready_matchup_items(row)[:limit]
-    if "injury_report" in key_tuple or "lineup_status" in key_tuple or "key_players" in key_tuple:
-        return sale_ready_injury_items(row, "away")[:limit]
-    return sale_ready_team_items(row)[:limit]
+        items = sale_ready_risk_items(row)[:limit]
+    elif any(key in key_tuple for key in ("chain_note", "chain_notes", "parlay_note", "parlay_notes", "combo_note")):
+        items = sale_ready_chain_items(row)[:limit]
+    elif "matchup_note" in key_tuple or "sports_context_summary" in key_tuple or "weather_summary" in key_tuple:
+        items = sale_ready_matchup_items(row)[:limit]
+    elif "injury_report" in key_tuple or "lineup_status" in key_tuple or "key_players" in key_tuple:
+        items = sale_ready_injury_items(row, "away")[:limit]
+    else:
+        items = sale_ready_team_items(row)[:limit]
+    return items
 
 
 def _patch_visuals(module: Any) -> None:
@@ -270,23 +272,23 @@ def _patch_visuals(module: Any) -> None:
         if callable(original_bullets):
             original_bullets(draw, x, y, compact_items, width, height, color, start, max(minimum, 10), limit, lang)
 
-    def repaint_evidence_strip(draw: Any) -> None:
+    def repaint_evidence_strip(draw: Any, lang: str) -> None:
         left_x, left_w = 20, 320
         draw.rectangle((left_x + 8, 1088, left_x + left_w - 8, 1120), fill=module.CREAM)
         draw.line((left_x + 12, 1088, left_x + left_w - 12, 1088), fill=module.BLACK + (135,), width=1)
-        module._txt_auto(draw, left_x + 22, 1094, "Price check required before entry.", left_w - 44, 22, 13, 9, module.BLACK, True, 1)
+        module._txt_auto(draw, left_x + 22, 1094, module._tr("Price check required before entry.", lang), left_w - 44, 22, 13, 9, module.BLACK, True, 1)
 
-    def draw_guidance_body(draw: Any, box: tuple[int, int, int, int], items: list[str], color: Any) -> None:
+    def draw_guidance_body(draw: Any, box: tuple[int, int, int, int], items: list[str], color: Any, lang: str) -> None:
         draw.rectangle(box, fill=module.CREAM)
         y = box[1] + 10
         for item in items[:3]:
             draw.ellipse((box[0] + 12, y + 5, box[0] + 24, y + 17), fill=color)
-            module._txt_auto(draw, box[0] + 32, y, item, box[2] - box[0] - 46, 30, 15, 11, module.TEXT, False, 2)
+            module._txt_auto(draw, box[0] + 32, y, module._tr(item, lang), box[2] - box[0] - 46, 30, 15, 11, module.TEXT, False, 2)
             y += 30
 
-    def repaint_bottom_guidance(draw: Any, row: Any) -> None:
-        draw_guidance_body(draw, (34, 1234, 326, 1348), sale_ready_risk_items(row), module.RED)
-        draw_guidance_body(draw, (724, 1234, 1050, 1348), sale_ready_chain_items(row), module.BLUE)
+    def repaint_bottom_guidance(draw: Any, row: Any, lang: str) -> None:
+        draw_guidance_body(draw, (34, 1234, 326, 1348), sale_ready_risk_items(row), module.RED, lang)
+        draw_guidance_body(draw, (724, 1234, 1050, 1348), sale_ready_chain_items(row), module.BLUE, lang)
 
     def repaint_final(img: Any, row: Any, lang: str) -> None:
         draw = module.ImageDraw.Draw(img, "RGBA")
@@ -303,14 +305,17 @@ def _patch_visuals(module: Any) -> None:
         draw.text((40, fy + 76), rec, font=module._fit(rec, 190, 24, 12, True), fill=module.CREAM)
         draw.text((284, fy + 18), module._tr(action, lang).upper(), font=module._fit(action.upper(), 340, 58, 18, True), fill=accent)
         module._txt_auto(draw, 284, fy + 92, pick_text, 360, 34, 40, 10, module.CREAM, True, 1)
-        module._txt_auto(draw, 670, fy + 36, module._tr(explanation, lang), 340, 88, 19, 10, module.CREAM, False, None)
+        if lang == "es":
+            module._txt_auto(draw, 720, fy + 112, "Revisar si mejora la línea.", 300, 32, 15, 8, module.CREAM, False, 1)
+        else:
+            module._txt_auto(draw, 670, fy + 36, module._tr(explanation, lang), 340, 88, 19, 10, module.CREAM, False, None)
 
     def patched_render(pick: Any, *args: Any, **kwargs: Any):
         img = original_render(pick, *args, **kwargs)
         lang = module._lang(pick, kwargs.get("language") if "language" in kwargs else (args[10] if len(args) >= 11 else None))
         draw = module.ImageDraw.Draw(img, "RGBA")
-        repaint_evidence_strip(draw)
-        repaint_bottom_guidance(draw, pick)
+        repaint_evidence_strip(draw, lang)
+        repaint_bottom_guidance(draw, pick, lang)
         repaint_final(img, pick, lang)
         return img
 
