@@ -4,7 +4,7 @@ from typing import Any, Iterable
 
 from autonomous_betting_agent.multi_leg_report import attach_multi_leg_review, format_items
 
-_FLAG = "_ABA_MAGAZINE_COMBO_SECTION_PATCHED_V4"
+_FLAG = "_ABA_MAGAZINE_COMBO_SECTION_PATCHED_V5"
 _LAST_ITEMS = ""
 
 
@@ -58,6 +58,16 @@ def _row_with_latest(row_value: Any) -> dict[str, Any]:
     return row
 
 
+def _paint_combo_box(module: Any, image: Any, row: dict[str, Any], language: str) -> Any:
+    draw = module.ImageDraw.Draw(image, "RGBA")
+    x, y, width, height = 712, 1178, 348, 175
+    module._section(draw, x, y, width, height, "CHAIN BETTING NOTES", module.BLUE, language)
+    draw.rectangle((x + 10, y + 56, x + width - 10, y + height - 8), fill=module.CREAM)
+    items = combo_section_items(row)
+    module._bullets_auto(draw, x + 24, y + 70, items, width - 48, height - 88, module.BLUE, 14, 7, 3, language)
+    return image
+
+
 def install(module: Any) -> Any:
     if getattr(module, _FLAG, False):
         return module
@@ -73,7 +83,12 @@ def install(module: Any) -> Any:
         original = getattr(module, name, None)
         if callable(original):
             def page_wrapper(pick: Any, *args: Any, _original=original, **kwargs: Any):
-                return _original(_row_with_latest(pick), *args, **kwargs)
+                row = _row_with_latest(pick)
+                rendered = _original(row, *args, **kwargs)
+                if name.endswith("_png"):
+                    return rendered
+                explicit = kwargs.get("language") if "language" in kwargs else (args[10] if len(args) > 10 else None)
+                return _paint_combo_box(module, rendered, row, _lang(row, explicit))
             setattr(module, name, page_wrapper)
     setattr(module, _FLAG, True)
     return module
