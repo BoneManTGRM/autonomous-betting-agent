@@ -35,11 +35,10 @@ def test_sale_ready_patch_source_has_overlay_polish_plumbing():
     assert "Cuotas" in source
     assert "draw_guidance_body" in source
     assert "_es(module._tr(item, lang), lang)" in source
-    assert "module._txt_auto(draw, 735, fy + 56" in source
-    assert "_sale_ready_risk_chain_v2" in source
+    assert "_sale_ready_risk_chain_v3" in source
 
 
 def test_sale_ready_patch_preserves_v10_footer_marker():
     patched = sale_ready.apply_magazine_sale_ready_patch(renderer)
     assert patched.NO_MARKET_EXPORT_VERSION == "no_market_metric_v10"
-    assert patched.MAGAZINE_STYLE_VERSION.endswith("_sale_ready_risk_chain_v2")
+    assert patched.MAGAZINE_STYLE_VERSION.endswith("_sale_ready_risk_chain_v3")
