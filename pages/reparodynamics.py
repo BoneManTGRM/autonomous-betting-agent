@@ -3,7 +3,12 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from autonomous_betting_agent.reparodynamics_audit import audit_event_display_rows, latest_reparodynamics_audit_event
+from autonomous_betting_agent.adaptive_repair_runner import rows_from_csv_bytes, run_adaptive_repair_scan
+from autonomous_betting_agent.reparodynamics_audit import (
+    audit_event_display_rows,
+    latest_reparodynamics_audit_event,
+    write_reparodynamics_audit_event_from_runner_report,
+)
 from autonomous_betting_agent.reparodynamics_doctrine import get_reparodynamics_doctrine
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 
@@ -26,10 +31,17 @@ TEXT = {
         "forbidden": "Forbidden in Phase 3A",
         "status": "Activation status",
         "audit": "Reparodynamics Audit Log",
+        "controls": "Observation-only scan controls",
+        "include_system": "Include available local system sources",
+        "upload": "Optional graded CSV for this Reparodynamics scan",
+        "upload_loaded": "Loaded uploaded rows for observation scan.",
+        "run_now": "Run Phase 3A observation scan now",
+        "run_success": "Reparodynamics observation scan completed and audit event written.",
+        "scan_summary": "Latest scan summary",
         "no_run": "No run recorded yet.",
         "phase3a_explanation": "Phase 3A does not improve picks directly. It observes graded results, detects drift, finds duplicate-event issues, and prepares repair candidates for later Shadow Mode testing. No live model changes are allowed in this phase.",
         "final": "Final rule",
-        "warning": "This page is documentation/status only. It does not activate live repairs, Shadow Mode, TGRM, RYE scoring, confidence changes, bet-tier changes, bankroll changes, sportsbook changes, or model mutation.",
+        "warning": "This page can now run a real observation-only scan and write an audit event. It still does not activate live repairs, Shadow Mode, TGRM, RYE scoring, confidence changes, bet-tier changes, bankroll changes, sportsbook changes, filters, or model mutation.",
     },
     "es": {
         "title": "Reparodynamics",
@@ -46,10 +58,17 @@ TEXT = {
         "forbidden": "Prohibido en Fase 3A",
         "status": "Estado de activación",
         "audit": "Registro de Auditoría Reparodynamics",
+        "controls": "Controles de escaneo solo observación",
+        "include_system": "Incluir fuentes locales disponibles del sistema",
+        "upload": "CSV calificado opcional para este escaneo Reparodynamics",
+        "upload_loaded": "Filas subidas cargadas para escaneo de observación.",
+        "run_now": "Ejecutar escaneo de observación Fase 3A ahora",
+        "run_success": "Escaneo de observación Reparodynamics completado y evento de auditoría escrito.",
+        "scan_summary": "Resumen del último escaneo",
         "no_run": "Todavía no hay ejecución registrada.",
         "phase3a_explanation": "La Fase 3A no mejora picks directamente. Observa resultados calificados, detecta deriva, encuentra problemas de eventos duplicados y prepara candidatos de reparación para pruebas posteriores en Shadow Mode. No se permiten cambios al modelo en vivo en esta fase.",
         "final": "Regla final",
-        "warning": "Esta página es solo documentación/estado. No activa reparaciones en vivo, Shadow Mode, TGRM, puntuación RYE, cambios de confianza, cambios de nivel de apuesta, cambios de bankroll, cambios de sportsbook ni mutación del modelo.",
+        "warning": "Esta página ahora puede ejecutar un escaneo real solo de observación y escribir un evento de auditoría. Todavía no activa reparaciones en vivo, Shadow Mode, TGRM, puntuación RYE, cambios de confianza, niveles de apuesta, bankroll, sportsbook, filtros ni mutación del modelo.",
     },
 }
 
@@ -76,7 +95,7 @@ ES_LIST_MAP = {
     "Treat Shadow Mode readiness as readiness only, not activation.": "Tratar la preparación de Shadow Mode solo como preparación, no como activación.",
     "Phase 3A is observation-only.": "La Fase 3A es solo observación.",
     "Learning means observation, diagnostics, watchlist candidates, readiness checks, and saved reports only.": "Aprendizaje significa solo observación, diagnósticos, candidatos en watchlist, revisiones de preparación y reportes guardados.",
-    "No repair activates during Phase 3A.": "Ninguna reparación se activa durante la Fase 3A.",
+    "No repair activates during Phase 3A.": "Ninguna reparación se activa durante Phase 3A.",
     "No repair survives without proof.": "Ninguna reparación sobrevive sin prueba.",
     "The system does not chase losses.": "El sistema no persigue pérdidas.",
     "The system does not panic after variance.": "El sistema no entra en pánico después de la varianza.",
@@ -150,9 +169,48 @@ status_cols[3].metric(t("shadow"), value_text(str(doctrine.get("shadow_mode_acti
 status_cols[4].metric(t("tgrm"), value_text(str(doctrine.get("tgrm_activation", ""))))
 status_cols[5].metric(t("rye"), value_text(str(doctrine.get("rye_activation", ""))))
 
+st.subheader(t("controls"))
+include_system = st.checkbox(t("include_system"), value=True)
+uploaded_rows = None
+uploaded_bytes = None
+uploaded_name = "reparodynamics_upload.csv"
+upload = st.file_uploader(t("upload"), type=["csv"], key="reparodynamics_observation_upload")
+if upload is not None:
+    uploaded_bytes = upload.getvalue()
+    uploaded_name = upload.name
+    try:
+        uploaded_rows = rows_from_csv_bytes(uploaded_bytes)
+        st.success(f"{t('upload_loaded')} {len(uploaded_rows)}")
+        st.dataframe(pd.DataFrame(uploaded_rows).head(50), use_container_width=True)
+    except Exception as exc:
+        st.warning(f"Could not parse uploaded CSV: {exc}")
+        uploaded_rows = None
+
+if st.button(t("run_now"), type="primary"):
+    report = run_adaptive_repair_scan(
+        uploaded_rows=uploaded_rows,
+        uploaded_filename=uploaded_name,
+        uploaded_bytes=uploaded_bytes,
+        include_system_sources=include_system,
+    )
+    audit_event = write_reparodynamics_audit_event_from_runner_report(report, source="Reparodynamics page observation scan")
+    st.success(t("run_success"))
+    with st.expander(t("scan_summary"), expanded=True):
+        st.json({
+            "run_id": report.run_id,
+            "sources": report.source_summary,
+            "safety_state": report.safety_state,
+            "readiness": report.readiness,
+            "activation_gate": report.activation_gate,
+            "production_repairs_active": report.production_repairs_active,
+            "shadow_mode_active": report.shadow_mode_active,
+            "live_pick_changes": report.live_pick_changes,
+        })
+else:
+    audit_event = latest_reparodynamics_audit_event()
+
 st.subheader(t("audit"))
 st.info(t("phase3a_explanation"))
-audit_event = latest_reparodynamics_audit_event()
 if audit_event is None:
     st.info(t("no_run"))
 else:
