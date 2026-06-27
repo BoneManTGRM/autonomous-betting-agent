@@ -41,6 +41,18 @@ def _row(value: Any) -> Mapping[str, Any]:
     return api_sources._row(value)
 
 
+def _split(value: Any) -> list[str]:
+    splitter = getattr(api_sources, "_split", None)
+    if callable(splitter):
+        try:
+            return splitter(value)
+        except Exception:
+            pass
+    if _bad(value):
+        return []
+    return [p.strip(" -•") for p in str(value).replace("•", "\n").replace(";", "\n").replace("|", "\n").splitlines() if p.strip(" -•")]
+
+
 def _bad(value: Any) -> bool:
     return value is None or str(value).strip().lower() in {"", "nan", "none", "null", "n/a", "na", "nat", "--"}
 
@@ -128,6 +140,15 @@ def _dedupe(items: Iterable[str]) -> list[str]:
     return out
 
 
+def _short_location(location: str) -> str:
+    return (
+        re.sub(r"\s+", " ", str(location or "").strip(" ."))
+        .replace("Pennsylvania, United States of America", "PA, USA")
+        .replace("United States of America", "USA")
+        .replace("United States", "USA")
+    )
+
+
 def _clean_provider_item(text: str) -> str:
     value = re.sub(r"\s+", " ", str(text or "").strip())
     low = value.lower()
@@ -142,6 +163,44 @@ def _clean_provider_item(text: str) -> str:
             return "No lineup/injury headline returned."
         return "No recent matching news returned."
     return value.replace("Pennsylvania, United States of America", "PA, USA")
+
+
+def _clean_matchup_item(text: str) -> list[str]:
+    value = re.sub(r"\s+", " ", str(text or "").strip())
+    low = value.lower()
+    if not value:
+        return []
+    if low.startswith("api-fb lookup checked") or low.startswith("api-football checked") or low.startswith("api-fb lookup only"):
+        return ["API-FB lookup checked; no fixture match."]
+    if low.startswith("location:"):
+        return ["Location: " + _short_location(value.split(":", 1)[1]) + "."]
+    if low.startswith("weather:") or low.startswith("weatherapi:"):
+        body = value.split(":", 1)[1].strip()
+        location = ""
+        loc_match = re.search(r"\bLocation:\s*(.+)$", body, flags=re.I)
+        if loc_match:
+            location = loc_match.group(1).strip(" .")
+            body = body[: loc_match.start()].strip(" .")
+        temp_match = re.search(r"(-?\d+(?:\.\d+)?)\s*°\s*([CF])\b", body, flags=re.I)
+        wind_match = re.search(r"wind\s+\d+(?:\.\d+)?\s*kph", body, flags=re.I)
+        condition = ""
+        for part in re.split(r"[.,;]", body):
+            clean = part.strip()
+            if clean and not re.search(r"°\s*[CF]\b", clean, re.I) and "wind" not in clean.lower():
+                condition = clean[:1].lower() + clean[1:]
+                break
+        pieces = []
+        if temp_match:
+            pieces.append(f"{temp_match.group(1)}°{temp_match.group(2).upper()}")
+        if condition:
+            pieces.append(condition)
+        if wind_match:
+            pieces.append(wind_match.group(0).lower())
+        out = ["Weather: " + ", ".join(pieces[:3]) + "."] if pieces else [value]
+        if location:
+            out.append("Location: " + _short_location(location) + ".")
+        return out
+    return [_clean_provider_item(value)]
 
 
 def sale_ready_team_items(row: Any, side: str = "") -> list[str]:
@@ -160,8 +219,10 @@ def sale_ready_injury_items(row: Any, prefix: str = "") -> list[str]:
 
 def sale_ready_matchup_items(row: Any) -> list[str]:
     lang = _lang(row)
-    raw = [str(item) for item in api_sources.matchup_items(row)]
-    return [_es(item, lang) for item in _dedupe(raw)[:3]]
+    cleaned: list[str] = []
+    for item in api_sources.matchup_items(row):
+        cleaned.extend(_clean_matchup_item(item))
+    return [_es(item, lang) for item in _dedupe(cleaned)[:3]]
 
 
 def sale_ready_risk_items(row: Any) -> list[str]:
@@ -184,6 +245,12 @@ def sale_ready_chain_items(row: Any) -> list[str]:
 
 def _items_from_context(row: Any, keys: Iterable[str], fallback: list[str], limit: int, lang: str = "en") -> list[str]:
     key_tuple = tuple(keys)
+    explicit: list[str] = []
+    data = _row(row)
+    for key in key_tuple:
+        explicit.extend(_split(data.get(key)))
+    if explicit:
+        return [_es(item, lang) for item in explicit[:limit]]
     if any(key in key_tuple for key in ("risk", "risk_level", "risk_label", "profit_guard_status", "risk_note", "risk_notes", "why_lose", "hidden_risk")):
         items = sale_ready_risk_items(row)
     elif any(key in key_tuple for key in ("chain_note", "chain_notes", "parlay_note", "parlay_notes", "combo_note", "main_read", "add_on_legs")):
