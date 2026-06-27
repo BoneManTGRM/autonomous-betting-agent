@@ -1,13 +1,13 @@
 area,area_type,group_value,records,avg_predicted,actual_hit_rate,actual_minus_predicted,smoothed_hit_rate,smoothed_edge,stake_units,profit_units,roi,avg_price,avg_clv_percent,beat_close_rate,reliability,brier,memory_type,importance,action
 Sport: MLB,sport,MLB,23,0.666043,0.826087,0.160043,0.784785,0.118742,23.0,8.4951,0.369352,1.56185,,,0.784526,0.176053,sport,0.455157,raise_trust
+Sport: FIFA World Cup,sport,FIFA World Cup,36,0.7375,0.694444,-0.043056,0.702273,-0.035227,36.0,14.0,0.388889,,,,0.821473,0.213819,sport,0.432057,lower_trust
+FIFA World Cup / 70-80%,sport_probability_bucket,FIFA World Cup|70-80%,36,0.7375,0.694444,-0.043056,0.702273,-0.035227,36.0,14.0,0.388889,,,,0.821473,0.213819,sport_probability_bucket,0.432057,lower_trust
+FIFA World Cup / estimated_score,sport_market,FIFA World Cup|estimated_score,36,0.7375,0.694444,-0.043056,0.702273,-0.035227,36.0,14.0,0.388889,,,,0.821473,0.213819,sport_market,0.432057,lower_trust
 Probability source: predicted_probability,probability_source,predicted_probability,75,0.75,0.733333,-0.016667,0.73494,-0.01506,75.0,35.0,0.466667,,,,0.877604,0.195833,probability_source,0.43012,raise_trust
 Confidence/read: 0.75,confidence,0.75,75,0.75,0.733333,-0.016667,0.73494,-0.01506,75.0,35.0,0.466667,,,,0.877604,0.195833,confidence,0.43012,raise_trust
-Probability bucket: 70-80%,probability_bucket,70-80%,92,0.740913,0.75,0.009087,0.749273,0.00836,92.0,45.4,0.493478,1.4,,,0.88173,0.189231,probability_bucket,0.41672,raise_trust
-Market: estimated_score,market_type,estimated_score,64,0.75,0.75,0.0,0.75,0.0,64.0,32.0,0.5,,,,0.882812,0.1875,market_type,0.4,raise_trust
+Probability bucket: 70-80%,probability_bucket,70-80%,101,0.737267,0.742574,0.005307,0.742185,0.004917,101.0,48.4,0.479208,1.4,,,0.879831,0.19227,probability_bucket,0.409835,raise_trust
+Market: estimated_score,market_type,estimated_score,73,0.743836,0.739726,-0.00411,0.740132,-0.003704,73.0,35.0,0.479452,,,,0.880051,0.191918,market_type,0.407407,raise_trust
 MLB / spreads,sport_market,MLB|spreads,18,0.642722,0.833333,0.190611,0.774684,0.131962,18.0,5.4951,0.305283,1.56185,,,0.749494,0.179818,sport_market,0.397755,raise_trust
-Sport: FIFA World Cup,sport,FIFA World Cup,27,0.75,0.703704,-0.046296,0.714286,-0.035714,27.0,11.0,0.407407,,,,0.784467,0.210648,sport,0.379557,lower_trust
-FIFA World Cup / 70-80%,sport_probability_bucket,FIFA World Cup|70-80%,27,0.75,0.703704,-0.046296,0.714286,-0.035714,27.0,11.0,0.407407,,,,0.784467,0.210648,sport_probability_bucket,0.379557,lower_trust
-FIFA World Cup / estimated_score,sport_market,FIFA World Cup|estimated_score,27,0.75,0.703704,-0.046296,0.714286,-0.035714,27.0,11.0,0.407407,,,,0.784467,0.210648,sport_market,0.379557,lower_trust
 Probability source: final_probability,probability_source,final_probability,19,0.640789,0.789474,0.148684,0.745419,0.10463,19.0,4.4951,0.236584,1.566489,,,0.750504,0.189682,probability_source,0.379102,raise_trust
 Market: spreads,market_type,spreads,19,0.640789,0.789474,0.148684,0.745419,0.10463,19.0,4.4951,0.236584,1.566489,,,0.750504,0.189682,market_type,0.379102,raise_trust
 Bookmaker: consensus_average,bookmaker,consensus_average,19,0.640789,0.789474,0.148684,0.745419,0.10463,19.0,4.4951,0.236584,1.566489,,,0.750504,0.189682,bookmaker,0.379102,raise_trust
@@ -24,6 +24,7 @@ Market: Winner,market_type,Winner,7,0.7,1.0,0.3,0.84,0.14,7.0,7.0,1.0,,,,0.68463
 Odds: 1.60-1.89,odds_bucket,1.60-1.89,8,0.600375,0.75,0.149625,0.675187,0.074813,8.0,2.0103,0.251287,1.666288,,,0.625449,0.211052,odds_bucket,0.194527,raise_trust
 Sport: MMA,sport,MMA,9,0.738889,0.666667,-0.072222,0.700654,-0.038235,9.0,3.0,0.333333,,,,0.625046,0.235278,sport,0.181372,lower_trust
 MMA / 70-80%,sport_probability_bucket,MMA|70-80%,9,0.738889,0.666667,-0.072222,0.700654,-0.038235,9.0,3.0,0.333333,,,,0.625046,0.235278,sport_probability_bucket,0.181372,lower_trust
+Probability source: fallback_high_confidence,probability_source,fallback_high_confidence,9,0.7,0.666667,-0.033333,0.682353,-0.017647,9.0,3.0,0.333333,,,,0.632512,0.223333,probability_source,0.165698,raise_trust
 MMA / round/method,sport_market,MMA|round/method,7,0.75,0.571429,-0.178571,0.666667,-0.083333,7.0,1.0,0.142857,,,,0.56789,0.276786,sport_market,0.147539,lower_trust
 MLB / 70-80%,sport_probability_bucket,MLB|70-80%,6,0.744,0.833333,0.089333,0.782286,0.038286,6.0,3.4,0.566667,1.4,,,0.629046,0.149049,sport_probability_bucket,0.141517,raise_trust
 Sport: NRL,sport,NRL,7,0.75,0.714286,-0.035714,0.733333,-0.016667,7.0,3.0,0.428571,,,,0.612533,0.205357,sport,0.141327,raise_trust
