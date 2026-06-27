@@ -63,6 +63,14 @@ def install(module: Any) -> Any:
         )
         return repaint_customer_footer(image, pick, language)
 
+    # Preserve wrapper flags from earlier renderer patches. Without this, a later
+    # idempotent sale-ready install can fail to detect that the renderer is already
+    # wrapped, re-wrap it after footer cleanup, and make the green internal version
+    # marker visible again.
+    try:
+        patched_render.__dict__.update(getattr(original_render, "__dict__", {}))
+    except Exception:
+        pass
     setattr(patched_render, _PATCH_FLAG, True)
     module.render_full_pick_magazine_page = patched_render
     return module
