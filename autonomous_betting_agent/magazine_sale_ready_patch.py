@@ -148,6 +148,8 @@ SPANISH_VISIBLE_TEXT = {
     "ACTIVE APIS": "APIS ACTIVAS",
     "NO LIVE": "SIN EN VIVO",
     "NO LIVE:": "SIN EN VIVO:",
+    "Odds": "Cuotas",
+    "ODDS": "CUOTAS",
     "Price check required before entry.": "Revisar cuota antes de entrar.",
     "Negative edge at current price.": "Ventaja negativa con la cuota actual.",
     "Do not play unless price improves.": "No jugar salvo que la cuota mejore.",
@@ -450,7 +452,11 @@ def _items_from_context(row: Any, keys: Iterable[str], fallback: list[str], limi
 
 def _patch_translation_layer(module: Any) -> None:
     if getattr(module, _TRANSLATION_FLAG, False):
-        return
+        try:
+            if getattr(module, "_team_label")("Haiti", "es") == "Haití":
+                return
+        except Exception:
+            pass
     try:
         module.COUNTRY_ES.update(COUNTRY_ES)
     except Exception:
