@@ -6,6 +6,7 @@ from autonomous_betting_agent.reparodynamics_audit import (
 )
 
 
+# Zero-row scans should report no-data semantics, not stale cached learning signals.
 def _duplicate_event_rows():
     return [
         {"sport": "Soccer", "event": "Team A vs Team B", "known_start_utc": "2026-06-27T20:00:00Z", "market": "moneyline", "result": "Won", "confidence": "0.72", "odds": "+110", "closing_odds": "+105"},
@@ -26,6 +27,19 @@ def test_audit_counts_rows_unique_events_and_duplicates_separately():
     assert event.duplicates_detected == 1
     assert event.source == "Learning Page graded upload"
     assert event.reason == "Phase 3A observation-only"
+
+
+def test_zero_row_audit_reports_no_data_without_fake_drift_or_candidates():
+    event = build_reparodynamics_audit_event([], source="Learning Page graded upload", timestamp="2026-06-27T04:39:00Z")
+    display = {row["field"]: row["value"] for row in audit_event_display_rows(event)}
+
+    assert event.rows_scanned == 0
+    assert event.unique_events_scanned == 0
+    assert event.duplicates_detected == 0
+    assert event.new_patterns_detected == 0
+    assert event.repair_candidates_generated == 0
+    assert event.drift_detected is False
+    assert display["Drift detected"] == "NO DATA"
 
 
 def test_audit_log_updates_after_learning_page_ingestion(tmp_path):
