@@ -65,7 +65,7 @@ def compact_weather(text: str) -> list[str]:
     wind_match = re.search(r"wind\s*-?\d+(?:\.\d+)?\s*kph", body, flags=re.I)
     condition_match = re.search(r"^\s*([A-Za-z][A-Za-z\s'-]+?)(?:,|\s+-?\d|\.)", body)
     temp = temp_match.group(0).replace(" ", "") if temp_match else ""
-    condition = condition_match.group(1).strip(" .,').lower() if condition_match else ""
+    condition = condition_match.group(1).strip(" ., '").lower() if condition_match else ""
     wind = wind_match.group(0).lower() if wind_match else ""
     parts = [part for part in (temp, condition, wind) if part]
     if not parts:
