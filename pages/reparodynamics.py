@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from autonomous_betting_agent.adaptive_repair_runner import rows_from_csv_bytes, run_adaptive_repair_scan
+from autonomous_betting_agent.local_storage_import import save_reparodynamics_rows_to_research
 from autonomous_betting_agent.reparodynamics_audit import (
     audit_event_display_rows,
     latest_reparodynamics_audit_event,
@@ -21,6 +22,8 @@ TEXT = {
         "title": "Reparodynamics",
         "caption": "Measured self-repair doctrine and Phase 3B Shadow Mode control panel.",
         "warning": "Phase 3B can evaluate repair candidates in Shadow Mode. It writes audit records and comparison tables, but live predictions remain unchanged.",
+        "storage_warning": "Local storage may not persist across redeploys unless persistent storage is configured. Use exports for long-term proof backup.",
+        "save_warning": "Saving scan rows here only stores research rows locally. It does not train the model, change live picks, or activate Reparodynamics repairs.",
         "phase": "Current phase",
         "mode": "Operating mode",
         "repair": "Repair activation",
@@ -31,8 +34,12 @@ TEXT = {
         "include_system": "Include available local system sources",
         "upload": "Optional graded CSV for this scan",
         "loaded": "Loaded uploaded rows",
+        "save_scan": "Also save scanned rows to Local Control Center research ledger",
+        "save_confirm": "I understand this saves scan rows locally only and does not train or mutate the model",
         "run": "Run Phase 3B Shadow Mode scan",
         "success": "Shadow Mode scan completed. Audit event written.",
+        "saved": "Rows saved to research ledger",
+        "not_saved": "No scan rows were saved to local storage.",
         "audit": "Latest audit event",
         "summary": "Shadow Mode summary",
         "candidates": "Shadow Mode candidates",
@@ -43,11 +50,13 @@ TEXT = {
     },
     "es": {
         "title": "Reparodynamics",
-        "caption": "Doctrina de autorreparación medida y panel Fase 3B Shadow Mode.",
-        "warning": "La Fase 3B puede evaluar candidatos de reparación en Shadow Mode. Escribe auditoría y tablas de comparación, pero las predicciones en vivo no cambian.",
+        "caption": "Doctrina de autorreparacion medida y panel Fase 3B Shadow Mode.",
+        "warning": "La Fase 3B puede evaluar candidatos de reparacion en Shadow Mode. Escribe auditoria y tablas de comparacion, pero las predicciones en vivo no cambian.",
+        "storage_warning": "El almacenamiento local puede no persistir entre redeploys si no hay almacenamiento persistente configurado. Usa exportaciones como respaldo de prueba a largo plazo.",
+        "save_warning": "Guardar filas aqui solo almacena filas de investigacion localmente. No entrena el modelo, no cambia picks en vivo ni activa reparaciones Reparodynamics.",
         "phase": "Fase actual",
         "mode": "Modo operativo",
-        "repair": "Activación de reparación",
+        "repair": "Activacion de reparacion",
         "shadow": "Shadow Mode",
         "tgrm": "TGRM",
         "rye": "RYE",
@@ -55,43 +64,47 @@ TEXT = {
         "include_system": "Incluir fuentes locales disponibles del sistema",
         "upload": "CSV calificado opcional para este escaneo",
         "loaded": "Filas subidas cargadas",
+        "save_scan": "Tambien guardar filas escaneadas en el ledger de investigacion de Local Control Center",
+        "save_confirm": "Entiendo que esto solo guarda filas localmente y no entrena ni muta el modelo",
         "run": "Ejecutar escaneo Fase 3B Shadow Mode",
-        "success": "Escaneo Shadow Mode completado. Evento de auditoría escrito.",
-        "audit": "Último evento de auditoría",
+        "success": "Escaneo Shadow Mode completado. Evento de auditoria escrito.",
+        "saved": "Filas guardadas en ledger de investigacion",
+        "not_saved": "No se guardaron filas de escaneo en almacenamiento local.",
+        "audit": "Ultimo evento de auditoria",
         "summary": "Resumen Shadow Mode",
         "candidates": "Candidatos Shadow Mode",
-        "no_run": "Todavía no hay evento de auditoría registrado.",
+        "no_run": "Todavia no hay evento de auditoria registrado.",
         "no_candidates": "No se generaron candidatos Shadow Mode.",
         "forbidden": "Prohibido en Fase 3B",
-        "status": "Estado de activación",
+        "status": "Estado de activacion",
     },
 }
 
 ES = {
     "Phase 3B": "Fase 3B",
-    "Shadow Mode evaluation": "Evaluación Shadow Mode",
+    "Shadow Mode evaluation": "Evaluacion Shadow Mode",
     "Forbidden": "Prohibido",
     "ON": "ENCENDIDO",
     "OFF": "APAGADO",
     "NO DATA": "SIN DATOS",
-    "YES": "SÍ",
+    "YES": "SI",
     "NO": "NO",
-    "Phase 3B Shadow Mode; live mutation forbidden": "Fase 3B Shadow Mode; mutación en vivo prohibida",
-    "ABA may test repairs in Shadow Mode, but live repair remains forbidden.": "ABA puede probar reparaciones en Shadow Mode, pero la reparación en vivo sigue prohibida.",
+    "Phase 3B Shadow Mode; live mutation forbidden": "Fase 3B Shadow Mode; mutacion en vivo prohibida",
+    "ABA may test repairs in Shadow Mode, but live repair remains forbidden.": "ABA puede probar reparaciones en Shadow Mode, pero la reparacion en vivo sigue prohibida.",
 }
 
 FIELD_ES = {
-    "Last Reparodynamics Run": "Última ejecución Reparodynamics",
+    "Last Reparodynamics Run": "Ultima ejecucion Reparodynamics",
     "Source": "Fuente",
     "Rows scanned": "Filas escaneadas",
-    "Unique events scanned": "Eventos únicos escaneados",
+    "Unique events scanned": "Eventos unicos escaneados",
     "Duplicates detected": "Duplicados detectados",
     "New patterns detected": "Patrones nuevos detectados",
     "Drift detected": "Deriva detectada",
-    "Repair candidates generated": "Candidatos de reparación generados",
+    "Repair candidates generated": "Candidatos de reparacion generados",
     "Shadow Mode": "Shadow Mode",
-    "Live Mutation": "Mutación en vivo",
-    "Reason": "Razón",
+    "Live Mutation": "Mutacion en vivo",
+    "Reason": "Razon",
 }
 
 
@@ -119,6 +132,7 @@ doctrine = get_reparodynamics_doctrine()
 st.title(t("title"))
 st.caption(t("caption"))
 st.warning(t("warning"))
+st.info(t("storage_warning"))
 st.page_link("pages/shadow_mode_results.py", label=t("summary"))
 
 cols = st.columns(6)
@@ -130,7 +144,10 @@ cols[4].metric(t("tgrm"), v(doctrine.get("tgrm_activation", "")))
 cols[5].metric(t("rye"), v(doctrine.get("rye_activation", "")))
 
 st.subheader(t("controls"))
+st.caption(t("save_warning"))
 include_system = st.checkbox(t("include_system"), value=True)
+save_scan_rows = st.checkbox(t("save_scan"), value=False, key="reparodynamics_save_scan_rows")
+save_confirmed = st.checkbox(t("save_confirm"), value=False, key="reparodynamics_save_confirmed")
 uploaded_rows = None
 uploaded_bytes = None
 uploaded_name = "reparodynamics_upload.csv"
@@ -147,6 +164,15 @@ if st.button(t("run"), type="primary"):
     st.session_state["shadow_mode_latest_report"] = report.to_dict()
     audit_event = write_reparodynamics_audit_event_from_runner_report(report, source="Reparodynamics Phase 3B scan")
     st.success(t("success"))
+    if save_scan_rows:
+        rows_to_save = uploaded_rows or []
+        if rows_to_save and save_confirmed:
+            save_result = save_reparodynamics_rows_to_research(rows_to_save, run_id=report.run_id, filename=uploaded_name, confirmed=True)
+            st.success(f"{t('saved')}: {save_result['rows_imported']} ({save_result['rows_skipped_duplicate']} duplicate)" )
+        elif rows_to_save and not save_confirmed:
+            st.warning(t("not_saved"))
+        else:
+            st.info(t("not_saved"))
     summary = shadow_summary(report)
     candidates = shadow_result_rows(report)
     st.subheader(t("summary"))
