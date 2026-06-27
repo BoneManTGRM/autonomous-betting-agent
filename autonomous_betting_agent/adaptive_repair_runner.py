@@ -1,4 +1,4 @@
-"""Compatibility exports for the Phase 3A Adaptive Repair Runner."""
+"""Compatibility exports for the Phase 3B Adaptive Repair Runner."""
 
 from __future__ import annotations
 
