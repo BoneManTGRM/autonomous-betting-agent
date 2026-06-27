@@ -38,6 +38,22 @@ def number(data: Mapping[str, Any], *keys: str) -> float | None:
     return None
 
 
+def decimal_price(data: Mapping[str, Any]) -> float | None:
+    price = number(data, "decimal_price", "odds", "best_price", "odds_at_pick")
+    if price is None or price <= 0:
+        return None
+    return 1 + price / 100 if price >= 100 else price
+
+
+def model_probability(data: Mapping[str, Any]) -> float | None:
+    prob = number(data, "confidence", "model_probability", "final_probability", "model_probability_clean")
+    if prob is None:
+        return None
+    if prob > 1:
+        prob /= 100
+    return max(0.0, min(prob, 0.98))
+
+
 def market(data: Mapping[str, Any], language: str) -> str:
     blob = f"{text(data, 'market_type', 'bet_type', 'market')} {text(data, 'pick', 'prediction', 'selection', 'public_pick')}".lower()
     if "corner" in blob or "córner" in blob:
@@ -46,6 +62,8 @@ def market(data: Mapping[str, Any], language: str) -> str:
         return "Ambos equipos anotan" if language == "es" else "Both Teams To Score"
     if "double chance" in blob or "doble oportunidad" in blob:
         return "Doble oportunidad" if language == "es" else "Double Chance"
+    if "team total" in blob or "total de equipo" in blob:
+        return "Total de equipo" if language == "es" else "Team Total"
     if "over" in blob or "under" in blob or "más de" in blob or "menos de" in blob:
         return "Más/Menos" if language == "es" else "Over/Under"
     if "home" in blob or "away" in blob or "local" in blob or "visitante" in blob:
@@ -54,26 +72,22 @@ def market(data: Mapping[str, Any], language: str) -> str:
 
 
 def item_ok(data: Mapping[str, Any], minimum: float) -> dict[str, Any] | None:
-    price = number(data, "decimal_price", "odds", "best_price")
-    conf = number(data, "confidence", "model_probability", "final_probability")
+    price = decimal_price(data)
+    conf = model_probability(data)
     edge = number(data, "model_market_edge", "edge")
     value = number(data, "expected_value_per_unit", "profit_expected_value", "expected_value", "ev")
-    if price is None or conf is None:
-        return None
-    if conf > 1:
-        conf /= 100
     if edge is not None and abs(edge) > 1:
         edge /= 100
-    if price <= 0 or conf < minimum:
+    if price is None or conf is None or conf < minimum:
         return None
     if (edge is not None and edge < 0) or (value is not None and value < 0):
         return None
-    status = " ".join(str(data.get(key, "")) for key in ("learning_status", "consumer_action", "recommended_action", "data_issue_reason")).lower()
-    if any(token in status for token in ("blocked", "stale", "research only", "no play")):
+    status = " ".join(str(data.get(key, "")) for key in ("learning_status", "consumer_action", "recommended_action", "data_issue_reason", "official_status_label")).lower()
+    if any(token in status for token in ("blocked", "stale", "research only", "no play", "learning-blocked", "learning blocked")):
         return None
     out = dict(data)
     out["_ml_price"] = price
-    out["_ml_conf"] = max(0.0, min(conf, 0.98))
+    out["_ml_conf"] = conf
     return out
 
 
@@ -81,9 +95,19 @@ def event_key(data: Mapping[str, Any]) -> str:
     return " ".join(text(data, "event", "public_event", "matchup", "event_name", default="unknown").lower().split())
 
 
-def different_events(items: list[Mapping[str, Any]]) -> bool:
-    keys = [event_key(item) for item in items]
-    return len(keys) == len(set(keys))
+def same_game_allowed(data: Mapping[str, Any]) -> bool:
+    return str(data.get("same_game_parlay_compatible", data.get("same_game_combo_compatible", ""))).lower() in {"1", "true", "yes"}
+
+
+def different_events_or_allowed(items: list[Mapping[str, Any]]) -> bool:
+    seen: set[str] = set()
+    for item in items:
+        key = event_key(item)
+        if key in seen and not same_game_allowed(item):
+            return False
+        seen.add(key)
+    choices = " | ".join(text(item, "pick", "selection", "prediction", "public_pick").lower() for item in items)
+    return not ("over" in choices and "under" in choices)
 
 
 def build(rows: Iterable[Any]) -> dict[str, Any] | None:
@@ -93,13 +117,13 @@ def build(rows: Iterable[Any]) -> dict[str, Any] | None:
         pool = [item for item in pool if item is not None]
         pool.sort(key=lambda item: (float(item["_ml_conf"]), float(item["_ml_price"])), reverse=True)
         chosen = pool[:count]
-        if len(chosen) == count and different_events(chosen):
+        if len(chosen) == count and different_events_or_allowed(chosen):
             combo_price = 1.0
             combo_conf = 1.0
             for item in chosen:
                 combo_price *= float(item["_ml_price"])
                 combo_conf *= float(item["_ml_conf"])
-            return {"lane": lane, "items": chosen, "price": combo_price, "confidence": combo_conf * 0.92}
+            return {"lane": lane, "items": chosen, "price": combo_price, "confidence": combo_conf * 0.92, "estimated_ev": combo_price * combo_conf * 0.92 - 1}
     return None
 
 
@@ -109,11 +133,17 @@ def label_lane(value: str, language: str) -> str:
     return {"safe_two": "Safer 2-leg parlay", "value_two": "Value 2-leg parlay", "higher_three": "Higher-risk 3-leg parlay"}.get(value, value)
 
 
+def no_combo_items(language: str = "en", limit: int = 3) -> list[str]:
+    if language == "es":
+        return ["No se recomienda parlay", "No hay suficientes selecciones compatibles.", "Faltan cuotas verificadas."][:limit]
+    return ["No parlay recommended", "Not enough compatible selections.", "Verified odds are missing."][:limit]
+
+
 def format_items(rows: Iterable[Any], language: str = "en", limit: int = 3) -> list[str]:
     source = [dict(row(item)) for item in rows]
     built = build(source)
     if not built:
-        return ["No se recomienda parlay", "No hay suficientes selecciones compatibles.", "Faltan cuotas verificadas."][:limit] if language == "es" else ["No parlay recommended", "Not enough compatible selections.", "Verified odds are missing."][:limit]
+        return no_combo_items(language, limit)
     lines = [label_lane(str(built["lane"]), language)]
     for item in built["items"][:2]:
         choice = text(item, "pick", "selection", "prediction", "public_pick", default="Selection")
@@ -123,3 +153,11 @@ def format_items(rows: Iterable[Any], language: str = "en", limit: int = 3) -> l
         prob_label = "Probabilidad estimada" if language == "es" else "Estimated probability"
         lines.append(f"{price_label}: {float(built['price']):.2f} · {prob_label}: {float(built['confidence']):.0%}")
     return lines[:limit]
+
+
+def attach_multi_leg_review(rows: Iterable[Any], language: str = "en") -> list[dict[str, Any]]:
+    source = [dict(row(item)) for item in rows]
+    if not source:
+        return []
+    joined = "|".join(format_items(source, language, 3))
+    return [dict(item, combo_magazine_items=joined, parlay_magazine_items=joined) for item in source]
