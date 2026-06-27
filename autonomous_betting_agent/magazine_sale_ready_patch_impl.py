@@ -7,8 +7,8 @@ from autonomous_betting_agent import magazine_api_sources as api_sources
 from autonomous_betting_agent.multi_leg_report import format_items as multi_leg_items
 
 _APPLIED_FLAG = "_ABA_SALE_READY_DIRECT_MULTI_LEG_APPLIED"
-_RENDER_FLAG = "_ABA_SALE_READY_DIRECT_MULTI_LEG_V2"
-_VERSION_SUFFIX = "_sale_ready_direct_multileg_v2"
+_RENDER_FLAG = "_ABA_SALE_READY_DIRECT_MULTI_LEG_V3"
+_VERSION_SUFFIX = "_sale_ready_direct_multileg_v3"
 
 COUNTRY_ES = {
     "france": "Francia",
@@ -227,6 +227,19 @@ def _arg(args: tuple[Any, ...], kwargs: Mapping[str, Any], index: int, name: str
     return kwargs.get(name) if name in kwargs else (args[index] if len(args) > index else default)
 
 
+def _paint_vs_badge(module: Any, img: Any) -> None:
+    draw = module.ImageDraw.Draw(img, "RGBA")
+    box = getattr(module, "VS_BADGE_BOX", (46, 456, 106, 516))
+    clear = (box[0] - 10, box[1] - 10, box[2] + 12, box[3] + 10)
+    draw.rectangle(clear, fill=module.PAPER)
+    draw.rounded_rectangle(box, radius=12, fill=module.BLACK, outline=module.CREAM, width=2)
+    font = module._fit("VS", box[2] - box[0] - 12, 34, 14, True)
+    tbox = draw.textbbox((0, 0), "VS", font=font)
+    x = box[0] + ((box[2] - box[0]) - (tbox[2] - tbox[0])) / 2
+    y = box[1] + ((box[3] - box[1]) - (tbox[3] - tbox[1])) / 2 - 2
+    draw.text((x, y), "VS", font=font, fill=module.CREAM)
+
+
 def _paint_footer(module: Any, img: Any, lang: str) -> None:
     draw = module.ImageDraw.Draw(img, "RGBA")
     y0, y1 = 1542, 1581
@@ -265,6 +278,7 @@ def _patch_visuals(module: Any) -> None:
         explicit_lang = kwargs.get("language") if "language" in kwargs else _arg(args, kwargs, 10, "language", None)
         lang = module._lang(pick, explicit_lang)
         draw = module.ImageDraw.Draw(img, "RGBA")
+        _paint_vs_badge(module, img)
         draw.rectangle((724, 1234, 1050, 1348), fill=module.CREAM)
         y = 1244
         for item in sale_ready_chain_items(pick)[:3]:
