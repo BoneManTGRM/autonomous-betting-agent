@@ -92,16 +92,30 @@ def _existing_identities(storage: Any, ledger_type: str) -> set[str]:
     return {stable_row_identity(row) for row in existing}
 
 
+def _import_copy(row: Mapping[str, Any], identity: str, index: int) -> dict[str, Any]:
+    """Create a duplicate import copy without rewriting an existing SQLite proof row."""
+
+    payload = dict(row)
+    original_proof_id = _text(payload.get("proof_id"))
+    if original_proof_id:
+        payload.setdefault("original_proof_id", original_proof_id)
+    digest = hashlib.sha256(f"{identity}|{index}|{json.dumps(payload, sort_keys=True, default=str)}".encode("utf-8")).hexdigest()[:16]
+    payload["proof_id"] = f"local-import-{digest}-{index}"
+    payload["local_duplicate_copy"] = "true"
+    return payload
+
+
 def _dedupe_rows(rows: Sequence[Mapping[str, Any]], existing: set[str], *, dedupe: bool) -> tuple[list[dict[str, Any]], int]:
-    if not dedupe:
-        return [dict(row) for row in rows], 0
     seen = set(existing)
     output: list[dict[str, Any]] = []
     skipped = 0
-    for row in rows:
+    for index, row in enumerate(rows, start=1):
         identity = stable_row_identity(row)
         if identity in seen:
-            skipped += 1
+            if dedupe:
+                skipped += 1
+                continue
+            output.append(_import_copy(row, identity, index))
             continue
         seen.add(identity)
         output.append(dict(row))
