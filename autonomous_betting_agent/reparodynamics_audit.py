@@ -1,9 +1,9 @@
-"""Phase 3A Reparodynamics audit log helpers.
+"""Phase 3B Reparodynamics audit log helpers.
 
-This module records observation-only audit events from real graded rows or
-runner reports. It never activates live repairs, Shadow Mode, TGRM, RYE scoring,
-confidence changes, bet-tier changes, bankroll changes, sportsbook changes, or
-model mutation.
+This module records Shadow Mode audit events from real graded rows or runner
+reports. Shadow Mode may evaluate counterfactual repair candidates, but it never
+activates live repairs, TGRM, RYE scoring, confidence changes, bet-tier changes,
+bankroll changes, sportsbook changes, or production model mutation.
 """
 
 from __future__ import annotations
@@ -22,16 +22,16 @@ from autonomous_betting_agent.adaptive_repair_runner_core import (
 )
 from autonomous_betting_agent.reparodynamics_doctrine import get_reparodynamics_doctrine
 
-REPARODYNAMICS_AUDIT_SCHEMA_VERSION = "reparodynamics_audit_phase_3a_v1"
+REPARODYNAMICS_AUDIT_SCHEMA_VERSION = "reparodynamics_audit_phase_3b_shadow_v1"
 REPARODYNAMICS_AUDIT_LOG_PATH = Path("data/adaptive_repair/reparodynamics_audit_log.jsonl")
 REPARODYNAMICS_AUDIT_LATEST_PATH = Path("data/adaptive_repair/reparodynamics_audit_latest.json")
-PHASE_3A_BLOCK_REASON = "Phase 3A observation-only"
+PHASE_3B_BLOCK_REASON = "Phase 3B Shadow Mode; live mutation forbidden"
 NO_DATA_DRIFT_DISPLAY = "NO DATA"
 
 
 @dataclass(frozen=True)
 class ReparodynamicsAuditEvent:
-    """Single observation-only audit event for the Reparodynamics page."""
+    """Single Shadow Mode audit event for the Reparodynamics page."""
 
     schema_version: str
     timestamp: str
@@ -63,6 +63,7 @@ class ReparodynamicsAuditEvent:
 
 _ROLE_PHRASES = (
     "phase 3a observation-only",
+    "phase 3b shadow mode",
     "reparodynamics page observation scan",
     "learning page graded upload",
     "no source available",
@@ -105,7 +106,7 @@ def observation_only_drift_detected(
     duplicates_detected: int,
     row_event_gap_threshold: float = 0.05,
 ) -> bool:
-    """Return whether the observation-only audit sees drift or drift risk.
+    """Return whether the Shadow Mode audit sees drift or drift risk.
 
     This is a safety signal only. It does not authorize or apply repairs.
     A zero-row scan has no evidence, so it must never report real drift.
@@ -170,7 +171,7 @@ def audit_event_from_runner_report(
         repair_candidates_generated=patterns,
         shadow_mode=str(doctrine.get("shadow_mode_activation", "OFF")),
         live_mutation=str(doctrine.get("live_mutation", "Forbidden")),
-        reason=PHASE_3A_BLOCK_REASON,
+        reason=PHASE_3B_BLOCK_REASON,
         repair_activation=str(doctrine.get("repair_activation", "OFF")),
         tgrm_activation=str(doctrine.get("tgrm_activation", "OFF")),
         rye_activation=str(doctrine.get("rye_activation", "OFF")),
@@ -191,7 +192,7 @@ def build_reparodynamics_audit_event(
     source: str = "Learning Page graded upload",
     timestamp: str | None = None,
 ) -> ReparodynamicsAuditEvent:
-    """Analyze real rows and return a Phase 3A audit event without mutation."""
+    """Analyze real rows and return a Phase 3B Shadow Mode audit event without mutation."""
 
     safe_rows = [dict(row) for row in rows]
     source_hash = hash_rows(safe_rows) if safe_rows else ""
@@ -256,7 +257,7 @@ def _event_from_dict(data: Mapping[str, Any]) -> ReparodynamicsAuditEvent:
         repair_candidates_generated=_to_int(data.get("repair_candidates_generated")),
         shadow_mode=str(data.get("shadow_mode", "OFF")),
         live_mutation=str(data.get("live_mutation", "Forbidden")),
-        reason=str(data.get("reason", PHASE_3A_BLOCK_REASON)),
+        reason=str(data.get("reason", PHASE_3B_BLOCK_REASON)),
         repair_activation=str(data.get("repair_activation", "OFF")),
         tgrm_activation=str(data.get("tgrm_activation", "OFF")),
         rye_activation=str(data.get("rye_activation", "OFF")),
