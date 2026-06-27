@@ -4,7 +4,8 @@ from typing import Any
 
 from autonomous_betting_agent.multi_leg_report import format_items
 
-_FLAG = "_ABA_PARLAY_FOOTER_OVERRIDE_V1"
+_FLAG = "_ABA_PARLAY_FOOTER_OVERRIDE_V2"
+_VERSION_SUFFIX = "_parlay_footer_v2"
 
 
 def _row(value: Any) -> dict[str, Any]:
@@ -70,12 +71,19 @@ def _patch_sale_ready_globals() -> None:
     sale_ready.sale_ready_chain_items = sale_ready_parlay_items
 
 
+def _bump_style_version(module: Any) -> None:
+    current = str(getattr(module, "MAGAZINE_STYLE_VERSION", ""))
+    if _VERSION_SUFFIX not in current:
+        module.MAGAZINE_STYLE_VERSION = f"{current}{_VERSION_SUFFIX}"
+
+
 def install(module: Any) -> Any:
-    if getattr(module, _FLAG, False):
-        return module
     _patch_sale_ready_globals()
     module.chain_items = lambda row: parlay_review_items(row, _lang(_row(row)))
     module._chain_items = module.chain_items
+    if getattr(module, _FLAG, False):
+        _bump_style_version(module)
+        return module
     original = getattr(module, "render_full_pick_magazine_page", None)
     if callable(original):
         def wrapped_page(pick: Any, *args: Any, _original=original, **kwargs: Any):
@@ -95,5 +103,6 @@ def install(module: Any) -> Any:
         def wrapped_png(pick: Any, *args: Any, **kwargs: Any):
             return module._png(module.render_full_pick_magazine_page(pick, *args, **kwargs))
         module.render_full_pick_magazine_page_png = wrapped_png
+    _bump_style_version(module)
     setattr(module, _FLAG, True)
     return module
