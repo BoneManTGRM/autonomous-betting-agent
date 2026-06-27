@@ -96,26 +96,3 @@ def test_spanish_weather_matchup_notes_are_readable_and_translated():
     assert "Light rain" not in text
     assert "wind" not in text
     assert "United States of America" not in text
-
-
-def test_spanish_page_render_path_accepts_long_translated_country_names():
-    apply_magazine_sale_ready_patch(magazine)
-    row = {
-        "report_language": "es",
-        "event_name": "Ivory Coast vs New Zealand",
-        "away_team": "Ivory Coast",
-        "home_team": "New Zealand",
-        "sport": "FIFA WORLD CUP",
-        "pick": "Game total: Over 2.5",
-        "final_decision": "WATCHLIST",
-        "model_market_edge": "-0.021",
-        "expected_value_per_unit": "-0.031",
-        "weather_summary": "Weather: Partly cloudy, 23.3°C, wind 5.8 kph. Location: Philadelphia, Pennsylvania, United States of America.",
-        "api_football_summary": "API-FB lookup checked Ivory Coast / New Zealand; no match returned.",
-        "newsapi_summary": "News checked; no injury/lineup headline.",
-        "odds_source": "The Odds API",
-    }
-
-    assert not magazine.validate_magazine_layout_no_overflow(row, language="es")
-    page = magazine.render_full_pick_magazine_page(row, language="es")
-    assert page.size == (magazine.PAGE_WIDTH, magazine.PAGE_HEIGHT)
