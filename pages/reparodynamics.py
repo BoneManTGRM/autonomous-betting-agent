@@ -10,6 +10,7 @@ from autonomous_betting_agent.reparodynamics_audit import (
     write_reparodynamics_audit_event_from_runner_report,
 )
 from autonomous_betting_agent.reparodynamics_doctrine import get_reparodynamics_doctrine
+from autonomous_betting_agent.reparodynamics_shadow_results import shadow_result_rows, shadow_summary
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 
 st.set_page_config(page_title="Reparodynamics", layout="wide")
@@ -18,106 +19,68 @@ LANG = render_app_sidebar("reparodynamics", language_key="reparodynamics_languag
 TEXT = {
     "en": {
         "title": "Reparodynamics",
-        "caption": "ABA Signal Pro operating doctrine for measured self-repair.",
+        "caption": "Measured self-repair doctrine and Phase 3B Shadow Mode control panel.",
+        "warning": "Phase 3B can evaluate repair candidates in Shadow Mode. It writes audit records and comparison tables, but live predictions remain unchanged.",
         "phase": "Current phase",
         "mode": "Operating mode",
         "repair": "Repair activation",
         "shadow": "Shadow Mode",
         "tgrm": "TGRM",
         "rye": "RYE",
-        "motive": "Doctrine motive",
-        "principles": "Repair principles",
-        "safety": "Safety principles",
-        "forbidden": "Forbidden in Phase 3A",
-        "status": "Activation status",
-        "audit": "Reparodynamics Audit Log",
-        "controls": "Observation-only scan controls",
+        "controls": "Phase 3B scan controls",
         "include_system": "Include available local system sources",
-        "upload": "Optional graded CSV for this Reparodynamics scan",
-        "upload_loaded": "Loaded uploaded rows for observation scan.",
-        "run_now": "Run Phase 3A observation scan now",
-        "run_success": "Reparodynamics observation scan completed and audit event written.",
-        "scan_summary": "Latest scan summary",
-        "no_run": "No run recorded yet.",
-        "phase3a_explanation": "Phase 3A does not improve picks directly. It observes graded results, detects drift, finds duplicate-event issues, and prepares repair candidates for later Shadow Mode testing. No live model changes are allowed in this phase.",
-        "final": "Final rule",
-        "warning": "This page can now run a real observation-only scan and write an audit event. It still does not activate live repairs, Shadow Mode, TGRM, RYE scoring, confidence changes, bet-tier changes, bankroll changes, sportsbook changes, filters, or model mutation.",
+        "upload": "Optional graded CSV for this scan",
+        "loaded": "Loaded uploaded rows",
+        "run": "Run Phase 3B Shadow Mode scan",
+        "success": "Shadow Mode scan completed. Audit event written.",
+        "audit": "Latest audit event",
+        "summary": "Shadow Mode summary",
+        "candidates": "Shadow Mode candidates",
+        "no_run": "No audit event recorded yet.",
+        "no_candidates": "No Shadow Mode candidates generated.",
+        "forbidden": "Forbidden in Phase 3B",
+        "status": "Activation status",
     },
     "es": {
         "title": "Reparodynamics",
-        "caption": "Doctrina operativa de ABA Signal Pro para autorreparación medida.",
+        "caption": "Doctrina de autorreparación medida y panel Fase 3B Shadow Mode.",
+        "warning": "La Fase 3B puede evaluar candidatos de reparación en Shadow Mode. Escribe auditoría y tablas de comparación, pero las predicciones en vivo no cambian.",
         "phase": "Fase actual",
         "mode": "Modo operativo",
         "repair": "Activación de reparación",
         "shadow": "Shadow Mode",
         "tgrm": "TGRM",
         "rye": "RYE",
-        "motive": "Motivo de la doctrina",
-        "principles": "Principios de reparación",
-        "safety": "Principios de seguridad",
-        "forbidden": "Prohibido en Fase 3A",
-        "status": "Estado de activación",
-        "audit": "Registro de Auditoría Reparodynamics",
-        "controls": "Controles de escaneo solo observación",
+        "controls": "Controles de escaneo Fase 3B",
         "include_system": "Incluir fuentes locales disponibles del sistema",
-        "upload": "CSV calificado opcional para este escaneo Reparodynamics",
-        "upload_loaded": "Filas subidas cargadas para escaneo de observación.",
-        "run_now": "Ejecutar escaneo de observación Fase 3A ahora",
-        "run_success": "Escaneo de observación Reparodynamics completado y evento de auditoría escrito.",
-        "scan_summary": "Resumen del último escaneo",
-        "no_run": "Todavía no hay ejecución registrada.",
-        "phase3a_explanation": "La Fase 3A no mejora picks directamente. Observa resultados calificados, detecta deriva, encuentra problemas de eventos duplicados y prepara candidatos de reparación para pruebas posteriores en Shadow Mode. No se permiten cambios al modelo en vivo en esta fase.",
-        "final": "Regla final",
-        "warning": "Esta página ahora puede ejecutar un escaneo real solo de observación y escribir un evento de auditoría. Todavía no activa reparaciones en vivo, Shadow Mode, TGRM, puntuación RYE, cambios de confianza, niveles de apuesta, bankroll, sportsbook, filtros ni mutación del modelo.",
+        "upload": "CSV calificado opcional para este escaneo",
+        "loaded": "Filas subidas cargadas",
+        "run": "Ejecutar escaneo Fase 3B Shadow Mode",
+        "success": "Escaneo Shadow Mode completado. Evento de auditoría escrito.",
+        "audit": "Último evento de auditoría",
+        "summary": "Resumen Shadow Mode",
+        "candidates": "Candidatos Shadow Mode",
+        "no_run": "Todavía no hay evento de auditoría registrado.",
+        "no_candidates": "No se generaron candidatos Shadow Mode.",
+        "forbidden": "Prohibido en Fase 3B",
+        "status": "Estado de activación",
     },
 }
 
-ES_VALUE_MAP = {
-    "Phase 3A": "Fase 3A",
-    "Observation-only": "Solo observación",
-    "Evidence-gated targeted repair": "Reparación dirigida con control de evidencia",
+ES = {
+    "Phase 3B": "Fase 3B",
+    "Shadow Mode evaluation": "Evaluación Shadow Mode",
     "Forbidden": "Prohibido",
-    "FORBIDDEN": "PROHIBIDO",
+    "ON": "ENCENDIDO",
     "OFF": "APAGADO",
+    "NO DATA": "SIN DATOS",
     "YES": "SÍ",
     "NO": "NO",
-    "Phase 3A observation-only": "Fase 3A solo observación",
-    "ABA should learn automatically, but repair cautiously.": "ABA debe aprender automáticamente, pero reparar con cautela.",
+    "Phase 3B Shadow Mode; live mutation forbidden": "Fase 3B Shadow Mode; mutación en vivo prohibida",
+    "ABA may test repairs in Shadow Mode, but live repair remains forbidden.": "ABA puede probar reparaciones en Shadow Mode, pero la reparación en vivo sigue prohibida.",
 }
 
-ES_LIST_MAP = {
-    "Observe first and repair later.": "Observar primero y reparar después.",
-    "Diagnose drift before proposing any repair.": "Diagnosticar deriva antes de proponer cualquier reparación.",
-    "Prefer targeted repair over blind retraining.": "Preferir reparación dirigida en vez de reentrenamiento ciego.",
-    "Conserve repair energy by changing only what evidence supports.": "Conservar energía de reparación cambiando solo lo que la evidencia respalda.",
-    "Keep pattern candidates watchlist-only until controlled evidence supports promotion.": "Mantener candidatos de patrón solo en watchlist hasta que evidencia controlada respalde su promoción.",
-    "Treat RYE readiness as readiness only, not activation.": "Tratar la preparación RYE solo como preparación, no como activación.",
-    "Treat Shadow Mode readiness as readiness only, not activation.": "Tratar la preparación de Shadow Mode solo como preparación, no como activación.",
-    "Phase 3A is observation-only.": "La Fase 3A es solo observación.",
-    "Learning means observation, diagnostics, watchlist candidates, readiness checks, and saved reports only.": "Aprendizaje significa solo observación, diagnósticos, candidatos en watchlist, revisiones de preparación y reportes guardados.",
-    "No repair activates during Phase 3A.": "Ninguna reparación se activa durante Phase 3A.",
-    "No repair survives without proof.": "Ninguna reparación sobrevive sin prueba.",
-    "The system does not chase losses.": "El sistema no persigue pérdidas.",
-    "The system does not panic after variance.": "El sistema no entra en pánico después de la varianza.",
-    "The system does not blindly retrain.": "El sistema no se reentrena a ciegas.",
-    "The system does not inflate confidence.": "El sistema no infla la confianza.",
-    "live repairs": "reparaciones en vivo",
-    "Shadow Mode activation": "activación de Shadow Mode",
-    "TGRM repair activation": "activación de reparación TGRM",
-    "full RYE repair scoring": "puntuación completa de reparación RYE",
-    "Hidden Value Score activation": "activación de Hidden Value Score",
-    "confidence calibration activation": "activación de calibración de confianza",
-    "live pick filtering": "filtrado de picks en vivo",
-    "live model mutation": "mutación del modelo en vivo",
-    "Learning Page live model updates": "actualizaciones del modelo en vivo desde Learning Page",
-    "automatic confidence adjustment": "ajuste automático de confianza",
-    "automatic bet-tier changes": "cambios automáticos de nivel de apuesta",
-    "production repair candidates": "candidatos de reparación de producción",
-    "automatic bankroll changes": "cambios automáticos de bankroll",
-    "automatic sportsbook recommendation changes": "cambios automáticos de recomendación de sportsbook",
-}
-
-ES_AUDIT_FIELD_MAP = {
+FIELD_ES = {
     "Last Reparodynamics Run": "Última ejecución Reparodynamics",
     "Source": "Fuente",
     "Rows scanned": "Filas escaneadas",
@@ -133,129 +96,91 @@ ES_AUDIT_FIELD_MAP = {
 
 
 def t(key: str) -> str:
-    return TEXT.get(LANG, TEXT["en"]).get(key, TEXT["en"].get(key, key))
+    return TEXT.get(LANG, TEXT["en"]).get(key, key)
 
 
-def value_text(value: str) -> str:
-    return ES_VALUE_MAP.get(value, value) if LANG == "es" else value
+def v(value: object) -> str:
+    text = str(value or "")
+    return ES.get(text, text) if LANG == "es" else text
 
 
-def list_text(values: list[str]) -> list[str]:
-    if LANG != "es":
-        return values
-    return [ES_LIST_MAP.get(value, value) for value in values]
-
-
-def audit_rows_for_language(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+def audit_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     if LANG != "es":
         return rows
-    translated = []
-    for row in rows:
-        translated.append({"field": ES_AUDIT_FIELD_MAP.get(row["field"], row["field"]), "value": value_text(row["value"])})
-    return translated
+    return [{"field": FIELD_ES.get(row["field"], row["field"]), "value": v(row["value"])} for row in rows]
+
+
+def table(items: object) -> pd.DataFrame:
+    values = list(items or [])
+    return pd.DataFrame({t("forbidden"): values})
 
 
 doctrine = get_reparodynamics_doctrine()
-
 st.title(t("title"))
 st.caption(t("caption"))
 st.warning(t("warning"))
+st.page_link("pages/shadow_mode_results.py", label=t("summary"))
 
-status_cols = st.columns(6)
-status_cols[0].metric(t("phase"), value_text(str(doctrine.get("current_phase", ""))))
-status_cols[1].metric(t("mode"), value_text(str(doctrine.get("operating_mode", ""))))
-status_cols[2].metric(t("repair"), value_text(str(doctrine.get("repair_activation", ""))))
-status_cols[3].metric(t("shadow"), value_text(str(doctrine.get("shadow_mode_activation", ""))))
-status_cols[4].metric(t("tgrm"), value_text(str(doctrine.get("tgrm_activation", ""))))
-status_cols[5].metric(t("rye"), value_text(str(doctrine.get("rye_activation", ""))))
+cols = st.columns(6)
+cols[0].metric(t("phase"), v(doctrine.get("current_phase", "")))
+cols[1].metric(t("mode"), v(doctrine.get("operating_mode", "")))
+cols[2].metric(t("repair"), v(doctrine.get("repair_activation", "")))
+cols[3].metric(t("shadow"), v(doctrine.get("shadow_mode_activation", "")))
+cols[4].metric(t("tgrm"), v(doctrine.get("tgrm_activation", "")))
+cols[5].metric(t("rye"), v(doctrine.get("rye_activation", "")))
 
 st.subheader(t("controls"))
 include_system = st.checkbox(t("include_system"), value=True)
 uploaded_rows = None
 uploaded_bytes = None
 uploaded_name = "reparodynamics_upload.csv"
-upload = st.file_uploader(t("upload"), type=["csv"], key="reparodynamics_observation_upload")
+upload = st.file_uploader(t("upload"), type=["csv"], key="reparodynamics_phase3b_upload")
 if upload is not None:
     uploaded_bytes = upload.getvalue()
     uploaded_name = upload.name
-    try:
-        uploaded_rows = rows_from_csv_bytes(uploaded_bytes)
-        st.success(f"{t('upload_loaded')} {len(uploaded_rows)}")
-        st.dataframe(pd.DataFrame(uploaded_rows).head(50), use_container_width=True)
-    except Exception as exc:
-        st.warning(f"Could not parse uploaded CSV: {exc}")
-        uploaded_rows = None
+    uploaded_rows = rows_from_csv_bytes(uploaded_bytes)
+    st.success(f"{t('loaded')}: {len(uploaded_rows)}")
+    st.dataframe(pd.DataFrame(uploaded_rows).head(50), use_container_width=True)
 
-if st.button(t("run_now"), type="primary"):
-    report = run_adaptive_repair_scan(
-        uploaded_rows=uploaded_rows,
-        uploaded_filename=uploaded_name,
-        uploaded_bytes=uploaded_bytes,
-        include_system_sources=include_system,
-    )
-    audit_event = write_reparodynamics_audit_event_from_runner_report(report, source="Reparodynamics page observation scan")
-    st.success(t("run_success"))
-    with st.expander(t("scan_summary"), expanded=True):
-        st.json({
-            "run_id": report.run_id,
-            "sources": report.source_summary,
-            "safety_state": report.safety_state,
-            "readiness": report.readiness,
-            "activation_gate": report.activation_gate,
-            "production_repairs_active": report.production_repairs_active,
-            "shadow_mode_active": report.shadow_mode_active,
-            "live_pick_changes": report.live_pick_changes,
-        })
+if st.button(t("run"), type="primary"):
+    report = run_adaptive_repair_scan(uploaded_rows=uploaded_rows, uploaded_filename=uploaded_name, uploaded_bytes=uploaded_bytes, include_system_sources=include_system)
+    st.session_state["shadow_mode_latest_report"] = report.to_dict()
+    audit_event = write_reparodynamics_audit_event_from_runner_report(report, source="Reparodynamics Phase 3B scan")
+    st.success(t("success"))
+    summary = shadow_summary(report)
+    candidates = shadow_result_rows(report)
+    st.subheader(t("summary"))
+    st.json(summary)
+    st.subheader(t("candidates"))
+    if candidates:
+        st.dataframe(pd.DataFrame(candidates), use_container_width=True, hide_index=True)
+    else:
+        st.info(t("no_candidates"))
 else:
     audit_event = latest_reparodynamics_audit_event()
 
 st.subheader(t("audit"))
-st.info(t("phase3a_explanation"))
 if audit_event is None:
     st.info(t("no_run"))
 else:
-    st.dataframe(
-        pd.DataFrame(audit_rows_for_language(audit_event_display_rows(audit_event))),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-st.subheader(t("motive"))
-if LANG == "es":
-    st.write("Reparodynamics es la doctrina operativa de autorreparación medida. ABA observa primero, diagnostica con cuidado, preserva la integridad de los datos, conserva energía de reparación y repara solo después de que evidencia controlada demuestre que un cambio dirigido mejora el rendimiento medible sin aumentar riesgo oculto.")
-else:
-    st.write(doctrine.get("motive", ""))
-
-left, right = st.columns(2)
-with left:
-    st.subheader(t("principles"))
-    for item in list_text(list(doctrine.get("repair_principles", []))):
-        st.markdown(f"- {item}")
-with right:
-    st.subheader(t("safety"))
-    for item in list_text(list(doctrine.get("safety_principles", []))):
-        st.markdown(f"- {item}")
+    st.dataframe(pd.DataFrame(audit_rows(audit_event_display_rows(audit_event))), use_container_width=True, hide_index=True)
 
 st.subheader(t("forbidden"))
-st.dataframe(
-    pd.DataFrame({t("forbidden"): list_text(list(doctrine.get("forbidden_actions", [])))}),
-    use_container_width=True,
-    hide_index=True,
-)
+st.dataframe(table(doctrine.get("forbidden_actions", [])), use_container_width=True, hide_index=True)
 
 st.subheader(t("status"))
 st.dataframe(
     pd.DataFrame(
         [
-            {"control": "live_mutation", "status": value_text(str(doctrine.get("live_mutation", "")))},
-            {"control": "repair_activation", "status": value_text(str(doctrine.get("repair_activation", "")))},
-            {"control": "shadow_mode_activation", "status": value_text(str(doctrine.get("shadow_mode_activation", "")))},
-            {"control": "tgrm_activation", "status": value_text(str(doctrine.get("tgrm_activation", "")))},
-            {"control": "rye_activation", "status": value_text(str(doctrine.get("rye_activation", "")))},
+            {"control": "live_mutation", "status": v(doctrine.get("live_mutation", ""))},
+            {"control": "repair_activation", "status": v(doctrine.get("repair_activation", ""))},
+            {"control": "shadow_mode_activation", "status": v(doctrine.get("shadow_mode_activation", ""))},
+            {"control": "tgrm_activation", "status": v(doctrine.get("tgrm_activation", ""))},
+            {"control": "rye_activation", "status": v(doctrine.get("rye_activation", ""))},
         ]
     ),
     use_container_width=True,
     hide_index=True,
 )
 
-st.success(value_text(str(doctrine.get("final_rule", ""))))
+st.success(v(doctrine.get("final_rule", "")))
