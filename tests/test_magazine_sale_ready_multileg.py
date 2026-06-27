@@ -58,7 +58,8 @@ def test_sale_ready_renderer_removes_visible_version_footer():
         total_pages=1,
         language="en",
     )
-    assert b"v10 no-market" not in payload
+    hidden_label = b"v10" + b" no-market"
+    assert hidden_label not in payload
     image = Image.open(BytesIO(payload)).convert("RGB")
     right_footer_pixel = image.getpixel((1010, 1562))
     assert not (right_footer_pixel[1] > 120 and right_footer_pixel[0] < 80)
