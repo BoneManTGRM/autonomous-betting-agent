@@ -6,6 +6,7 @@ from autonomous_betting_agent.reparodynamics_audit import (
 )
 
 
+# Zero-row scans should report no-data semantics, not stale cached learning signals.
 def _duplicate_event_rows():
     return [
         {"sport": "Soccer", "event": "Team A vs Team B", "known_start_utc": "2026-06-27T20:00:00Z", "market": "moneyline", "result": "Won", "confidence": "0.72", "odds": "+110", "closing_odds": "+105"},
