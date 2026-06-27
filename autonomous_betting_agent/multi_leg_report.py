@@ -123,7 +123,8 @@ def build(rows: Iterable[Any]) -> dict[str, Any] | None:
             for item in chosen:
                 combo_price *= float(item["_ml_price"])
                 combo_conf *= float(item["_ml_conf"])
-            return {"lane": lane, "items": chosen, "price": combo_price, "confidence": combo_conf * 0.92, "estimated_ev": combo_price * combo_conf * 0.92 - 1}
+            combo_conf *= 0.92
+            return {"lane": lane, "items": chosen, "price": combo_price, "confidence": combo_conf, "estimated_ev": combo_price * combo_conf - 1}
     return None
 
 
@@ -139,19 +140,33 @@ def no_combo_items(language: str = "en", limit: int = 3) -> list[str]:
     return ["No parlay recommended", "Not enough compatible selections.", "Verified odds are missing."][:limit]
 
 
+def _fmt_price(value: float) -> str:
+    return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+def _leg_label(item: Mapping[str, Any], language: str) -> str:
+    choice = text(item, "pick", "selection", "prediction", "public_pick", default="Selection")
+    return f"{choice} ({market(item, language)}) @ {_fmt_price(float(item['_ml_price']))}"
+
+
+def _summary_line(built: Mapping[str, Any], language: str) -> str:
+    price_label = "Cuota combinada" if language == "es" else "Combined odds"
+    prob_label = "Probabilidad estimada" if language == "es" else "Estimated probability"
+    return f"{price_label}: {_fmt_price(float(built['price']))} · {prob_label}: {float(built['confidence']):.0%}"
+
+
 def format_items(rows: Iterable[Any], language: str = "en", limit: int = 3) -> list[str]:
     source = [dict(row(item)) for item in rows]
     built = build(source)
     if not built:
         return no_combo_items(language, limit)
-    lines = [label_lane(str(built["lane"]), language)]
-    for item in built["items"][:2]:
-        choice = text(item, "pick", "selection", "prediction", "public_pick", default="Selection")
-        lines.append(f"{choice} ({market(item, language)}) @ {float(item['_ml_price']):.2f}")
-    if len(lines) < limit:
-        price_label = "Cuota combinada" if language == "es" else "Combined odds"
-        prob_label = "Probabilidad estimada" if language == "es" else "Estimated probability"
-        lines.append(f"{price_label}: {float(built['price']):.2f} · {prob_label}: {float(built['confidence']):.0%}")
+    legs = [_leg_label(item, language) for item in built["items"]]
+    if limit <= 2:
+        return [label_lane(str(built["lane"]), language), _summary_line(built, language)][:limit]
+    if limit == 3:
+        joined_legs = " + ".join(legs[:2])
+        return [label_lane(str(built["lane"]), language), joined_legs, _summary_line(built, language)]
+    lines = [label_lane(str(built["lane"]), language), *legs, _summary_line(built, language)]
     return lines[:limit]
 
 
