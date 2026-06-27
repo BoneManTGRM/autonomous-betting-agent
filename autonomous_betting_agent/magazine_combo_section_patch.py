@@ -4,7 +4,8 @@ from typing import Any, Iterable
 
 from autonomous_betting_agent.multi_leg_report import attach_multi_leg_review, format_items
 
-_FLAG = "_ABA_MAGAZINE_COMBO_SECTION_PATCHED_V3"
+_FLAG = "_ABA_MAGAZINE_COMBO_SECTION_PATCHED_V4"
+_LAST_ITEMS = ""
 
 
 def _row(value: Any) -> dict[str, Any]:
@@ -41,11 +42,20 @@ def combo_section_items(row_value: Any) -> list[str]:
 
 
 def _attach(rows: Iterable[Any], language: str | None = None) -> list[dict[str, Any]]:
+    global _LAST_ITEMS
     data = [_row(item) for item in rows]
     if not data:
         return []
     enriched = attach_multi_leg_review(data, _lang(data[0], language))
+    _LAST_ITEMS = str(enriched[0].get("combo_magazine_items", "")) if enriched else ""
     return [dict(item, combo_magazine_items=item.get("combo_magazine_items", "")) for item in enriched]
+
+
+def _row_with_latest(row_value: Any) -> dict[str, Any]:
+    row = _row(row_value)
+    if _LAST_ITEMS and not row.get("combo_magazine_items"):
+        row["combo_magazine_items"] = _LAST_ITEMS
+    return row
 
 
 def install(module: Any) -> Any:
@@ -59,5 +69,11 @@ def install(module: Any) -> Any:
             def wrapper(picks: Iterable[Any], *args: Any, _original=original, **kwargs: Any):
                 return _original(_attach(picks, kwargs.get("language")), *args, **kwargs)
             setattr(module, name, wrapper)
+    for name in ("render_full_pick_magazine_page", "render_full_pick_magazine_page_png"):
+        original = getattr(module, name, None)
+        if callable(original):
+            def page_wrapper(pick: Any, *args: Any, _original=original, **kwargs: Any):
+                return _original(_row_with_latest(pick), *args, **kwargs)
+            setattr(module, name, page_wrapper)
     setattr(module, _FLAG, True)
     return module
