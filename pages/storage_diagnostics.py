@@ -20,6 +20,7 @@ from autonomous_betting_agent.pick_hold_store import (
     store_snapshot,
 )
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
+from autonomous_betting_agent.ui_i18n import localize_dataframe
 
 st.set_page_config(page_title='Storage Diagnostics', layout='wide')
 LANG = render_app_sidebar('storage_diagnostics', language_key='storage_diagnostics_language')
@@ -111,6 +112,10 @@ TEXT = {
 
 def t(key: str) -> str:
     return TEXT.get(LANG, TEXT['en']).get(key, TEXT['en'].get(key, key))
+
+
+def display_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    return localize_dataframe(frame, LANG)
 
 
 def _secret_value(*names: str) -> str:
@@ -265,7 +270,7 @@ with st.expander(t('recover_title'), expanded=False):
             st.error(message)
 
 snapshot = store_snapshot(workspace_id)
-st.dataframe(snapshot, use_container_width=True, hide_index=True)
+st.dataframe(display_frame(snapshot), use_container_width=True, hide_index=True)
 
 if not github_store_enabled():
     st.warning(t('missing_github'))
