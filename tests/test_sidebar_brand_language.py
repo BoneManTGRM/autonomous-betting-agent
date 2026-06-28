@@ -7,7 +7,8 @@ def test_sidebar_uses_colored_brand_and_safe_page_radio_selector() -> None:
     text = (Path(__file__).resolve().parents[1] / 'autonomous_betting_agent' / 'sidebar_nav.py').read_text(encoding='utf-8')
     assert 'aba-sidebar-title' in text
     assert 'linear-gradient' in text
-    assert "st.radio('Language / Idioma'" in text
+    assert "st.radio('Idioma' if normalize_language(language) == 'es' else 'Language'" in text
+    assert 'format_func=lambda option: _sidebar_language_option(option, language)' in text
     assert 'key=widget_key' in text
     assert 'on_change=_sync_global_from_radio' in text
     assert "widget_key = f'aba_radio_{language_key}'" in text
