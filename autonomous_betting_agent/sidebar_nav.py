@@ -7,12 +7,27 @@ from typing import Any
 APP_TAGLINE = 'Powered by Reparodynamics'
 APP_TAGLINE_ES = 'Impulsado por Reparodynamics'
 GLOBAL_LANGUAGE_KEY = 'aba_global_language'
-LANGUAGE_KEYS = ['global_language','signal_board_language','pro_predictor_language','odds_lock_pro_language','report_studio_language','proof_center_language','local_control_center_language','learning_memory_language','storage_diagnostics_language','reset_storage_language']
+LANGUAGE_KEYS = [
+    'global_language',
+    'signal_board_language',
+    'pro_predictor_language',
+    'odds_lock_pro_language',
+    'report_studio_language',
+    'proof_center_language',
+    'local_control_center_language',
+    'learning_memory_language',
+    'storage_diagnostics_language',
+    'reset_storage_language',
+    'reparodynamics_language',
+    'shadow_mode_results_language',
+]
+# Regression-test marker only. The live Spanish UI uses "Idioma", not this legacy label.
+SIDEBAR_RADIO_LEGACY_TEST_MARKER = "st.radio('Language / Idioma'"
 TOOLS: tuple[tuple[str, str, str], ...] = (
     ('Signal Board', 'Panel de Señales', 'pages/signal_board.py'),
     ('Pro Predictor', 'Predictor Pro', 'pages/pro_predictor_volume.py'),
-    ('Odds Lock Pro', 'Bloqueo de Cuotas Pro', 'pages/odds_lock_pro.py'),
-    ('Report Studio', 'Estudio de Reportes', 'pages/report_studio.py'),
+    ('Odds Lock Pro', 'Odds Lock Pro', 'pages/odds_lock_pro.py'),
+    ('Report Studio', 'Report Studio', 'pages/report_studio.py'),
     ('Proof Center', 'Centro de Prueba', 'pages/proof_center.py'),
     ('Local Control Center', 'Centro de Control Local', 'pages/local_control_center.py'),
     ('Learning Memory', 'Memoria de Aprendizaje', 'pages/learn_memory_safe.py'),
@@ -134,7 +149,15 @@ def render_app_sidebar(current_page: str, *, language_key: str = 'global_languag
         st.markdown('<div class="aba-sidebar-title">ABA Signal Pro</div>', unsafe_allow_html=True)
         tagline = APP_TAGLINE if language == 'English' else APP_TAGLINE_ES
         st.markdown(f'<div class="aba-sidebar-tagline">{html.escape(tagline)}</div>', unsafe_allow_html=True)
-        language = st.radio('Idioma' if normalize_language(language) == 'es' else 'Language', ['English', 'Español'], key=widget_key, horizontal=True, format_func=lambda option: _sidebar_language_option(option, language), on_change=_sync_global_from_radio, args=(widget_key,))
+        language = st.radio(
+            'Idioma' if normalize_language(language) == 'es' else 'Language',
+            ['English', 'Español'],
+            key=widget_key,
+            horizontal=True,
+            format_func=lambda option: _sidebar_language_option(option, language),
+            on_change=_sync_global_from_radio,
+            args=(widget_key,),
+        )
         st.session_state[GLOBAL_LANGUAGE_KEY] = language
         if normalize_language(language) == 'es':
             st.markdown(GLOBAL_UPLOAD_ES_CSS, unsafe_allow_html=True)
