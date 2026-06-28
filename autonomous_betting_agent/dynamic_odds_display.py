@@ -14,7 +14,6 @@ from autonomous_betting_agent.dynamic_odds_shadow_memory import (
     protected_baseline_metrics,
     runtime_lr_model,
     shadow_model_status,
-    train_and_save_dynamic_odds_shadow_model,
     training_result_stats,
 )
 
@@ -142,15 +141,23 @@ def _lr_model_from_rows(rows: Sequence[Mapping[str, Any]], config: Mapping[str, 
     model = learn_lr_multipliers(completed, config) if completed else learn_lr_multipliers([], config)
     baseline = protected_baseline_metrics(stats["wins"], stats["losses"], config)
     model.update({**stats, **baseline})
-    model["model_source"] = "current_completed_rows_shadow_learning" if completed else "no_lr_data"
+    model["model_source"] = "current_completed_rows_shadow_learning_unsaved" if completed else "no_lr_data"
     model["last_trained_at_utc"] = ""
     model["dynamic_odds_applied_live_count"] = 0
     model.setdefault("model_quality_label", baseline.get("baseline_confidence", "DATA BLOCKED"))
-    model.setdefault("model_quality_reason", "current_rows_only")
+    model.setdefault("model_quality_reason", "current_rows_only_unsaved")
     return model
 
 
 def _resolve_lr_model(rows: Sequence[Mapping[str, Any]] | None, lr_model: Mapping[str, Any] | None, config: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """Resolve Shadow LR math without mutating disk or official pick fields.
+
+    Phase 3E.4 requires Streamlit rerenders to be idempotent. A saved Shadow
+    model may be loaded and used for pending rows, but unsaved completed rows
+    are evaluated in memory only. Persistent training is reserved for the
+    explicit trainer button in the shared control panel.
+    """
+
     source_rows = [deepcopy(dict(row)) for row in list(rows or []) if isinstance(row, Mapping)]
     model = deepcopy(dict(lr_model or {}))
     if model:
@@ -162,13 +169,6 @@ def _resolve_lr_model(rows: Sequence[Mapping[str, Any]] | None, lr_model: Mappin
     saved_payload = load_dynamic_odds_shadow_model(workspace_id)
     if int((saved_payload.get("lr_model") or {}).get("feature_count") or saved_payload.get("feature_count") or 0) > 0:
         return runtime_lr_model(saved_payload)
-    completed = completed_win_loss_rows(source_rows)
-    if completed:
-        try:
-            saved_payload = train_and_save_dynamic_odds_shadow_model(completed, workspace_id=workspace_id, config=config, source="graded_rows_seen_in_shadow_panel")
-            return runtime_lr_model(saved_payload)
-        except Exception:
-            return _lr_model_from_rows(completed, config)
     return _lr_model_from_rows(source_rows, config)
 
 
@@ -343,7 +343,7 @@ def dynamic_odds_shadow_learning_summary(rows: Sequence[Mapping[str, Any]], lr_m
         "training_rows_used": int(model.get("training_rows") or model.get("training_rows_used") or 0),
         "feature_count": int(model.get("feature_count") or 0),
         "baseline_success_rate": model.get("baseline_success_rate"),
-        "learning_source": model.get("model_source") or ("current_completed_rows_shadow_learning" if int(model.get("feature_count") or 0) > 0 else "no_lr_data"),
+        "learning_source": model.get("model_source") or ("current_completed_rows_shadow_learning_unsaved" if int(model.get("feature_count") or 0) > 0 else "no_lr_data"),
         "leakage_guard": "ON",
         "dynamic_odds_mode": SHADOW_ONLY,
         "dynamic_odds_live_activation": "OFF",
