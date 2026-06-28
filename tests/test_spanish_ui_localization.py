@@ -98,6 +98,21 @@ def test_report_studio_dropdowns_preserve_raw_values_with_spanish_labels() -> No
     assert "global_localize_dataframe" in source
 
 
+def test_sidebar_language_selector_is_spanish_in_spanish_mode() -> None:
+    source = Path("autonomous_betting_agent/sidebar_nav.py").read_text(encoding="utf-8")
+    assert "'Language / Idioma'" not in source
+    assert "'Idioma' if normalize_language(language) == 'es' else 'Language'" in source
+    assert "return 'Inglés'" in source
+
+
+def test_reparodynamics_spanish_shadow_mode_wording_is_contextual() -> None:
+    source = Path("pages/reparodynamics.py").read_text(encoding="utf-8")
+    assert "Resumen Shadow Mode" not in source
+    assert "Resumen de Shadow Mode" in source
+    assert "Evaluacion en Shadow Mode" in source
+    assert "El almacenamiento local puede no persistir" in source
+
+
 def test_no_model_or_ledger_logic_modules_changed() -> None:
     touched_pages = [
         "pages/signal_board.py",
