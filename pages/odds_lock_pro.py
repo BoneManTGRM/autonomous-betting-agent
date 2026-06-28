@@ -32,6 +32,7 @@ from autonomous_betting_agent.odds_lock_tools import (
     proof_id_from_hash,
     summarize_locked_picks,
 )
+from autonomous_betting_agent.odds_math_control_panel import render_dynamic_odds_control_panel
 from autonomous_betting_agent.pick_hold_store import load_first_available, save_held_rows
 from autonomous_betting_agent.row_normalizer import normalize_frame, safe_text
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
@@ -468,16 +469,23 @@ def show_candidates(frame: pd.DataFrame) -> None:
     st.dataframe(display_frame(frame[cols] if cols else frame), use_container_width=True, hide_index=True)
 
 
-def show_dynamic_odds_shadow_panel(frame: pd.DataFrame) -> None:
+def show_dynamic_odds_shadow_panel(frame: pd.DataFrame, *, workspace_id: str) -> None:
     st.subheader(t('dynamic_odds_shadow'))
     st.warning(t('dynamic_odds_warning'))
+    rows = frame.to_dict('records') if not frame.empty else []
     if frame.empty:
         st.info(t('dynamic_odds_empty'))
-        return
-    shadow_rows = build_dynamic_odds_shadow_rows(frame.to_dict('records'))
-    shadow_frame = pd.DataFrame(shadow_rows)
-    st.dataframe(display_frame(shadow_frame), use_container_width=True, hide_index=True)
+    else:
+        shadow_rows = build_dynamic_odds_shadow_rows(rows)
+        shadow_frame = pd.DataFrame(shadow_rows)
+        st.dataframe(display_frame(shadow_frame), use_container_width=True, hide_index=True)
     st.json(dynamic_odds_shadow_safety_summary())
+    render_dynamic_odds_control_panel(
+        rows,
+        workspace_id=workspace_id,
+        language=LANG,
+        panel_key_prefix='odds_lock_pro_dynamic_odds_shadow',
+    )
 
 
 def exposure_summary(frame: pd.DataFrame, *, daily_limit_units: float, sport_limit_units: float) -> pd.DataFrame:
@@ -593,7 +601,7 @@ st.dataframe(display_frame(page_health_frame(health_frame_source, page='what_are
 
 dynamic_shadow_source = review_rows if not review_rows.empty else (active_locked if not active_locked.empty else normalized)
 with st.expander(t('dynamic_odds_shadow'), expanded=True):
-    show_dynamic_odds_shadow_panel(dynamic_shadow_source)
+    show_dynamic_odds_shadow_panel(dynamic_shadow_source, workspace_id=workspace_id)
 
 tabs = st.tabs([t('research_candidates_tab'), t('official_candidates_tab'), t('locked'), t('dashboard'), t('reports'), t('exposure'), t('client')])
 
