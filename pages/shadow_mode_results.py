@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 import streamlit as st
 
-from autonomous_betting_agent.adaptive_repair_runner import rows_from_csv_bytes, run_adaptive_repair_scan
+from autonomous_betting_agent.adaptive_repair_runner import combined_rows, hash_rows, rows_from_csv_bytes, run_adaptive_repair_scan, system_source_adapters, uploaded_source
 from autonomous_betting_agent.reparodynamics_audit import write_reparodynamics_audit_event_from_runner_report
-from autonomous_betting_agent.reparodynamics_shadow_results import no_live_mutation_assertions, shadow_result_rows, shadow_summary
+from autonomous_betting_agent.reparodynamics_shadow_backtest import build_phase3c_report
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
+from autonomous_betting_agent.ui_i18n import localize_dataframe
 
 st.set_page_config(page_title="Shadow Mode Results", layout="wide")
 LANG = render_app_sidebar("shadow_mode_results", language_key="shadow_mode_results_language", selector="radio")
@@ -14,47 +17,42 @@ LANG = render_app_sidebar("shadow_mode_results", language_key="shadow_mode_resul
 TEXT = {
     "en": {
         "title": "Shadow Mode Results",
-        "caption": "Counterfactual repair-candidate review. Live picks stay unchanged.",
-        "warning": "Phase 3B evaluates repair candidates in Shadow Mode only. It does not change confidence, EV, edge, units, bankroll, sportsbooks, filters, reports, or live picks.",
+        "caption": "Phase 3C Shadow Backtest comparison. Live behavior stays unchanged.",
+        "warning": "Shadow Mode results are simulation-only. No live system behavior was changed.",
         "include_system": "Include available local system sources",
-        "upload": "Optional graded CSV for Shadow Mode scan",
+        "upload": "Optional graded CSV for Shadow Backtest",
         "uploaded": "Uploaded rows loaded",
-        "run": "Run Shadow Mode comparison",
-        "summary": "Shadow Mode Summary",
-        "candidates": "Repair candidates under Shadow Mode",
-        "safety": "No-live-mutation safety checks",
-        "no_candidates": "No repair candidates were generated. This is valid when the scan has no data or no qualifying drift/data-quality signals.",
+        "run": "Run Shadow Backtest comparison",
+        "baseline": "Baseline Metrics",
+        "comparison": "Shadow Backtest Comparison",
+        "blockers": "Data Blockers",
+        "watchlists": "Watchlists",
+        "rejected": "Rejected Repairs",
+        "manual": "Manual Review Queue",
+        "safety": "Safety Gates",
+        "no_data": "Run a Shadow Backtest scan to show results.",
+        "empty": "No rows in this section.",
         "audit_written": "Audit event written. Live mutation remains forbidden.",
     },
     "es": {
         "title": "Resultados Shadow Mode",
-        "caption": "Revisión contrafactual de candidatos de reparación. Los picks en vivo no cambian.",
-        "warning": "La Fase 3B evalúa candidatos de reparación solo en Shadow Mode. No cambia confianza, VE, ventaja, unidades, bankroll, sportsbooks, filtros, reportes ni picks en vivo.",
+        "caption": "Comparacion Shadow Backtest Fase 3C. El comportamiento en vivo no cambia.",
+        "warning": "Los resultados de Shadow Mode son solo simulacion. No se cambio el comportamiento en vivo del sistema.",
         "include_system": "Incluir fuentes locales disponibles del sistema",
-        "upload": "CSV calificado opcional para escaneo Shadow Mode",
+        "upload": "CSV calificado opcional para Shadow Backtest",
         "uploaded": "Filas subidas cargadas",
-        "run": "Ejecutar comparación Shadow Mode",
-        "summary": "Resumen Shadow Mode",
-        "candidates": "Candidatos de reparación en Shadow Mode",
-        "safety": "Controles de seguridad sin mutación en vivo",
-        "no_candidates": "No se generaron candidatos de reparación. Esto es válido cuando el escaneo no tiene datos o no hay señales calificadas de deriva/calidad de datos.",
-        "audit_written": "Evento de auditoría escrito. La mutación en vivo sigue prohibida.",
+        "run": "Ejecutar comparacion Shadow Backtest",
+        "baseline": "Metricas baseline",
+        "comparison": "Comparacion Shadow Backtest",
+        "blockers": "Bloqueadores de datos",
+        "watchlists": "Listas de observacion",
+        "rejected": "Reparaciones rechazadas",
+        "manual": "Cola de revision manual",
+        "safety": "Compuertas de seguridad",
+        "no_data": "Ejecuta un escaneo Shadow Backtest para mostrar resultados.",
+        "empty": "No hay filas en esta seccion.",
+        "audit_written": "Evento de auditoria escrito. La mutacion en vivo sigue prohibida.",
     },
-}
-
-ES_COLUMNS = {
-    "rank": "rango",
-    "candidate_id": "id_candidato",
-    "pattern_name": "patrón",
-    "pattern_type": "tipo",
-    "affected_scope": "alcance",
-    "sample_size": "muestra",
-    "evidence_summary": "evidencia",
-    "current_live_behavior": "comportamiento_actual_en_vivo",
-    "shadow_mode_action": "acción_shadow_mode",
-    "would_change_live_pick": "cambiaría_pick_en_vivo",
-    "production_repair_allowed": "reparación_producción_permitida",
-    "safety_decision": "decisión_seguridad",
 }
 
 
@@ -62,10 +60,37 @@ def t(key: str) -> str:
     return TEXT.get(LANG, TEXT["en"]).get(key, key)
 
 
-def localize_frame(frame: pd.DataFrame) -> pd.DataFrame:
-    if LANG != "es" or frame.empty:
-        return frame
-    return frame.rename(columns={col: ES_COLUMNS.get(col, col) for col in frame.columns})
+def display_frame(frame: pd.DataFrame | None) -> pd.DataFrame | None:
+    return localize_dataframe(frame, LANG) if frame is not None else None
+
+
+def show_table(rows: Any) -> None:
+    frame = pd.DataFrame(list(rows or []))
+    if frame.empty:
+        st.info(t("empty"))
+    else:
+        st.dataframe(display_frame(frame), use_container_width=True, hide_index=True)
+
+
+def one_row(data: dict[str, Any]) -> pd.DataFrame:
+    return pd.DataFrame([data])
+
+
+def flat(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out = []
+    for item in rows or []:
+        comparison = item.get("comparison_metrics", {}) or {}
+        out.append({"title": item.get("title", ""), "finding_type": item.get("finding_type", ""), "candidate_type": item.get("candidate_type", ""), "sample_size": item.get("sample_size", 0), "baseline_ROI": comparison.get("baseline_ROI"), "shadow_ROI": comparison.get("shadow_ROI"), "ROI_delta": comparison.get("ROI_delta"), "decision": item.get("decision", ""), "decision_reason": item.get("decision_reason", "")})
+    return out
+
+
+def scan_rows(uploaded_rows: list[dict[str, Any]] | None, uploaded_name: str, include_system: bool) -> list[dict[str, Any]]:
+    sources = []
+    if uploaded_rows is not None:
+        sources.append(uploaded_source("uploaded_csv_rows", uploaded_rows, source_hash=hash_rows(uploaded_rows), source_path=uploaded_name))
+    if include_system:
+        sources.extend(system_source_adapters())
+    return combined_rows(sources)
 
 
 st.title(t("title"))
@@ -82,41 +107,40 @@ if upload is not None:
     uploaded_name = upload.name
     uploaded_rows = rows_from_csv_bytes(uploaded_bytes)
     st.success(f"{t('uploaded')}: {len(uploaded_rows)}")
-    st.dataframe(pd.DataFrame(uploaded_rows).head(50), use_container_width=True)
+    st.dataframe(display_frame(pd.DataFrame(uploaded_rows).head(50)), use_container_width=True)
 
 if st.button(t("run"), type="primary"):
-    report = run_adaptive_repair_scan(
-        uploaded_rows=uploaded_rows,
-        uploaded_filename=uploaded_name,
-        uploaded_bytes=uploaded_bytes,
-        include_system_sources=include_system,
-    )
-    st.session_state["shadow_mode_latest_report"] = report.to_dict()
-    write_reparodynamics_audit_event_from_runner_report(report, source="Shadow Mode Results page")
+    phase3c_report = build_phase3c_report(scan_rows(uploaded_rows, uploaded_name, include_system))
+    runner_report = run_adaptive_repair_scan(uploaded_rows=uploaded_rows, uploaded_filename=uploaded_name, uploaded_bytes=uploaded_bytes, include_system_sources=include_system)
+    write_reparodynamics_audit_event_from_runner_report(runner_report, source="Shadow Mode Results page", phase3c_report=phase3c_report)
+    st.session_state["phase3c_latest_report"] = phase3c_report
+    st.session_state["shadow_mode_latest_report"] = runner_report.to_dict()
     st.success(t("audit_written"))
 
-report_data = st.session_state.get("shadow_mode_latest_report")
-if report_data:
-    summary = shadow_summary(report_data)
-    assertions = no_live_mutation_assertions(report_data)
-    candidate_rows = shadow_result_rows(report_data)
-
-    st.subheader(t("summary"))
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Rows", summary["rows_scanned"])
-    c2.metric("Candidates", summary["candidate_count"])
-    c3.metric("Shadow", "ON" if summary["shadow_mode_active"] else "OFF")
-    c4.metric("Live changes", "ON" if summary["live_pick_changes"] else "OFF")
-    c5.metric("Gate", str(summary["repair_gate_status"]))
-    st.json(summary)
-
-    st.subheader(t("safety"))
-    st.dataframe(pd.DataFrame([{"check": key, "passed": value} for key, value in assertions.items()]), use_container_width=True, hide_index=True)
-
-    st.subheader(t("candidates"))
-    if candidate_rows:
-        st.dataframe(localize_frame(pd.DataFrame(candidate_rows)), use_container_width=True, hide_index=True)
-    else:
-        st.info(t("no_candidates"))
+report = st.session_state.get("phase3c_latest_report")
+if not report:
+    st.info(t("no_data"))
 else:
-    st.info(t("no_candidates"))
+    counts = dict(report.get("summary_counts", {}) or {})
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1.metric("Rows", report.get("rows_scanned", 0))
+    c2.metric("Completed", report.get("completed_rows_used", 0))
+    c3.metric("Blockers", counts.get("data_blockers_count", 0))
+    c4.metric("Watchlists", counts.get("watchlists_count", 0))
+    c5.metric("Manual Review", counts.get("manual_review_eligible_count", 0))
+    c6.metric("Live Repairs", counts.get("live_repairs_applied_count", 0))
+    tabs = st.tabs([t("baseline"), t("comparison"), t("blockers"), t("watchlists"), t("rejected"), t("manual"), t("safety")])
+    with tabs[0]:
+        st.dataframe(display_frame(one_row(report.get("baseline_metrics", {}) or {})), use_container_width=True, hide_index=True)
+    with tabs[1]:
+        show_table(flat(list(report.get("shadow_tested_repairs", []) or [])))
+    with tabs[2]:
+        show_table(report.get("data_blockers", []))
+    with tabs[3]:
+        show_table(report.get("watchlists", []))
+    with tabs[4]:
+        show_table(report.get("rejected_repairs", []))
+    with tabs[5]:
+        show_table(report.get("manual_review_queue", []))
+    with tabs[6]:
+        st.dataframe(display_frame(one_row(report.get("safety_gates", {}) or {})), use_container_width=True, hide_index=True)
