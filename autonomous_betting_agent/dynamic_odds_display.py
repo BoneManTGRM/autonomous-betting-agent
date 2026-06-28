@@ -16,6 +16,7 @@ from autonomous_betting_agent.dynamic_odds_shadow_memory import (
     shadow_model_status,
     training_result_stats,
 )
+from autonomous_betting_agent.odds_value_engine import ADVISORY_COLUMNS, build_advisory_odds_value_rows
 
 SHADOW_ONLY = "SHADOW ONLY"
 
@@ -41,6 +42,7 @@ DISPLAY_COLUMNS = [
     "current_EV",
     "dynamic_EV_delta",
     "dynamic_fair_odds",
+    *ADVISORY_COLUMNS,
     "global_baseline",
     "segment_baseline",
     "protected_baseline",
@@ -307,7 +309,18 @@ def resolved_dynamic_odds_shadow_model(rows: Sequence[Mapping[str, Any]], lr_mod
 def build_dynamic_odds_shadow_rows(rows: Sequence[Mapping[str, Any]], lr_model: Mapping[str, Any] | None = None, config: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
     source_rows = [deepcopy(dict(row)) for row in list(rows or []) if isinstance(row, Mapping)]
     model = _resolve_lr_model(source_rows, lr_model, config)
-    return [build_dynamic_odds_shadow_row(row, lr_model=model, config=config) for row in source_rows]
+    shadow_rows = [build_dynamic_odds_shadow_row(row, lr_model=model, config=config) for row in source_rows]
+    advisory_inputs = []
+    for source, shadow in zip(source_rows, shadow_rows):
+        advisory_input = {**source}
+        advisory_input["model_quality_label"] = shadow.get("model_quality_label", "DATA BLOCKED")
+        advisory_input["lr_model_loaded"] = shadow.get("lr_model_loaded", False)
+        advisory_inputs.append(advisory_input)
+    advisory_rows = build_advisory_odds_value_rows(advisory_inputs, config=config)
+    for shadow, advisory in zip(shadow_rows, advisory_rows):
+        for column in ADVISORY_COLUMNS:
+            shadow[column] = advisory.get(column)
+    return shadow_rows
 
 
 def dynamic_odds_shadow_display_columns() -> list[str]:
@@ -387,4 +400,7 @@ def dynamic_odds_shadow_safety_summary() -> dict[str, Any]:
         "repair_activation": "OFF",
         "automatic_live_promotion": "FORBIDDEN",
         "shadow_model_training": "OFFLINE_ONLY",
+        "advisory_odds_math_mode": "ADVISORY_ONLY",
+        "advisory_odds_value_live_application": "OFF",
+        "advisory_odds_value_applied_live_count": 0,
     }
