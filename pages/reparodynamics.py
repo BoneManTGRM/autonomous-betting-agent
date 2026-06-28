@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pandas as pd
@@ -30,7 +31,7 @@ from autonomous_betting_agent.reparodynamics_repair_memory import (
 )
 from autonomous_betting_agent.reparodynamics_shadow_backtest import build_phase3c_report
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
-from autonomous_betting_agent.ui_i18n import localize_dataframe, localize_value
+from autonomous_betting_agent.ui_i18n import localize_dataframe, localize_options, localize_value
 
 st.set_page_config(page_title="Reparodynamics", layout="wide")
 LANG = render_app_sidebar("reparodynamics", language_key="reparodynamics_language", selector="radio")
@@ -60,6 +61,7 @@ TEXT = {
         "run": "Run Phase 3C Shadow Backtest + save to Repair Memory",
         "success": "Shadow Backtest completed and saved to Repair Memory. Audit event written.",
         "save_memory": "Save Phase 3C results to Repair Memory",
+        "already_saved": "This Phase 3C run is already saved to Repair Memory.",
         "memory_saved": "Phase 3C results saved to Repair Memory.",
         "saved": "Rows saved to research ledger",
         "not_saved": "No scan rows were saved to local storage.",
@@ -89,6 +91,7 @@ TEXT = {
         "apply_review": "Save manual review decision",
         "review_saved": "Manual review decision saved. No live repairs were activated.",
         "manual_warning": "Manual approval does not activate live repairs.",
+        "final_rule": "ABA may store repair memory and manual review labels, but live repair remains forbidden.",
     },
     "es": {
         "title": "Reparodynamics",
@@ -113,7 +116,8 @@ TEXT = {
         "save_confirm": "Entiendo que esto solo guarda filas localmente y no entrena ni muta el modelo",
         "run": "Ejecutar Shadow Backtest Fase 3C y guardar en Repair Memory",
         "success": "Shadow Backtest completado y guardado en Repair Memory. Evento de auditoria escrito.",
-        "save_memory": "Guardar resultados Fase 3C en memoria de reparación",
+        "save_memory": "Guardar resultados Fase 3C en memoria de reparacion",
+        "already_saved": "Ya guardado en Repair Memory.",
         "memory_saved": "Resultados Fase 3C guardados en Repair Memory.",
         "saved": "Filas guardadas en ledger de investigacion",
         "not_saved": "No se guardaron filas de escaneo en almacenamiento local.",
@@ -143,7 +147,93 @@ TEXT = {
         "apply_review": "Guardar decision de revision manual",
         "review_saved": "Decision de revision manual guardada. No se activaron reparaciones en vivo.",
         "manual_warning": "La aprobacion manual no activa reparaciones en vivo.",
+        "final_rule": "ABA puede guardar memoria de reparacion y etiquetas de revision manual, pero la reparacion en vivo sigue prohibida.",
     },
+}
+
+PAGE_COLUMN_LABELS_ES = {
+    "created_at_utc": "Creado UTC",
+    "created at utc": "Creado UTC",
+    "event_id": "ID de evento",
+    "event id": "ID de evento",
+    "event_type": "Tipo de evento",
+    "event type": "Tipo de evento",
+    "field": "Campo",
+    "value": "Valor",
+    "description": "Descripcion",
+    "section": "Seccion",
+    "repair_key": "Clave de reparacion",
+    "repair key": "Clave de reparacion",
+    "reviewer": "Revisor",
+    "memory_status": "Estado de memoria",
+    "manual_status": "Estado manual",
+    "manual_note": "Nota manual",
+    "latest_decision": "Decision mas reciente",
+    "latest_decision_reason": "Razon mas reciente",
+    "times_seen": "Veces detectado",
+    "times_shadow_tested": "Veces probado en Shadow",
+    "times_data_blocked": "Veces bloqueado por datos",
+    "times_watchlist": "Veces en lista de observacion",
+    "times_rejected": "Veces rechazado",
+    "total_completed_rows_used": "Filas completadas totales",
+    "avg_ROI_delta": "Cambio ROI promedio",
+    "total_profit_units_delta": "Cambio total en unidades de ganancia",
+    "total_avoided_losses": "Derrotas evitadas totales",
+}
+
+PAGE_VALUE_LABELS_ES = {
+    "aba_may_store_repair_memory_and_manual_review_labels_but_live_repair_remains_forbidden": "ABA puede guardar memoria de reparacion y etiquetas de revision manual, pero la reparacion en vivo sigue prohibida.",
+    "closing_odds_or_comparable_clv_data_are_unavailable_for_clv_based_evaluation": "No hay cuotas de cierre o datos CLV comparables para evaluacion basada en CLV.",
+    "rows_are_missing_decimal_odds_needed_for_price_based_simulation": "Faltan cuotas decimales necesarias para simulacion basada en precio.",
+    "dnb_repair_option_cannot_be_simulated_without_draw_no_bet_odds": "La opcion DNB no puede simularse sin cuotas draw-no-bet.",
+    "double_chance_repair_option_cannot_be_simulated_without_double_chance_odds": "La opcion de doble oportunidad no puede simularse sin cuotas de doble oportunidad.",
+    "completed_result_rows_are_below_the_candidate_threshold": "Las filas completadas estan por debajo del umbral de candidato.",
+    "keep_collecting_completed_rows_before_repair_candidacy": "Sigue recolectando filas completadas antes de considerar candidatura de reparacion.",
+    "combat_method_round_markets_remain_capped_to_watchlist_until_sample_size_and_roi_gates_are_met": "Los mercados de metodo/ronda de combate siguen en lista de observacion hasta cumplir muestra y compuertas ROI.",
+    "clv_is_unavailable_use_roi_only_shadow_testing_until_closing_odds_exist": "CLV no esta disponible; usa pruebas Shadow solo con ROI hasta que existan cuotas de cierre.",
+    "phase_3d_repair_memory": "Fase 3D Repair Memory",
+    "reparodynamics_phase_3d_scan": "Escaneo Reparodynamics Fase 3D",
+    "phase3c_saved_to_memory": "Fase 3C guardada en memoria",
+    "manual_review_decision": "decision de revision manual",
+    "repair_memory_summary": "resumen de Repair Memory",
+    "phase4_lockbox_candidate_detected": "candidato lockbox Fase 4 detectado",
+    "last_reparodynamics_run": "Ultima ejecucion Reparodynamics",
+    "source": "Fuente",
+    "phase": "Fase",
+    "rows_scanned": "Filas escaneadas",
+    "completed_rows_used": "Filas completadas usadas",
+    "unique_events_scanned": "Eventos unicos escaneados",
+    "duplicates_detected": "Duplicados detectados",
+    "new_patterns_detected": "Patrones nuevos detectados",
+    "drift_detected": "Drift detectado",
+    "data_blockers": "Bloqueadores de datos",
+    "watchlists": "Listas de observacion",
+    "shadow_tested_repairs": "Reparaciones probadas en Shadow",
+    "manual_review_eligible": "Elegibles para revision manual",
+    "live_repairs_applied": "Reparaciones en vivo aplicadas",
+    "shadow_mode": "Shadow Mode",
+    "live_mutation": "Mutacion en vivo",
+    "model_training": "Entrenamiento del modelo",
+    "stored_data_mutation": "Mutacion de datos guardados",
+    "reason": "Razon",
+    "yes": "SI",
+    "no": "NO",
+    "no_data": "SIN DATOS",
+    "on": "ENCENDIDO",
+    "off": "APAGADO",
+    "forbidden": "PROHIBIDO",
+    "enabled": "ACTIVADO",
+    "preparation_only": "SOLO PREPARACION",
+    "data_blockers": "bloqueadores de datos",
+    "watchlists": "listas de observacion",
+    "repair_candidates": "candidatos de reparacion",
+    "shadow_tested_repairs": "reparaciones probadas en Shadow",
+    "rejected_repairs": "reparaciones rechazadas",
+    "manual_review_queue": "cola de revision manual",
+    "missing_closing_odds": "faltan cuotas de cierre",
+    "missing_decimal_odds": "faltan cuotas decimales",
+    "missing_draw_no_bet_odds": "faltan cuotas draw-no-bet",
+    "missing_double_chance_odds": "faltan cuotas de doble oportunidad",
 }
 
 
@@ -151,8 +241,26 @@ def t(key: str) -> str:
     return TEXT.get(LANG, TEXT["en"]).get(key, key)
 
 
+def _page_value_key(value: Any) -> str:
+    return re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", str(value).strip().lower())).strip("_")
+
+
+def page_value(value: Any) -> Any:
+    if not str(LANG).lower().startswith("es"):
+        return value
+    if value is None:
+        return value
+    text = str(value).strip()
+    if not text:
+        return value
+    localized = localize_value(text, LANG)
+    if localized != text:
+        return localized
+    return PAGE_VALUE_LABELS_ES.get(_page_value_key(text), value)
+
+
 def metric_value(value: Any) -> str:
-    localized = str(localize_value(value, LANG))
+    localized = str(page_value(value))
     if str(value).strip().upper() in {"ON", "OFF", "FORBIDDEN", "ENABLED"}:
         return localized.upper()
     return localized
@@ -161,7 +269,17 @@ def metric_value(value: Any) -> str:
 def display_frame(frame: pd.DataFrame | None) -> pd.DataFrame | None:
     if frame is None:
         return None
-    return localize_dataframe(frame, LANG)
+    if not str(LANG).lower().startswith("es"):
+        return frame
+    out = frame.copy()
+    normalized_columns = {column: str(column).strip().replace(" ", "_") for column in out.columns}
+    out = out.rename(columns=normalized_columns)
+    if not out.empty:
+        for column in out.columns:
+            if out[column].dtype == object:
+                out[column] = out[column].map(page_value)
+    out = localize_dataframe(out, LANG)
+    return out.rename(columns={column: PAGE_COLUMN_LABELS_ES.get(str(column), column) for column in out.columns})
 
 
 def show_table(rows: Any) -> None:
@@ -336,7 +454,9 @@ with tabs[2]:
         st.info(t("empty"))
     else:
         selected_key = st.selectbox(t("review_repair"), repair_keys, key="manual_repair_key")
-        action = st.selectbox(t("review_action"), ["keep_testing", "reject", "watchlist", "manual_approved_for_future", "clear_manual_decision"], key="manual_repair_action")
+        action_display, action_reverse = localize_options(["keep_testing", "reject", "watchlist", "manual_approved_for_future", "clear_manual_decision"], LANG)
+        action_label = st.selectbox(t("review_action"), action_display, key="manual_repair_action")
+        action = action_reverse[action_label]
         reviewer = st.text_input(t("reviewer"), value="manual", key="manual_reviewer")
         note = st.text_area(t("review_note"), value="", key="manual_review_note")
         if st.button(t("apply_review")):
@@ -380,4 +500,4 @@ with tabs[9]:
         st.dataframe(display_frame(pd.DataFrame(audit_event_display_rows(latest))), use_container_width=True, hide_index=True)
     show_frame(frames["events"])
 
-st.success(str(localize_value(doctrine.get("final_rule", ""), LANG)))
+st.success(t("final_rule"))
