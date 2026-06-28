@@ -4,6 +4,13 @@ from copy import deepcopy
 from typing import Any, Mapping, Sequence
 
 from autonomous_betting_agent.dynamic_odds_predictor import dynamic_value_metrics, learn_lr_multipliers
+from autonomous_betting_agent.dynamic_odds_shadow_memory import (
+    infer_workspace_id,
+    load_dynamic_odds_shadow_model,
+    runtime_lr_model,
+    shadow_model_status,
+    train_and_save_dynamic_odds_shadow_model,
+)
 
 SHADOW_ONLY = "SHADOW ONLY"
 
@@ -38,6 +45,8 @@ DISPLAY_COLUMNS = [
     "dynamic_signal_status",
     "dynamic_odds_mode",
     "lr_model_loaded",
+    "lr_model_source",
+    "lr_model_last_trained_at_utc",
     "lr_training_rows_used",
     "lr_feature_count",
     "dynamic_odds_applied_live_count",
@@ -102,14 +111,33 @@ def _has_learned_lr(metrics: Mapping[str, Any], lr_model: Mapping[str, Any] | No
 
 def _lr_model_from_rows(rows: Sequence[Mapping[str, Any]], config: Mapping[str, Any] | None = None) -> dict[str, Any]:
     completed = [deepcopy(dict(row)) for row in rows or [] if isinstance(row, Mapping) and _is_completed_row(row)]
-    return learn_lr_multipliers(completed, config) if completed else learn_lr_multipliers([], config)
+    model = learn_lr_multipliers(completed, config) if completed else learn_lr_multipliers([], config)
+    model["model_source"] = "current_completed_rows_shadow_learning" if completed else "no_lr_data"
+    model["last_trained_at_utc"] = ""
+    model["dynamic_odds_applied_live_count"] = 0
+    return model
 
 
 def _resolve_lr_model(rows: Sequence[Mapping[str, Any]] | None, lr_model: Mapping[str, Any] | None, config: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    source_rows = [deepcopy(dict(row)) for row in list(rows or []) if isinstance(row, Mapping)]
     model = deepcopy(dict(lr_model or {}))
     if model:
+        model.setdefault("model_source", "provided_shadow_model")
+        model.setdefault("last_trained_at_utc", "")
+        model["dynamic_odds_applied_live_count"] = 0
         return model
-    return _lr_model_from_rows(list(rows or []), config)
+    workspace_id = infer_workspace_id(source_rows)
+    saved_payload = load_dynamic_odds_shadow_model(workspace_id)
+    if int((saved_payload.get("lr_model") or {}).get("feature_count") or saved_payload.get("feature_count") or 0) > 0:
+        return runtime_lr_model(saved_payload)
+    completed = [row for row in source_rows if _is_completed_row(row)]
+    if completed:
+        try:
+            saved_payload = train_and_save_dynamic_odds_shadow_model(completed, workspace_id=workspace_id, config=config, source="graded_rows_seen_in_shadow_panel")
+            return runtime_lr_model(saved_payload)
+        except Exception:
+            return _lr_model_from_rows(completed, config)
+    return _lr_model_from_rows(source_rows, config)
 
 
 def _strongest_lr(metrics: Mapping[str, Any]) -> dict[str, Any]:
@@ -182,6 +210,8 @@ def build_dynamic_odds_shadow_row(row: Mapping[str, Any], lr_model: Mapping[str,
         "dynamic_signal_status": status,
         "dynamic_odds_mode": SHADOW_ONLY,
         "lr_model_loaded": model_loaded,
+        "lr_model_source": model.get("model_source", "no_model"),
+        "lr_model_last_trained_at_utc": model.get("last_trained_at_utc", ""),
         "lr_training_rows_used": int(model.get("training_rows") or 0),
         "lr_feature_count": int(model.get("feature_count") or 0),
         "dynamic_odds_applied_live_count": 0,
@@ -210,12 +240,14 @@ def dynamic_odds_shadow_learning_summary(rows: Sequence[Mapping[str, Any]], lr_m
     probability_deltas = [float(row["probability_delta"]) for row in shadow_rows if row.get("probability_delta") is not None]
     biggest_upgrade = max(shadow_rows, key=lambda row: row.get("dynamic_EV_delta") if row.get("dynamic_EV_delta") is not None else -999.0, default={})
     biggest_downgrade = min(shadow_rows, key=lambda row: row.get("dynamic_EV_delta") if row.get("dynamic_EV_delta") is not None else 999.0, default={})
+    status_payload = shadow_model_status({"lr_model": model, "workspace_id": model.get("workspace_id", ""), "last_trained_at_utc": model.get("last_trained_at_utc", "")}, source=str(model.get("model_source", "no_model")))
     return {
+        **status_payload,
         "lr_model_loaded": int(model.get("feature_count") or 0) > 0,
         "training_rows_used": int(model.get("training_rows") or 0),
         "feature_count": int(model.get("feature_count") or 0),
         "baseline_success_rate": model.get("baseline_success_rate"),
-        "learning_source": "current_completed_rows_shadow_learning" if int(model.get("feature_count") or 0) > 0 else "no_lr_data",
+        "learning_source": model.get("model_source") or ("current_completed_rows_shadow_learning" if int(model.get("feature_count") or 0) > 0 else "no_lr_data"),
         "leakage_guard": "ON",
         "dynamic_odds_mode": SHADOW_ONLY,
         "dynamic_odds_live_activation": "OFF",
