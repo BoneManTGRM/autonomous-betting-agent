@@ -4,8 +4,9 @@ This module is intentionally wording-focused and behavior-safe. It defines the
 Phase 3E doctrine used by reports and dashboards. Phase 3E adds a Dynamic Odds
 Predictor shadow layer while still forbidding live repairs, live confidence
 changes, live bet-tier changes, bankroll changes, sportsbook changes, live
-filters, proof-ledger mutation, stored-data mutation, and production model
-mutation.
+filters, proof-ledger mutation, production data mutation, and production model
+mutation. Offline Dynamic Odds Shadow model memory is allowed only inside its
+own shadow-only storage path.
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ REPAIR_PRINCIPLES = [
 ]
 
 SAFETY_PRINCIPLES = [
-    "Phase 3E enables Dynamic Odds Predictor shadow evaluation, Repair Memory, and Manual Review only.",
+    "Phase 3E enables Dynamic Odds Predictor shadow evaluation, shadow model memory, Repair Memory, and Manual Review only.",
     "Learning means observation, diagnostics, shadow evaluation, memory summaries, readiness checks, and saved reports only.",
     "No live repair activates during Phase 3E.",
     "No dynamic odds probability activates during Phase 3E.",
@@ -88,6 +89,9 @@ PHASE_3E_DOCTRINE: dict[str, Any] = {
     "tgrm_activation": "SHADOW ONLY",
     "rye_activation": "SHADOW ONLY",
     "model_training": "FORBIDDEN",
+    "official_model_training": "FORBIDDEN",
+    "live_model_training": "FORBIDDEN",
+    "shadow_model_training": "OFFLINE_ONLY",
     "stored_data_mutation": "FORBIDDEN",
     "live_repairs_applied": 0,
     "repairs_applied_live": 0,
@@ -96,7 +100,7 @@ PHASE_3E_DOCTRINE: dict[str, Any] = {
     "manual_review": "ENABLED",
     "phase4_lockbox": "PREPARATION ONLY",
     "automatic_live_promotion": "FORBIDDEN",
-    "final_rule": "ABA may run Dynamic Odds Predictor in shadow mode and store repair memory, but live repair and live dynamic odds activation remain forbidden.",
+    "final_rule": "ABA may run Dynamic Odds Predictor in shadow mode and store shadow model memory, but live repair and live dynamic odds activation remain forbidden.",
 }
 
 # Backward-compatible aliases for code that imports older constant names.
