@@ -9,9 +9,9 @@ from autonomous_betting_agent.reparodynamics_audit import (
 # Zero-row scans should report no-data semantics, not stale cached learning signals.
 def _duplicate_event_rows():
     return [
-        {"sport": "Soccer", "event": "Team A vs Team B", "known_start_utc": "2026-06-27T20:00:00Z", "market": "moneyline", "result": "Won", "confidence": "0.72", "odds": "+110", "closing_odds": "+105"},
-        {"sport": "Soccer", "event": "Team A vs Team B", "known_start_utc": "2026-06-27T20:00:00Z", "market": "total", "result": "Lost", "confidence": "0.61", "odds": "-105", "closing_odds": "-110"},
-        {"sport": "Tennis", "event": "Player C vs Player D", "known_start_utc": "2026-06-27T21:00:00Z", "market": "moneyline", "result": "Won", "confidence": "0.68", "odds": "+120", "closing_odds": "+115"},
+        {"sport": "Soccer", "event": "Team A vs Team B", "known_start_utc": "2026-06-27T20:00:00Z", "market": "moneyline", "result": "Won", "confidence": "0.72", "odds": "1.90", "closing_odds": "1.85"},
+        {"sport": "Soccer", "event": "Team A vs Team B", "known_start_utc": "2026-06-27T20:00:00Z", "market": "total", "result": "Lost", "confidence": "0.61", "odds": "1.95", "closing_odds": "1.92"},
+        {"sport": "Tennis", "event": "Player C vs Player D", "known_start_utc": "2026-06-27T21:00:00Z", "market": "moneyline", "result": "Won", "confidence": "0.68", "odds": "2.20", "closing_odds": "2.10"},
     ]
 
 
@@ -26,7 +26,7 @@ def test_audit_counts_rows_unique_events_and_duplicates_separately():
     assert event.unique_events_scanned == 2
     assert event.duplicates_detected == 1
     assert event.source == "Learning Page graded upload"
-    assert event.reason == "Phase 3B Shadow Mode; live mutation forbidden"
+    assert event.reason == "Phase 3C Shadow Backtest; live mutation forbidden"
 
 
 def test_zero_row_audit_reports_no_data_without_fake_drift_or_candidates():
@@ -69,15 +69,19 @@ def test_audit_log_updates_after_learning_page_ingestion(tmp_path):
     assert len(log_path.read_text(encoding="utf-8").splitlines()) == 2
 
 
-def test_phase_3b_shadow_mode_is_on_but_mutation_controls_stay_off():
+def test_phase_3c_shadow_mode_is_on_but_mutation_controls_stay_off():
     event = build_reparodynamics_audit_event(_duplicate_event_rows(), timestamp="2026-06-27T04:39:00Z")
 
+    assert event.phase == "Phase 3C Shadow Backtest"
     assert event.repair_activation == "OFF"
     assert event.shadow_mode == "ON"
-    assert event.tgrm_activation == "OFF"
-    assert event.rye_activation == "OFF"
-    assert event.live_mutation == "Forbidden"
+    assert event.tgrm_activation == "SHADOW ONLY"
+    assert event.rye_activation == "SHADOW ONLY"
+    assert event.live_mutation == "FORBIDDEN"
     assert event.model_mutation == "FORBIDDEN"
+    assert event.model_training == "FORBIDDEN"
+    assert event.stored_data_mutation == "FORBIDDEN"
+    assert event.live_repairs_applied_count == 0
     assert event.confidence_changes == "OFF"
     assert event.bet_tier_changes == "OFF"
     assert event.bankroll_changes == "OFF"
@@ -89,13 +93,19 @@ def test_display_rows_include_requested_visible_fields():
     fields = {row["field"] for row in audit_event_display_rows(event)}
 
     assert "Last Reparodynamics Run" in fields
+    assert "Phase" in fields
     assert "Source" in fields
     assert "Rows scanned" in fields
+    assert "Completed rows used" in fields
     assert "Unique events scanned" in fields
     assert "Duplicates detected" in fields
-    assert "New patterns detected" in fields
-    assert "Drift detected" in fields
-    assert "Repair candidates generated" in fields
+    assert "Data blockers" in fields
+    assert "Watchlists" in fields
+    assert "Shadow-tested repairs" in fields
+    assert "Manual review eligible" in fields
+    assert "Live repairs applied" in fields
     assert "Shadow Mode" in fields
     assert "Live Mutation" in fields
+    assert "Model Training" in fields
+    assert "Stored Data Mutation" in fields
     assert "Reason" in fields
