@@ -10,6 +10,7 @@ from autonomous_betting_agent.reparodynamics_repair_memory import (
     extract_repair_memory_rows,
     manual_review_decision,
     repair_memory_to_frames,
+    stable_memory_run_id,
     stable_repair_key,
     update_repair_memory,
 )
@@ -40,11 +41,15 @@ def _finding(candidate_type: str = "no_play", roi_delta: float = 0.05, profit_de
     }
 
 
-def _report(finding: dict | None = None) -> dict:
+def _report(finding: dict | None = None, *, generated_at: str = "2026-01-01T00:00:00Z") -> dict:
     finding = finding or _finding()
     return {
         "phase": "Phase 3C Shadow Backtest",
-        "generated_at_utc": "2026-01-01T00:00:00Z",
+        "generated_at_utc": generated_at,
+        "rows_scanned": 80,
+        "completed_rows_used": 80,
+        "summary_counts": {"shadow_tested_repairs_count": 1},
+        "baseline_metrics": {"completed_rows_used": 80},
         "shadow_tested_repairs": [finding],
         "data_blockers": [],
         "watchlists": [],
@@ -60,17 +65,35 @@ def test_stable_repair_key_same_across_runs():
     assert first == second
 
 
-def test_update_repair_memory_increments_times_seen():
+def test_same_phase3c_report_does_not_increment_times_seen():
+    report = _report()
+    memory = update_repair_memory(None, report)
+    memory = update_repair_memory(memory, {**report, "generated_at_utc": "2026-01-01T00:10:00Z"})
+    item = next(iter(memory["items"].values()))
+    assert item["times_seen"] == 1
+    assert len(item["history"]) == 1
+    assert memory["last_save_status"] == "already_saved"
+
+
+def test_different_phase3c_reports_increment_times_seen():
     memory = update_repair_memory(None, _report())
-    memory = update_repair_memory(memory, _report())
+    memory = update_repair_memory(memory, _report(_finding(roi_delta=0.07, profit_delta=4.0), generated_at="2026-01-02T00:00:00Z"))
     item = next(iter(memory["items"].values()))
     assert item["times_seen"] == 2
+    assert len(item["history"]) == 2
+
+
+def test_stable_memory_run_id_ignores_generated_at_timestamp():
+    first = stable_memory_run_id(_report(generated_at="2026-01-01T00:00:00Z"))
+    second = stable_memory_run_id(_report(generated_at="2026-01-01T00:30:00Z"))
+    assert first == second
 
 
 def test_phase3c_report_converts_to_memory_rows():
     rows = extract_repair_memory_rows(_report(), source="test")
     assert rows
     assert rows[0]["repair_key"]
+    assert rows[0]["memory_run_id"]
     assert rows[0]["ROI_delta"] == 0.05
 
 
@@ -90,8 +113,8 @@ def test_low_sample_repair_not_phase4_candidate():
 
 def test_repeated_positive_roi_can_be_promising():
     memory = None
-    for index in range(2):
-        report = _report({**_finding(), "title": f"soccer_draw_risk_{index}"})
+    for index, roi_delta in enumerate([0.05, 0.07]):
+        report = _report({**_finding(roi_delta=roi_delta), "title": f"soccer_draw_risk_{index}"})
         memory = update_repair_memory(memory, report)
     statuses = {item["memory_status"] for item in memory["items"].values()}
     assert statuses <= {"promising", "new", "keep_testing"}
@@ -110,8 +133,8 @@ def test_manual_reject_and_approve_do_not_activate_repairs():
 
 def test_phase4_lockbox_candidate_requires_repetition_and_manual_approval():
     memory = None
-    for _ in range(3):
-        memory = update_repair_memory(memory, _report())
+    for roi_delta in [0.05, 0.06, 0.07]:
+        memory = update_repair_memory(memory, _report(_finding(roi_delta=roi_delta, profit_delta=3.0 + roi_delta)))
     key = next(iter(memory["items"].keys()))
     approved = manual_review_decision(memory, key, "manual_approved_for_future")
     assert approved["items"][key]["memory_status"] == "phase4_lockbox_candidate"
