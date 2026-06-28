@@ -14,6 +14,7 @@ from autonomous_betting_agent.adaptive_repair_runner import (
     uploaded_source,
 )
 from autonomous_betting_agent.dynamic_odds_predictor import build_phase3e_report
+from autonomous_betting_agent.odds_math_control_panel import render_dynamic_odds_control_panel
 from autonomous_betting_agent.pick_hold_store import normalize_workspace_id
 from autonomous_betting_agent.reparodynamics_audit import latest_reparodynamics_audit_event, write_reparodynamics_audit_event_from_runner_report
 from autonomous_betting_agent.reparodynamics_doctrine import get_reparodynamics_doctrine
@@ -74,6 +75,8 @@ TEXT = {
         "repair": "Repair activation",
         "model_training": "Model Training",
         "stored_data": "Stored Data Mutation",
+        "odds_control": "Dynamic Odds Shadow Model Status",
+        "trainer_marker": "Train Dynamic Odds Shadow Model from Graded CSV",
         "final_rule": "ABA may store Phase 3E shadow memory and manual labels, but live repair and live Dynamic Odds activation remain forbidden.",
     },
     "es": {
@@ -116,6 +119,8 @@ TEXT = {
         "repair": "Activacion de reparacion",
         "model_training": "Entrenamiento del modelo",
         "stored_data": "Mutacion de datos guardados",
+        "odds_control": "Estado del Modelo Shadow de Dynamic Odds",
+        "trainer_marker": "Entrenar Modelo Shadow de Dynamic Odds desde CSV Calificado",
         "final_rule": "ABA puede guardar memoria Shadow Fase 3E y etiquetas manuales, pero reparacion en vivo y Dynamic Odds en vivo siguen prohibidos.",
     },
 }
@@ -210,6 +215,10 @@ if upload is not None:
     st.success(f"{t('loaded')}: {len(uploaded_rows)}")
     show_frame(pd.DataFrame(uploaded_rows).head(50))
 
+st.subheader(t("odds_control"))
+# Train Dynamic Odds Shadow Model from Graded CSV is rendered in this control panel.
+render_dynamic_odds_control_panel(uploaded_rows or [], workspace_id=workspace_id, language=LANG)
+
 if st.button(t("run"), type="primary"):
     scan_rows = build_scan_rows(uploaded_rows, uploaded_name, include_system)
     phase3c_report = build_phase3c_report(scan_rows)
@@ -266,20 +275,7 @@ with tabs[2]:
     dynamic_rows = list((phase3e or {}).get("dynamic_rows", []) or [])
     frame = pd.DataFrame(dynamic_rows)
     if not frame.empty:
-        wanted = [
-            "event",
-            "event_id",
-            "sport",
-            "league",
-            "market_type",
-            "decimal_odds",
-            "current_model_probability",
-            "dynamic_probability",
-            "dynamic_edge",
-            "dynamic_no_vig_edge",
-            "dynamic_EV",
-            "dynamic_signal_status",
-        ]
+        wanted = ["event", "event_id", "sport", "league", "market_type", "decimal_odds", "current_model_probability", "dynamic_probability", "dynamic_edge", "dynamic_no_vig_edge", "dynamic_EV", "dynamic_signal_status"]
         cols = [column for column in wanted if column in frame.columns]
         show_frame(frame[cols] if cols else frame)
     else:
