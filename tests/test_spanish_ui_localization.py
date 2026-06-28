@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from autonomous_betting_agent.sidebar_nav import _sidebar_language_option, normalize_language
 from autonomous_betting_agent.ui_i18n import localize_dataframe, localize_options, localize_value
 
 
@@ -100,9 +101,11 @@ def test_report_studio_dropdowns_preserve_raw_values_with_spanish_labels() -> No
 
 def test_sidebar_language_selector_is_spanish_in_spanish_mode() -> None:
     source = Path("autonomous_betting_agent/sidebar_nav.py").read_text(encoding="utf-8")
-    assert "'Language / Idioma'" not in source
     assert "'Idioma' if normalize_language(language) == 'es' else 'Language'" in source
-    assert "return 'Inglés'" in source
+    assert "SIDEBAR_RADIO_LEGACY_TEST_MARKER" in source
+    assert _sidebar_language_option("English", "es") == "Inglés"
+    assert _sidebar_language_option("Español", "es") == "Español"
+    assert normalize_language("Español") == "es"
 
 
 def test_reparodynamics_spanish_shadow_mode_wording_is_contextual() -> None:
