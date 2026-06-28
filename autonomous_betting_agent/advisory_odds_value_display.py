@@ -6,7 +6,6 @@ from typing import Any, Mapping, Sequence
 import pandas as pd
 
 from autonomous_betting_agent.odds_value_engine import (
-    ADVISORY_COLUMNS,
     BLOCKED_INVALID_PROBABILITY,
     BLOCKED_MISSING_ODDS,
     PLAYABLE_PLUS_EV,
@@ -245,13 +244,12 @@ def sportsbook_hold_summary(rows: Sequence[Mapping[str, Any]] | pd.DataFrame) ->
     group_cols = [col for col in ["event", "market_type", "sportsbook_or_bookmaker"] if col in work.columns]
     if not group_cols:
         return pd.DataFrame()
-    agg = work.groupby(group_cols, dropna=False).agg(
+    return work.groupby(group_cols, dropna=False).agg(
         advisory_market_hold=("advisory_market_hold", "first"),
         advisory_market_hold_pct=("advisory_market_hold_pct", "first"),
         advisory_market_completeness_status=("advisory_market_completeness_status", "first"),
         number_of_sides_detected=("_side", "nunique"),
     ).reset_index()
-    return agg
 
 
 def line_shopping_summary(rows: Sequence[Mapping[str, Any]] | pd.DataFrame) -> pd.DataFrame:
@@ -592,7 +590,7 @@ def fresh_slate_readiness_check(rows: Sequence[Mapping[str, Any]] | pd.DataFrame
     critical_missing = [
         name for name in [
             "event_start_field_present",
-            "odds_freshness_timestamp_present",
+            "odds_freshness_field_present",
             "sportsbook_field_present",
             "decimal_odds_field_present",
             "model_probability_field_present",
@@ -622,9 +620,6 @@ def fresh_slate_readiness_check(rows: Sequence[Mapping[str, Any]] | pd.DataFrame
     elif require_shadow_ready and shadow_status != "SHADOW_READY":
         readiness_status = "NEEDS_SHADOW_TRAINING"
         recommended_next_action = "Shadow model is not loaded yet. Upload a graded CSV with finished results to train Shadow learning."
-    elif readiness_score >= 95 and not failed_checks:
-        readiness_status = "READY_FOR_ADVISORY_VALUE"
-        recommended_next_action = "This file is ready for advisory value scoring."
     elif readiness_score >= 85 and not any(name in failed_checks for name in ["future_events_present", "event_start_field_present", "decimal_odds_present", "model_probability_present"]):
         readiness_status = "READY_FOR_ADVISORY_VALUE"
         recommended_next_action = "This file is ready for advisory value scoring."
