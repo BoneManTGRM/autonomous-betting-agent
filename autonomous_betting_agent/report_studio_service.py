@@ -168,7 +168,7 @@ def _data_issues(frame: pd.DataFrame) -> int:
     return int(frame["data_issue_reason"].map(lambda value: bool(safe_text(value))).sum())
 
 
-def build_report_studio_cards(raw_rows: pd.DataFrame | Sequence[Mapping[str, Any]] | None, *, filters: ReportStudioFilters | None = None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def build_report_studio_cards(raw_rows: pd.DataFrame | Sequence[Mapping[str, Any]] | None, filters: ReportStudioFilters | None = None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     filters = filters or ReportStudioFilters()
     raw = _to_frame(raw_rows)
     if raw.empty:
@@ -187,7 +187,7 @@ def build_report_studio_cards(raw_rows: pd.DataFrame | Sequence[Mapping[str, Any
 def build_report_studio_state(raw_rows: pd.DataFrame | Sequence[Mapping[str, Any]] | None, brand: MagazineBrand | Mapping[str, Any], *, filters: ReportStudioFilters | None = None, source_note: str = "") -> ReportStudioState:
     filters = filters or ReportStudioFilters()
     brand_obj = _brand_from(brand)
-    raw, normalized, filtered, cards = build_report_studio_cards(raw_rows, filters=filters)
+    raw, normalized, filtered, cards = build_report_studio_cards(raw_rows, filters)
     groups = grouped_report(cards) if not cards.empty else {"best_plays": pd.DataFrame(), "watchlist": pd.DataFrame(), "no_play": pd.DataFrame()}
     audit = calibration_audit(cards, min_sample=10) if not cards.empty else {}
     exports = build_report_export_bundle(cards, brand_obj, mode=filters.mode, public=filters.public_feed)
