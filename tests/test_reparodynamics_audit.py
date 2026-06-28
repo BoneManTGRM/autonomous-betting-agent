@@ -6,6 +6,9 @@ from autonomous_betting_agent.reparodynamics_audit import (
 )
 
 
+PHASE_3E_NAME = "Phase 3E Dynamic Odds Predictor Shadow"
+
+
 # Zero-row scans should report no-data semantics, not stale cached learning signals.
 def _duplicate_event_rows():
     return [
@@ -72,7 +75,7 @@ def test_audit_log_updates_after_learning_page_ingestion(tmp_path):
 def test_shadow_mode_is_on_but_mutation_controls_stay_off():
     event = build_reparodynamics_audit_event(_duplicate_event_rows(), timestamp="2026-06-27T04:39:00Z")
 
-    assert event.phase == "Phase 3D Repair Memory"
+    assert event.phase == PHASE_3E_NAME
     assert event.repair_activation == "OFF"
     assert event.shadow_mode == "ON"
     assert event.tgrm_activation == "SHADOW ONLY"
