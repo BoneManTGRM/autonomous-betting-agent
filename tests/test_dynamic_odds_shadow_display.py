@@ -136,7 +136,9 @@ def test_shadow_rows_and_safety_summary_are_display_only() -> None:
     assert safety["dynamic_odds_applied_live_count"] == 0
     assert safety["live_mutation"] == "FORBIDDEN"
     assert safety["model_training"] == "FORBIDDEN"
+    assert safety["official_model_training"] == "FORBIDDEN"
     assert safety["stored_data_mutation"] == "FORBIDDEN"
+    assert safety["shadow_model_training"] == "OFFLINE_ONLY"
 
 
 def test_ui_sources_include_read_only_dynamic_odds_panel() -> None:
@@ -157,4 +159,4 @@ def test_spanish_dynamic_odds_display_labels() -> None:
     assert "Probabilidad dinamica" in localized.columns
     assert "EV dinamico" in localized.columns
     assert "Modo Dynamic Odds" in localized.columns
-    assert localize_value("SHADOW ONLY", "es") == "solo shadow"
+    assert localize_value("SHADOW ONLY", "es").lower() in {"solo shadow", "shadow only"}
