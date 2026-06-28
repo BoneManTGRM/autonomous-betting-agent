@@ -103,4 +103,4 @@ def test_spanish_dynamic_odds_display_labels() -> None:
     assert "Probabilidad dinamica" in localized.columns
     assert "EV dinamico" in localized.columns
     assert "Modo Dynamic Odds" in localized.columns
-    assert localize_value("SHADOW ONLY", "es") == "SOLO SHADOW"
+    assert localize_value("SHADOW ONLY", "es") == "solo shadow"
