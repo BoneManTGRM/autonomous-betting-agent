@@ -88,7 +88,8 @@ def test_sidebar_language_selector_behavior() -> None:
 
 def test_key_pages_use_spanish_display_helpers() -> None:
     reparodynamics_source = Path("pages/reparodynamics.py").read_text(encoding="utf-8")
-    assert "Fase 3D solo guarda memoria de Shadow Backtest" in reparodynamics_source
+    assert "Fase 3E es solo Shadow Mode" in reparodynamics_source
+    assert "Ejecutar prueba Shadow de Dynamic Odds Fase 3E" in reparodynamics_source
     assert "from autonomous_betting_agent.ui_i18n import localize_dataframe" in Path("pages/storage_diagnostics.py").read_text(encoding="utf-8")
     assert Path("autonomous_betting_agent/reparodynamics_shadow_backtest.py").exists()
     assert Path("autonomous_betting_agent/reparodynamics_repair_memory.py").exists()
