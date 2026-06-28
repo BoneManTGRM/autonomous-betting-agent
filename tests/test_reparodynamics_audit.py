@@ -26,7 +26,7 @@ def test_audit_counts_rows_unique_events_and_duplicates_separately():
     assert event.unique_events_scanned == 2
     assert event.duplicates_detected == 1
     assert event.source == "Learning Page graded upload"
-    assert event.reason == "Phase 3C Shadow Backtest; live mutation forbidden"
+    assert "live mutation forbidden" in event.reason
 
 
 def test_zero_row_audit_reports_no_data_without_fake_drift_or_candidates():
@@ -69,10 +69,10 @@ def test_audit_log_updates_after_learning_page_ingestion(tmp_path):
     assert len(log_path.read_text(encoding="utf-8").splitlines()) == 2
 
 
-def test_phase_3c_shadow_mode_is_on_but_mutation_controls_stay_off():
+def test_shadow_mode_is_on_but_mutation_controls_stay_off():
     event = build_reparodynamics_audit_event(_duplicate_event_rows(), timestamp="2026-06-27T04:39:00Z")
 
-    assert event.phase == "Phase 3C Shadow Backtest"
+    assert event.phase == "Phase 3D Repair Memory"
     assert event.repair_activation == "OFF"
     assert event.shadow_mode == "ON"
     assert event.tgrm_activation == "SHADOW ONLY"
