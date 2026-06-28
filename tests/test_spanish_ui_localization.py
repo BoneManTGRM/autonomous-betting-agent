@@ -42,20 +42,53 @@ def test_localize_dataframe_columns_and_cells() -> None:
         ]
     )
     out = localize_dataframe(frame, "es")
-    assert "rango_confianza" in out.columns
-    assert "riesgo_confianza" in out.columns
-    assert "tamano_muestra" in out.columns
-    assert "victorias" in out.columns
-    assert "derrotas" in out.columns
-    assert "tasa_acierto" in out.columns
-    assert "tipo_mercado" in out.columns
-    assert "rango_probabilidad_modelo" in out.columns
-    assert "carril_reporte_v2" in out.columns
-    assert out.loc[0, "rango_confianza"] == "Nivel A - candidato fuerte"
-    assert out.loc[0, "tipo_mercado"] == "ganador"
-    assert out.loc[0, "rango_probabilidad_modelo"] == "jugada de investigacion"
-    assert out.loc[0, "carril_reporte_v2"] == "candidata de aprendizaje"
-    assert out.loc[0, "visibilidad"] == "privado"
+    assert "Rango de confianza" in out.columns
+    assert "Riesgo de confianza" in out.columns
+    assert "Tamano de muestra" in out.columns
+    assert "Victorias" in out.columns
+    assert "Derrotas" in out.columns
+    assert "Tasa de acierto" in out.columns
+    assert "Tipo de mercado" in out.columns
+    assert "Rango de probabilidad del modelo" in out.columns
+    assert "Carril de reporte v2" in out.columns
+    assert out.loc[0, "Rango de confianza"] == "Nivel A - candidato fuerte"
+    assert out.loc[0, "Tipo de mercado"] == "ganador"
+    assert out.loc[0, "Rango de probabilidad del modelo"] == "jugada de investigacion"
+    assert out.loc[0, "Carril de reporte v2"] == "candidata de aprendizaje"
+    assert out.loc[0, "Visibilidad"] == "privado"
+
+
+def test_empty_spanish_dataframe_columns_localize() -> None:
+    frame = pd.DataFrame(columns=["event", "event_id", "sport", "sport_key", "event_start_utc"])
+    out = localize_dataframe(frame, "es")
+    assert list(out.columns) == ["Evento", "ID de evento", "Deporte", "Clave de deporte", "Inicio UTC"]
+
+
+def test_storage_keys_localize_for_diagnostics_tables() -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "workspace_id": "test_01",
+                "key": "pro_predictor_high_confidence_rows",
+                "loaded_rows": 148,
+                "disk_rows": 0,
+                "github_rows": 148,
+            }
+        ]
+    )
+    out = localize_dataframe(frame, "es")
+    assert "ID del espacio de trabajo" in out.columns
+    assert "Clave" in out.columns
+    assert "Filas cargadas" in out.columns
+    assert "Filas en disco" in out.columns
+    assert "Filas en GitHub" in out.columns
+    assert out.loc[0, "Clave"] == "Filas de alta confianza de Predictor Pro"
+
+
+def test_reparodynamics_forbidden_values_localize() -> None:
+    assert localize_value("live repairs", "es") == "reparaciones en vivo"
+    assert localize_value("TGRM repair activation", "es") == "activacion de reparacion TGRM"
+    assert localize_value("automatic bet-tier changes", "es") == "cambios automaticos de nivel de apuesta"
 
 
 def test_english_mode_unchanged() -> None:
@@ -114,6 +147,13 @@ def test_reparodynamics_spanish_shadow_mode_wording_is_contextual() -> None:
     assert "Resumen de Shadow Mode" in source
     assert "Evaluacion en Shadow Mode" in source
     assert "El almacenamiento local puede no persistir" in source
+    assert "reparaciones en vivo" in source
+
+
+def test_storage_diagnostics_uses_localized_dataframe() -> None:
+    source = Path("pages/storage_diagnostics.py").read_text(encoding="utf-8")
+    assert "from autonomous_betting_agent.ui_i18n import localize_dataframe" in source
+    assert "st.dataframe(display_frame(snapshot)" in source
 
 
 def test_no_model_or_ledger_logic_modules_changed() -> None:
@@ -122,6 +162,7 @@ def test_no_model_or_ledger_logic_modules_changed() -> None:
         "pages/odds_lock_pro.py",
         "pages/report_studio.py",
         "pages/reparodynamics.py",
+        "pages/storage_diagnostics.py",
     ]
     for file_name in touched_pages:
         assert Path(file_name).exists()
