@@ -13,6 +13,7 @@ from autonomous_betting_agent.reparodynamics_audit import (
 from autonomous_betting_agent.reparodynamics_doctrine import get_reparodynamics_doctrine
 from autonomous_betting_agent.reparodynamics_shadow_results import shadow_result_rows, shadow_summary
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
+from autonomous_betting_agent.ui_i18n import localize_dataframe
 
 st.set_page_config(page_title="Reparodynamics", layout="wide")
 LANG = render_app_sidebar("reparodynamics", language_key="reparodynamics_language", selector="radio")
@@ -123,6 +124,10 @@ def audit_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     return [{"field": FIELD_ES.get(row["field"], row["field"]), "value": v(row["value"])} for row in rows]
 
 
+def display_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    return localize_dataframe(frame, LANG)
+
+
 def table(items: object) -> pd.DataFrame:
     values = list(items or [])
     return pd.DataFrame({t("forbidden"): values})
@@ -157,7 +162,7 @@ if upload is not None:
     uploaded_name = upload.name
     uploaded_rows = rows_from_csv_bytes(uploaded_bytes)
     st.success(f"{t('loaded')}: {len(uploaded_rows)}")
-    st.dataframe(pd.DataFrame(uploaded_rows).head(50), use_container_width=True)
+    st.dataframe(display_frame(pd.DataFrame(uploaded_rows).head(50)), use_container_width=True)
 
 if st.button(t("run"), type="primary"):
     report = run_adaptive_repair_scan(uploaded_rows=uploaded_rows, uploaded_filename=uploaded_name, uploaded_bytes=uploaded_bytes, include_system_sources=include_system)
@@ -168,7 +173,7 @@ if st.button(t("run"), type="primary"):
         rows_to_save = uploaded_rows or []
         if rows_to_save and save_confirmed:
             save_result = save_reparodynamics_rows_to_research(rows_to_save, run_id=report.run_id, filename=uploaded_name, confirmed=True)
-            st.success(f"{t('saved')}: {save_result['rows_imported']} ({save_result['rows_skipped_duplicate']} duplicate)" )
+            st.success(f"{t('saved')}: {save_result['rows_imported']} ({save_result['rows_skipped_duplicate']} duplicate)")
         elif rows_to_save and not save_confirmed:
             st.warning(t("not_saved"))
         else:
@@ -179,7 +184,7 @@ if st.button(t("run"), type="primary"):
     st.json(summary)
     st.subheader(t("candidates"))
     if candidates:
-        st.dataframe(pd.DataFrame(candidates), use_container_width=True, hide_index=True)
+        st.dataframe(display_frame(pd.DataFrame(candidates)), use_container_width=True, hide_index=True)
     else:
         st.info(t("no_candidates"))
 else:
@@ -189,21 +194,23 @@ st.subheader(t("audit"))
 if audit_event is None:
     st.info(t("no_run"))
 else:
-    st.dataframe(pd.DataFrame(audit_rows(audit_event_display_rows(audit_event))), use_container_width=True, hide_index=True)
+    st.dataframe(display_frame(pd.DataFrame(audit_rows(audit_event_display_rows(audit_event)))), use_container_width=True, hide_index=True)
 
 st.subheader(t("forbidden"))
-st.dataframe(table(doctrine.get("forbidden_actions", [])), use_container_width=True, hide_index=True)
+st.dataframe(display_frame(table(doctrine.get("forbidden_actions", []))), use_container_width=True, hide_index=True)
 
 st.subheader(t("status"))
 st.dataframe(
-    pd.DataFrame(
-        [
-            {"control": "live_mutation", "status": v(doctrine.get("live_mutation", ""))},
-            {"control": "repair_activation", "status": v(doctrine.get("repair_activation", ""))},
-            {"control": "shadow_mode_activation", "status": v(doctrine.get("shadow_mode_activation", ""))},
-            {"control": "tgrm_activation", "status": v(doctrine.get("tgrm_activation", ""))},
-            {"control": "rye_activation", "status": v(doctrine.get("rye_activation", ""))},
-        ]
+    display_frame(
+        pd.DataFrame(
+            [
+                {"control": "live_mutation", "status": v(doctrine.get("live_mutation", ""))},
+                {"control": "repair_activation", "status": v(doctrine.get("repair_activation", ""))},
+                {"control": "shadow_mode_activation", "status": v(doctrine.get("shadow_mode_activation", ""))},
+                {"control": "tgrm_activation", "status": v(doctrine.get("tgrm_activation", ""))},
+                {"control": "rye_activation", "status": v(doctrine.get("rye_activation", ""))},
+            ]
+        )
     ),
     use_container_width=True,
     hide_index=True,
