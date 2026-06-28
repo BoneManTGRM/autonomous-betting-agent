@@ -18,6 +18,7 @@ from autonomous_betting_agent.advisory_odds_value_display import (
     advisory_summary_counts,
     blocked_reason_summary,
     duplicate_conflict_summary,
+    fresh_slate_readiness_check,
     line_shopping_summary,
     playable_table,
     prediction_only_table,
@@ -154,6 +155,10 @@ TEXT = {
         'stale_advisory': 'Stale-line warning table',
         'conflict_advisory': 'Duplicate/conflict table',
         'validation_advisory': 'Proof-safety validation',
+        'fresh_slate_readiness': 'Fresh Slate Readiness',
+        'fresh_slate_readiness_details': 'Fresh slate readiness details',
+        'readiness_score': 'Readiness score',
+        'readiness_status': 'Readiness status',
     },
     'es': {
         'title': 'Odds Lock Pro',
@@ -248,6 +253,10 @@ TEXT = {
         'stale_advisory': 'Tabla alertas linea vieja',
         'conflict_advisory': 'Tabla duplicado/conflicto',
         'validation_advisory': 'Validacion seguridad prueba',
+        'fresh_slate_readiness': 'Preparacion de slate fresco',
+        'fresh_slate_readiness_details': 'Detalles de preparacion de slate fresco',
+        'readiness_score': 'Puntaje de preparacion',
+        'readiness_status': 'Estado de preparacion',
     },
 }
 
@@ -571,6 +580,14 @@ def show_advisory_odds_value_panel(frame: pd.DataFrame, *, workspace_id: str) ->
         st.info(t('advisory_empty'))
         return
     advisory = advisory_frame(source)
+    readiness = fresh_slate_readiness_check(advisory)
+    st.subheader(t('fresh_slate_readiness'))
+    readiness_cols = st.columns(2)
+    readiness_cols[0].metric(t('readiness_score'), f"{readiness['readiness_score']}/100")
+    readiness_cols[1].metric(t('readiness_status'), readiness['readiness_status'])
+    st.info(readiness.get('recommended_next_action', 'Review advisory tables.'))
+    with st.expander(t('fresh_slate_readiness_details'), expanded=True):
+        st.json(readiness)
     counts = advisory_summary_counts(advisory)
     metric_cols = st.columns(10)
     metric_cols[0].metric('Rows', counts['total_advisory_rows'])
