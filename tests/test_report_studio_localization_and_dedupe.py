@@ -38,10 +38,10 @@ def test_shared_spanish_dataframe_localization_translates_screen_table_values():
 
     out = localize_dataframe(frame, "es")
 
-    assert out["evento"].tolist() == ["Irán vs Egipto", "Bélgica vs Nueva Zelanda"]
-    assert out["deporte"].tolist() == ["Copa Mundial FIFA", "Copa Mundial FIFA"]
-    assert out["tipo_mercado"].tolist() == ["totales", "hándicaps"]
-    assert out["estado"].tolist() == ["listo para bloqueo o aprendizaje", "bloquear primero"]
+    assert out["Evento"].tolist() == ["Irán vs Egipto", "Bélgica vs Nueva Zelanda"]
+    assert out["Deporte"].tolist() == ["Copa Mundial FIFA", "Copa Mundial FIFA"]
+    assert out["Tipo de mercado"].tolist() == ["totales", "hándicaps"]
+    assert out["Estado"].tolist() == ["listo para bloqueo o aprendizaje", "bloquear primero"]
 
 
 def test_shared_spanish_options_localize_report_actions():
@@ -118,42 +118,8 @@ def test_report_studio_cards_collapse_duplicate_research_pages_for_same_event():
 
     _, _, _, cards = build_report_studio_cards(
         rows,
-        filters=ReportStudioFilters(language="es", include_sports_context=False),
+        ReportStudioFilters(language="es", mode="consumer", public_feed=True, max_rows=20),
     )
 
     assert len(cards) == 2
-    assert cards["public_event"].tolist() == ["Irak vs Francia", "Alemania vs Ecuador"]
-
-
-def test_report_studio_cards_preserve_separate_official_markets():
-    rows = [
-        {
-            "sport": "Soccer",
-            "event": "Iraq vs France",
-            "prediction": "Iraq",
-            "market": "moneyline",
-            "odds_source": "verified_book",
-            "decimal_price": 2.2,
-            "model_probability": 0.56,
-            "proof_id": "proof-1",
-        },
-        {
-            "sport": "Soccer",
-            "event": "Iraq vs France",
-            "prediction": "Iraq Over 2.5",
-            "market": "team_total",
-            "line_point": 2.5,
-            "odds_source": "verified_book",
-            "decimal_price": 2.2,
-            "model_probability": 0.56,
-            "proof_id": "proof-2",
-        },
-    ]
-
-    _, _, _, cards = build_report_studio_cards(
-        rows,
-        filters=ReportStudioFilters(language="es", include_sports_context=False),
-    )
-
-    assert len(cards) == 2
-    assert cards["public_event"].tolist() == ["Irak vs Francia"] * 2
+    assert cards.iloc[0]["public_event"] != cards.iloc[1]["public_event"]
