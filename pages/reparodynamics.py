@@ -92,6 +92,17 @@ ES = {
     "NO": "NO",
     "Phase 3B Shadow Mode; live mutation forbidden": "Fase 3B con Shadow Mode; mutacion en vivo prohibida",
     "ABA may test repairs in Shadow Mode, but live repair remains forbidden.": "ABA puede probar reparaciones en Shadow Mode, pero la reparacion en vivo sigue prohibida.",
+    "live repairs": "reparaciones en vivo",
+    "TGRM repair activation": "activacion de reparacion TGRM",
+    "full RYE repair activation": "activacion completa de reparacion RYE",
+    "Hidden Value Score activation": "activacion de Hidden Value Score",
+    "confidence calibration activation": "activacion de calibracion de confianza",
+    "live pick filtering": "filtrado de picks en vivo",
+    "live model mutation": "mutacion del modelo en vivo",
+    "Learning Page live model updates": "actualizaciones en vivo del modelo desde Learning Page",
+    "automatic confidence adjustment": "ajuste automatico de confianza",
+    "automatic bet-tier changes": "cambios automaticos de nivel de apuesta",
+    "production repair candidates": "candidatos de reparacion en produccion",
 }
 
 FIELD_ES = {
@@ -129,7 +140,7 @@ def display_frame(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def table(items: object) -> pd.DataFrame:
-    values = list(items or [])
+    values = [v(item) for item in list(items or [])]
     return pd.DataFrame({t("forbidden"): values})
 
 
