@@ -4,6 +4,12 @@ from autonomous_betting_agent import ui_i18n
 
 PHASE3D_COLUMN_LABELS_ES = {
     "repair_key": "Clave de reparacion",
+    "memory_run_id": "ID de corrida de memoria",
+    "saved_run_ids": "IDs de corridas guardadas",
+    "last_saved_run_id": "Ultima corrida guardada",
+    "last_save_status": "Estado del ultimo guardado",
+    "duplicate_skipped": "Duplicado omitido",
+    "github_persistence_enabled": "Persistencia GitHub activada",
     "first_seen_utc": "Visto por primera vez UTC",
     "last_seen_utc": "Visto por ultima vez UTC",
     "times_seen": "Veces detectado",
@@ -57,11 +63,14 @@ PHASE3D_VALUE_LABELS_ES = {
     "preparation_only": "solo preparacion",
     "automatic_live_promotion_forbidden": "promocion automatica en vivo prohibida",
     "phase3c_saved_to_memory": "Fase 3C guardada en memoria",
+    "phase3c_duplicate_save_skipped": "guardado duplicado Fase 3C omitido",
     "manual_review_decision": "decision de revision manual",
     "repair_memory_summary": "resumen de Repair Memory",
     "phase4_lockbox_candidate_detected": "candidato lockbox Fase 4 detectado",
     "phase_3d_repair_memory": "Fase 3D Repair Memory",
     "repair_memory_manual_review_gate": "Repair Memory + compuerta de revision manual",
+    "already_saved": "ya guardado",
+    "saved": "guardado",
     "enabled": "activado",
 }
 
@@ -74,6 +83,7 @@ PHASE3D_VALUE_COLUMNS = {
     "automatic_live_promotion",
     "phase4_lockbox_status",
     "manual_review_enabled",
+    "last_save_status",
 }
 
 
