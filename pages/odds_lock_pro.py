@@ -7,7 +7,25 @@ from typing import Any, Mapping
 import pandas as pd
 import streamlit as st
 
+import autonomous_betting_agent.advisory_i18n_phase3e5  # noqa: F401
 import autonomous_betting_agent.ui_i18n_phase3e  # noqa: F401
+from autonomous_betting_agent.advisory_odds_value_display import (
+    ADVISORY_WARNING,
+    SAFETY_CONFIRMATION,
+    advisory_csv_frame,
+    advisory_frame,
+    advisory_report_text,
+    advisory_summary_counts,
+    blocked_reason_summary,
+    duplicate_conflict_summary,
+    line_shopping_summary,
+    playable_table,
+    prediction_only_table,
+    sportsbook_hold_summary,
+    stale_line_summary,
+    validate_advisory_rows,
+    watchlist_table,
+)
 from autonomous_betting_agent.commercial_platform_tools import (
     filter_locked_proof_rows,
     load_persistent_ledger,
@@ -78,6 +96,7 @@ TEXT = {
         'reports': 'Report generator',
         'exposure': 'Exposure',
         'client': 'Client view',
+        'advisory_odds_value': 'Advisory Odds Value',
         'input_rows': 'Input rows',
         'persistent_rows': 'Saved ledger',
         'reviewed': 'Reviewed',
@@ -94,6 +113,7 @@ TEXT = {
         'proof_quality': 'Proof quality',
         'download_locked': 'Download locked proof CSV',
         'download_client': 'Download client-view CSV',
+        'download_advisory_csv': 'Download advisory odds CSV',
         'save_persistent': 'Re-save locked rows to this test ledger',
         'saved_persistent': 'Saved to persistent test ledger',
         'blocker_summary': 'Why rows were blocked',
@@ -104,6 +124,7 @@ TEXT = {
         'report_language': 'Report language',
         'public_only': 'Public/client-safe view',
         'report': 'Copy/paste report',
+        'advisory_report': 'Copy/paste advisory report',
         'handoff': 'Handoff health',
         'saved_note': 'This version loads Pro Predictor handoff rows from session, local memory, and local JSON fallback.',
         'none': 'none',
@@ -120,6 +141,19 @@ TEXT = {
         'dynamic_odds_shadow': 'Dynamic Odds Shadow Math',
         'dynamic_odds_warning': 'Dynamic Odds is Shadow Mode only. These values do not change live picks, lock readiness, EV, stake, bankroll, grading, proof ledgers, or model probability.',
         'dynamic_odds_empty': 'No rows available for Dynamic Odds Shadow display.',
+        'advisory_prediction_only_note': 'These may be good predictions, but the current price does not show playable positive EV.',
+        'advisory_empty': 'No rows available for Advisory Odds Value display.',
+        'advisory_safety_banner': 'Advisory safety banner',
+        'advisory_summary': 'Advisory summary',
+        'playable_advisory': 'Playable +EV advisory table',
+        'watchlist_advisory': 'Watchlist-value table',
+        'prediction_only_advisory': 'Prediction-only table',
+        'blocked_advisory': 'Blocked rows by reason',
+        'hold_advisory': 'Sportsbook hold table',
+        'line_shopping_advisory': 'Best-price line-shopping table',
+        'stale_advisory': 'Stale-line warning table',
+        'conflict_advisory': 'Duplicate/conflict table',
+        'validation_advisory': 'Proof-safety validation',
     },
     'es': {
         'title': 'Odds Lock Pro',
@@ -156,6 +190,7 @@ TEXT = {
         'reports': 'Generador de reportes',
         'exposure': 'Exposicion',
         'client': 'Vista cliente',
+        'advisory_odds_value': 'Valor de Odds Asesoría',
         'input_rows': 'Filas entrada',
         'persistent_rows': 'Ledger guardado',
         'reviewed': 'Revisadas',
@@ -172,6 +207,7 @@ TEXT = {
         'proof_quality': 'Calidad prueba',
         'download_locked': 'Descargar CSV bloqueado',
         'download_client': 'Descargar CSV cliente',
+        'download_advisory_csv': 'Descargar CSV asesoría',
         'save_persistent': 'Re-guardar filas bloqueadas',
         'saved_persistent': 'Guardado en ledger persistente',
         'blocker_summary': 'Por que se bloquearon',
@@ -182,6 +218,7 @@ TEXT = {
         'report_language': 'Idioma del reporte',
         'public_only': 'Vista segura publico/cliente',
         'report': 'Reporte para copiar/pegar',
+        'advisory_report': 'Reporte asesoría para copiar/pegar',
         'handoff': 'Salud del traspaso',
         'saved_note': 'Esta version carga filas de Predictor Pro desde sesion, memoria local y JSON local.',
         'none': 'ninguna',
@@ -198,6 +235,19 @@ TEXT = {
         'dynamic_odds_shadow': 'Matematica Shadow de Dynamic Odds',
         'dynamic_odds_warning': 'Dynamic Odds es solo Shadow Mode. Estos valores no cambian picks en vivo, preparacion de bloqueo, EV, stake, bankroll, calificacion, ledgers de prueba ni probabilidad del modelo.',
         'dynamic_odds_empty': 'No hay filas disponibles para mostrar Dynamic Odds Shadow.',
+        'advisory_prediction_only_note': 'Pueden ser buenas predicciones, pero el precio actual no muestra EV positivo jugable.',
+        'advisory_empty': 'No hay filas disponibles para Valor de Odds Asesoría.',
+        'advisory_safety_banner': 'Banner de seguridad asesoría',
+        'advisory_summary': 'Resumen asesoría',
+        'playable_advisory': 'Tabla asesoría jugable +EV',
+        'watchlist_advisory': 'Tabla watchlist valor',
+        'prediction_only_advisory': 'Tabla solo prediccion',
+        'blocked_advisory': 'Filas bloqueadas por razon',
+        'hold_advisory': 'Tabla hold de sportsbook',
+        'line_shopping_advisory': 'Tabla mejor precio line-shopping',
+        'stale_advisory': 'Tabla alertas linea vieja',
+        'conflict_advisory': 'Tabla duplicado/conflicto',
+        'validation_advisory': 'Validacion seguridad prueba',
     },
 }
 
@@ -488,6 +538,74 @@ def show_dynamic_odds_shadow_panel(frame: pd.DataFrame, *, workspace_id: str) ->
     )
 
 
+def show_advisory_table(title: str, frame: pd.DataFrame, *, note: str | None = None) -> None:
+    st.subheader(title)
+    if note:
+        st.caption(note)
+    if frame.empty:
+        st.info(t('advisory_empty'))
+    else:
+        st.dataframe(display_frame(frame), use_container_width=True, hide_index=True)
+
+
+def show_advisory_odds_value_panel(frame: pd.DataFrame, *, workspace_id: str) -> None:
+    source = frame.copy(deep=True) if not frame.empty else pd.DataFrame()
+    st.subheader(t('advisory_odds_value'))
+    st.warning(ADVISORY_WARNING)
+    st.info(SAFETY_CONFIRMATION)
+    st.json({
+        'advisory_odds_value_only': True,
+        'proof_history_mutation': 'FORBIDDEN',
+        'official_model_probability_change': 'FORBIDDEN',
+        'official_EV_change': 'FORBIDDEN',
+        'official_edge_change': 'FORBIDDEN',
+        'lock_ready_change': 'FORBIDDEN',
+        'publish_ready_change': 'FORBIDDEN',
+        'locked_ledger_change': 'FORBIDDEN',
+        'places_bets': False,
+        'live_application': 'OFF',
+        'applied_live_count': 0,
+        'advisory_rows_feed_official_lock_buttons': False,
+    })
+    if source.empty:
+        st.info(t('advisory_empty'))
+        return
+    advisory = advisory_frame(source)
+    counts = advisory_summary_counts(advisory)
+    metric_cols = st.columns(10)
+    metric_cols[0].metric('Rows', counts['total_advisory_rows'])
+    metric_cols[1].metric('Playable +EV', counts['PLAYABLE_PLUS_EV'])
+    metric_cols[2].metric('Watchlist', counts['WATCHLIST_VALUE'])
+    metric_cols[3].metric('Prediction-only', counts['PREDICTION_ONLY_NOT_PLUS_EV'])
+    metric_cols[4].metric('Blocked', counts['blocked_rows'])
+    metric_cols[5].metric('Stale', counts['stale_rows'])
+    metric_cols[6].metric('Unknown', counts['unknown_freshness_rows'])
+    metric_cols[7].metric('Complete', counts['complete_markets'])
+    metric_cols[8].metric('Incomplete', counts['incomplete_markets'])
+    metric_cols[9].metric('Best prices', counts['best_price_opportunities'])
+
+    show_advisory_table(t('playable_advisory'), playable_table(advisory))
+    show_advisory_table(t('watchlist_advisory'), watchlist_table(advisory))
+    show_advisory_table(t('prediction_only_advisory'), prediction_only_table(advisory), note=t('advisory_prediction_only_note'))
+    show_advisory_table(t('blocked_advisory'), blocked_reason_summary(advisory))
+    show_advisory_table(t('hold_advisory'), sportsbook_hold_summary(advisory))
+    show_advisory_table(t('line_shopping_advisory'), line_shopping_summary(advisory))
+    show_advisory_table(t('stale_advisory'), stale_line_summary(advisory))
+    show_advisory_table(t('conflict_advisory'), duplicate_conflict_summary(advisory))
+
+    validation = validate_advisory_rows(source)
+    st.subheader(t('validation_advisory'))
+    proof_result = validation.get('proof_safety_check_result', {})
+    if proof_result.get('passed') is False:
+        st.warning(f"Proof-safety validation failed: {proof_result.get('violations', [])}")
+    else:
+        st.success('Proof-safety validation passed.')
+    st.json(validation)
+    csv_link(t('download_advisory_csv'), advisory_csv_frame(advisory), f'advisory_odds_value_{workspace_id}.csv')
+    st.subheader(t('advisory_report'))
+    st.text_area(t('advisory_report'), value=advisory_report_text(advisory), height=360)
+
+
 def exposure_summary(frame: pd.DataFrame, *, daily_limit_units: float, sport_limit_units: float) -> pd.DataFrame:
     if frame.empty:
         return pd.DataFrame(columns=['scope', 'stake_units', 'limit_units', 'status'])
@@ -603,7 +721,7 @@ dynamic_shadow_source = review_rows if not review_rows.empty else (active_locked
 with st.expander(t('dynamic_odds_shadow'), expanded=True):
     show_dynamic_odds_shadow_panel(dynamic_shadow_source, workspace_id=workspace_id)
 
-tabs = st.tabs([t('research_candidates_tab'), t('official_candidates_tab'), t('locked'), t('dashboard'), t('reports'), t('exposure'), t('client')])
+tabs = st.tabs([t('research_candidates_tab'), t('official_candidates_tab'), t('locked'), t('dashboard'), t('reports'), t('exposure'), t('client'), t('advisory_odds_value')])
 
 with tabs[0]:
     if research_candidates.empty:
@@ -655,3 +773,6 @@ with tabs[6]:
     client = client_view(active_locked, public_only=public_only_client)
     st.dataframe(display_frame(client), use_container_width=True, hide_index=True)
     csv_link(t('download_client'), client, f'odds_lock_pro_client_view_{workspace_id}.csv')
+
+with tabs[7]:
+    show_advisory_odds_value_panel(dynamic_shadow_source, workspace_id=workspace_id)
