@@ -9,6 +9,12 @@ from .report_product_layer import safe_text
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PROFILE_PATH = REPO_ROOT / 'data' / 'white_label_profiles.json'
+DEFAULT_DISCLAIMER_EN = 'Informational content only. Results are not guaranteed.'
+
+
+def _normalized_disclaimer(value: Any) -> str:
+    text = safe_text(value)
+    return '' if text == DEFAULT_DISCLAIMER_EN else text
 
 
 @dataclass
@@ -20,7 +26,7 @@ class WhiteLabelProfile:
     tagline: str = 'Powered by Reparodynamics'
     language: str = 'en'
     report_title: str = 'Daily Sports Analysis'
-    disclaimer: str = 'Informational content only. Results are not guaranteed.'
+    disclaimer: str = DEFAULT_DISCLAIMER_EN
     preferred_report_mode: str = 'Consumer Magazine'
     preferred_sports: list[str] | None = None
     risk_preference: str = 'Balanced'
@@ -39,7 +45,7 @@ class WhiteLabelProfile:
             tagline=safe_text(self.tagline) or 'Powered by Reparodynamics',
             language='es' if safe_text(self.language).lower().startswith('es') or 'español' in safe_text(self.language).lower() else 'en',
             report_title=safe_text(self.report_title) or 'Daily Sports Analysis',
-            disclaimer=safe_text(self.disclaimer) or 'Informational content only. Results are not guaranteed.',
+            disclaimer=_normalized_disclaimer(self.disclaimer),
             preferred_report_mode=safe_text(self.preferred_report_mode) or 'Consumer Magazine',
             preferred_sports=list(self.preferred_sports or []),
             risk_preference=safe_text(self.risk_preference) or 'Balanced',
