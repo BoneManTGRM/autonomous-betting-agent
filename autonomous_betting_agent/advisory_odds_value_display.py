@@ -139,7 +139,7 @@ def playable_table(rows: Sequence[Mapping[str, Any]] | pd.DataFrame) -> pd.DataF
     out = frame[frame["advisory_playable_status"].fillna("").astype(str) == PLAYABLE_PLUS_EV].copy()
     return _select_columns(out, [
         "event", "prediction", "sport", "league", "market_type", "sportsbook", "bookmaker",
-        "advisory_current_decimal_odds", "advisory_best_available_decimal_odds",
+        "advisory_playable_status", "advisory_current_decimal_odds", "advisory_best_available_decimal_odds",
         "advisory_best_available_sportsbook", "advisory_raw_EV", "advisory_best_price_EV",
         "advisory_no_vig_edge", "advisory_market_hold", "advisory_line_shopping_gain_pct",
         "advisory_stale_line_status", "advisory_playable_reason",
@@ -153,7 +153,7 @@ def watchlist_table(rows: Sequence[Mapping[str, Any]] | pd.DataFrame) -> pd.Data
     out = frame[frame["advisory_playable_status"].fillna("").astype(str) == WATCHLIST_VALUE].copy()
     return _select_columns(out, [
         "event", "prediction", "sport", "league", "market_type", "sportsbook", "bookmaker",
-        "advisory_current_decimal_odds", "advisory_best_available_decimal_odds",
+        "advisory_playable_status", "advisory_current_decimal_odds", "advisory_best_available_decimal_odds",
         "advisory_best_available_sportsbook", "advisory_raw_EV", "advisory_best_price_EV",
         "advisory_no_vig_edge", "advisory_market_completeness_status",
         "advisory_stale_line_status", "advisory_playable_reason",
@@ -166,7 +166,7 @@ def prediction_only_table(rows: Sequence[Mapping[str, Any]] | pd.DataFrame) -> p
         return pd.DataFrame()
     out = frame[frame["advisory_playable_status"].fillna("").astype(str) == PREDICTION_ONLY_NOT_PLUS_EV].copy()
     return _select_columns(out, [
-        "event", "prediction", "model_probability", "advisory_current_decimal_odds",
+        "event", "prediction", "model_probability", "advisory_playable_status", "advisory_current_decimal_odds",
         "advisory_raw_EV", "advisory_no_vig_edge", "advisory_prediction_only_reason",
         "advisory_playable_reason",
     ])
@@ -270,7 +270,6 @@ def validate_advisory_rows(rows: Sequence[Mapping[str, Any]] | pd.DataFrame) -> 
     valued = advisory_rows(original)
     frame = pd.DataFrame(valued)
     counts = advisory_summary_counts(valued)
-    status = frame.get("advisory_playable_status", pd.Series(dtype=str)).fillna("").astype(str) if not frame.empty else pd.Series(dtype=str)
     return {
         **counts,
         "total_rows": len(original),
