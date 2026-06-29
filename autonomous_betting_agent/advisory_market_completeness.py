@@ -105,11 +105,6 @@ def _first_value(row: Mapping[str, Any], fields: Sequence[str]) -> Any:
     return None
 
 
-def _first_text(row: Mapping[str, Any], fields: Sequence[str]) -> str:
-    value = _first_value(row, fields)
-    return _clean_text(value)
-
-
 def _to_float(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
@@ -123,20 +118,19 @@ def _to_float(value: Any) -> float | None:
 
 
 def _format_list(values: Sequence[str]) -> str:
-    clean = [str(value) for value in values if str(value)]
-    return ",".join(clean)
+    return ",".join([str(value) for value in values if str(value)])
 
 
 def _event_identity(row: Mapping[str, Any]) -> str:
-    direct = _first_text(row, EVENT_FIELDS)
+    direct = _clean_text(_first_value(row, EVENT_FIELDS))
     if direct:
         return _norm(direct)
-    home = _first_text(row, ("home_team", "home"))
-    away = _first_text(row, ("away_team", "away"))
+    home = _clean_text(_first_value(row, ("home_team", "home")))
+    away = _clean_text(_first_value(row, ("away_team", "away")))
     if home or away:
         return _norm(f"{away} at {home}")
-    sport = _first_text(row, ("sport",))
-    league = _first_text(row, ("league",))
+    sport = _clean_text(_first_value(row, ("sport",)))
+    league = _clean_text(_first_value(row, ("league",)))
     return _norm("|".join([sport, league])) or "unknown_event"
 
 
@@ -229,9 +223,6 @@ def _sportsbook_identity(row: Mapping[str, Any]) -> str:
 
 
 def build_market_pairing_key(row: Mapping[str, Any]) -> str:
-    # Deliberately does not include line value. Totals/spreads need all sides in
-    # one same-book group so mismatched lines can be diagnosed instead of hidden
-    # as separate one-sided groups.
     return "|".join([_event_identity(row), _market_type(row), _sportsbook_identity(row)])
 
 
@@ -434,8 +425,20 @@ def market_completeness_diagnostics(rows_or_frame: Sequence[Mapping[str, Any]] |
     return out
 
 
+def _is_precomputed_advisory_output(rows: Sequence[Mapping[str, Any]]) -> bool:
+    return any(
+        "advisory_market_completeness_status" in row and "advisory_playable_status" in row
+        for row in rows
+    )
+
+
 def apply_market_completeness_fields(rows_or_frame: Sequence[Mapping[str, Any]] | pd.DataFrame) -> list[dict[str, Any]]:
-    rows = market_completeness_diagnostics(rows_or_frame)
+    source = _records(rows_or_frame)
+    if _is_precomputed_advisory_output(source):
+        # Preserve already-generated advisory fixtures and legacy diagnostic rows.
+        # Raw rows without advisory completeness still receive Phase 3E.5.6 diagnostics.
+        return source
+    rows = market_completeness_diagnostics(source)
     for row in rows:
         if row.get("advisory_playable_status") == "PLAYABLE_PLUS_EV" and not bool(row.get("advisory_no_vig_available")):
             row["advisory_playable_status"] = "WATCHLIST_VALUE"
