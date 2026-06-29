@@ -197,6 +197,16 @@ def _is_stale(row: Mapping[str, Any], max_age_minutes: int = 180) -> bool:
     return (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds() > max_age_minutes * 60
 
 
+def _value_engine_row(source: Mapping[str, Any], decimal: float | None, model_probability: float | None) -> dict[str, Any]:
+    row = dict(source or {})
+    if decimal is not None:
+        row["decimal_price"] = decimal
+        row["odds_decimal"] = decimal
+    if model_probability is not None:
+        row.setdefault("model_probability", model_probability)
+    return row
+
+
 def assess_completed_odds_row(
     row: Mapping[str, Any],
     *,
@@ -218,7 +228,7 @@ def assess_completed_odds_row(
     min_playable = minimum_playable_decimal_odds(model_probability, ev_buffer=ev_buffer, safety_margin=safety_margin)
     ev = expected_value(model_probability, decimal)
     raw_edge = edge(model_probability, raw)
-    base_assessment = assess_value_pick({**source, "decimal_odds": decimal or source.get("decimal_odds")}, ev_buffer=ev_buffer, safety_margin=safety_margin, max_age_minutes=max_age_minutes)
+    base_assessment = assess_value_pick(_value_engine_row(source, decimal, model_probability), ev_buffer=ev_buffer, safety_margin=safety_margin, max_age_minutes=max_age_minutes)
     stale = _is_stale(source, max_age_minutes)
     unavailable = decimal is None or model_probability is None
     stake_fraction = fractional_kelly_stake_fraction(model_probability, decimal, fraction=kelly_fraction, cap=max_stake_fraction)
