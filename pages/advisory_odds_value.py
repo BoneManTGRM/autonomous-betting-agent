@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import base64
 import html
-from typing import Any
+from typing import Any, Mapping
 
 import pandas as pd
 import streamlit as st
 
 import autonomous_betting_agent.advisory_i18n_phase3e5  # noqa: F401
 import autonomous_betting_agent.ui_i18n_phase3e  # noqa: F401
+from autonomous_betting_agent.advisory_candidate_review import (
+    apply_manual_candidate_selection,
+    candidate_review_blocker_summary,
+    candidate_review_report_section,
+    candidate_review_rows,
+    candidate_review_summary,
+)
 from autonomous_betting_agent.advisory_explanation_engine import (
     advisory_explanation_reason_counts,
     advisory_explanation_report_section,
@@ -61,7 +68,7 @@ LANG = render_app_sidebar("advisory_odds_value", language_key="advisory_odds_val
 TEXT = {
     "en": {
         "title": "Advisory Odds Value",
-        "caption": "Phase 3E.5.9 proof-safe advisory odds readiness, threshold calibration, and explanations.",
+        "caption": "Phase 3E.6 proof-safe advisory odds readiness, explanations, and local candidate review.",
         "input": "Input",
         "test_window": "Test Window ID",
         "use_session": "Use latest saved/session rows",
@@ -84,6 +91,14 @@ TEXT = {
         "explanation_summary": "Explanation Summary",
         "reason_counts": "Reason Code Counts",
         "row_explanations": "Row-Level Explanations",
+        "candidate_review": "Manual Advisory Candidate Review Gate",
+        "candidate_summary": "Candidate Review Summary",
+        "candidate_blockers": "Candidate Review Blockers",
+        "eligible_candidates": "Eligible Local Review Candidates",
+        "selected_candidates": "Selected Manual Candidates",
+        "blocked_candidates": "Blocked Candidate Rows",
+        "watchlist_candidates": "Watchlist-Only Rows",
+        "prediction_only_candidates": "Prediction-Only Rows",
         "diagnostics": "Why no playable +EV rows?",
         "summary": "Advisory summary",
         "playable": "Original playable +EV advisory picks",
@@ -101,7 +116,7 @@ TEXT = {
     },
     "es": {
         "title": "Valor de Odds Asesoría",
-        "caption": "Fase 3E.5.9 preparación, umbrales y explicaciones asesoría sin tocar prueba.",
+        "caption": "Fase 3E.6 preparación, explicaciones y revisión local de candidatos sin tocar prueba.",
         "input": "Entrada",
         "test_window": "ID de ventana de prueba",
         "use_session": "Usar ultimas filas guardadas/sesion",
@@ -124,6 +139,14 @@ TEXT = {
         "explanation_summary": "Resumen de explicaciones",
         "reason_counts": "Conteo de codigos de razon",
         "row_explanations": "Explicaciones por fila",
+        "candidate_review": "Puerta de revisión manual de candidatos",
+        "candidate_summary": "Resumen de revisión de candidatos",
+        "candidate_blockers": "Bloqueadores de candidatos",
+        "eligible_candidates": "Candidatos locales elegibles",
+        "selected_candidates": "Candidatos manuales seleccionados",
+        "blocked_candidates": "Filas candidatas bloqueadas",
+        "watchlist_candidates": "Filas solo watchlist",
+        "prediction_only_candidates": "Filas solo prediccion",
         "diagnostics": "Por que no hay filas +EV jugables?",
         "summary": "Resumen asesoría",
         "playable": "Picks asesoría +EV originales",
@@ -215,6 +238,14 @@ def show_table(title: str, frame: pd.DataFrame, *, note: str | None = None) -> N
         st.dataframe(display_frame(frame), use_container_width=True, hide_index=True)
 
 
+def candidate_label(row: Mapping[str, Any]) -> str:
+    event = str(row.get("event") or row.get("event_name") or "event")
+    prediction = str(row.get("prediction") or row.get("selection") or "selection")
+    book = str(row.get("sportsbook") or row.get("bookmaker") or "book")
+    row_id = str(row.get("advisory_candidate_review_row_id") or "")
+    return f"{event} | {prediction} | {book} | {row_id}"
+
+
 def threshold_controls() -> dict[str, Any]:
     presets = advisory_threshold_presets()
     st.subheader(t("thresholds"))
@@ -260,12 +291,16 @@ calibrated_rows = apply_advisory_thresholds(advisory, threshold_config)
 calibrated_frame = pd.DataFrame(calibrated_rows)
 explained_rows = explain_advisory_rows(calibrated_rows)
 explained_frame = pd.DataFrame(explained_rows)
+candidate_base_rows = candidate_review_rows(explained_rows)
+candidate_base_frame = pd.DataFrame(candidate_base_rows)
 impact = threshold_impact_summary(advisory, calibrated_rows)
 validation = validate_advisory_rows(normalized)
 counts = advisory_summary_counts(advisory)
 readiness = fresh_slate_readiness_check(advisory)
 explanation_summary_frame = advisory_explanation_summary(explained_rows)
 top_explanation = explanation_summary_frame.iloc[0].to_dict() if not explanation_summary_frame.empty else {}
+candidate_summary_base = candidate_review_summary(candidate_base_rows)
+top_candidate = candidate_summary_base.iloc[0].to_dict() if not candidate_summary_base.empty else {}
 readiness.update({
     "threshold_preset_used": threshold_config.get("advisory_threshold_preset"),
     "calibrated_playable_count": impact.get("calibrated_PLAYABLE_PLUS_EV", 0),
@@ -276,6 +311,9 @@ readiness.update({
     "explained_row_count": len(explained_rows),
     "top_explanation_status": top_explanation.get("explanation_status"),
     "top_explanation_blocker": top_explanation.get("most_common_primary_reason"),
+    "manual_candidate_review_available": True,
+    "manual_candidate_review_row_count": len(candidate_base_rows),
+    "top_manual_candidate_review_status": top_candidate.get("advisory_manual_review_status"),
 })
 diagnostics = advisory_real_file_diagnostics(advisory)
 
@@ -288,6 +326,7 @@ st.json({
     "proof_preserving": True,
     "threshold_calibration_only": True,
     "explanation_only": True,
+    "manual_candidate_review_only": True,
     "live_application": "OFF",
     "applied_live_count": 0,
     "does_not_feed_official_locks": True,
@@ -331,6 +370,42 @@ explanation_cols = [
 ]
 show_table(t("row_explanations"), explained_frame[[col for col in explanation_cols if col in explained_frame.columns]].copy() if not explained_frame.empty else pd.DataFrame(columns=explanation_cols))
 
+st.subheader(t("candidate_review"))
+st.warning("Manual candidate review creates local review candidates only. It does not create official locks, does not publish proof, does not change bankroll/staking, and does not place bets.")
+eligible_frame = candidate_base_frame[candidate_base_frame.get("advisory_manual_review_status", pd.Series(dtype=str)).fillna("").astype(str) == "REVIEW_ELIGIBLE"].copy() if not candidate_base_frame.empty else pd.DataFrame()
+option_labels = {str(row.get("advisory_candidate_review_row_id")): candidate_label(row) for row in eligible_frame.to_dict("records")}
+selected_ids = st.multiselect(
+    "Select eligible rows as local review candidates",
+    options=list(option_labels.keys()),
+    format_func=lambda value: option_labels.get(str(value), str(value)),
+)
+candidate_rows = apply_manual_candidate_selection(explained_rows, selected_ids)
+candidate_frame = pd.DataFrame(candidate_rows)
+show_table(t("candidate_summary"), candidate_review_summary(candidate_rows))
+show_table(t("candidate_blockers"), candidate_review_blocker_summary(candidate_rows))
+candidate_cols = [
+    "event", "prediction", "market_type", "sportsbook", "bookmaker", "advisory_playable_status",
+    "advisory_calibrated_playable_status", "advisory_explanation_status", "advisory_manual_review_status",
+    "advisory_manual_review_eligible", "advisory_manual_review_blockers", "advisory_manual_review_warnings",
+    "advisory_candidate_review_status", "advisory_candidate_review_row_id", "advisory_manual_review_next_action",
+]
+if candidate_frame.empty:
+    empty_candidate = pd.DataFrame(columns=candidate_cols)
+    selected_candidate_frame = empty_candidate
+    blocked_candidate_frame = empty_candidate
+    watchlist_candidate_frame = empty_candidate
+    prediction_candidate_frame = empty_candidate
+else:
+    selected_candidate_frame = candidate_frame[candidate_frame["advisory_candidate_review_status"].fillna("").astype(str) == "MANUAL_CANDIDATE_ONLY"].copy()
+    blocked_candidate_frame = candidate_frame[candidate_frame["advisory_manual_review_status"].fillna("").astype(str) == "REVIEW_BLOCKED"].copy()
+    watchlist_candidate_frame = candidate_frame[candidate_frame["advisory_manual_review_status"].fillna("").astype(str) == "REVIEW_WATCHLIST_ONLY"].copy()
+    prediction_candidate_frame = candidate_frame[candidate_frame["advisory_manual_review_status"].fillna("").astype(str) == "REVIEW_PREDICTION_ONLY"].copy()
+show_table(t("eligible_candidates"), eligible_frame[[col for col in candidate_cols if col in eligible_frame.columns]].copy() if not eligible_frame.empty else pd.DataFrame(columns=candidate_cols))
+show_table(t("selected_candidates"), selected_candidate_frame[[col for col in candidate_cols if col in selected_candidate_frame.columns]].copy() if not selected_candidate_frame.empty else pd.DataFrame(columns=candidate_cols))
+show_table(t("blocked_candidates"), blocked_candidate_frame[[col for col in candidate_cols if col in blocked_candidate_frame.columns]].copy() if not blocked_candidate_frame.empty else pd.DataFrame(columns=candidate_cols))
+show_table(t("watchlist_candidates"), watchlist_candidate_frame[[col for col in candidate_cols if col in watchlist_candidate_frame.columns]].copy() if not watchlist_candidate_frame.empty else pd.DataFrame(columns=candidate_cols))
+show_table(t("prediction_only_candidates"), prediction_candidate_frame[[col for col in candidate_cols if col in prediction_candidate_frame.columns]].copy() if not prediction_candidate_frame.empty else pd.DataFrame(columns=candidate_cols))
+
 st.subheader(t("diagnostics"))
 if diagnostics.get("show_no_playable_warning"):
     st.warning(diagnostics.get("explanation", "No playable advisory rows were found."))
@@ -361,7 +436,15 @@ show_table(t("conflicts"), duplicate_conflict_summary(advisory))
 st.subheader(t("validation"))
 st.json(validation)
 
-csv_link(t("download"), advisory_csv_frame(explained_frame), f"advisory_odds_value_{workspace_id}.csv")
+csv_link(t("download"), advisory_csv_frame(candidate_frame), f"advisory_odds_value_{workspace_id}.csv")
 st.subheader(t("report"))
-combined_report = advisory_report_text(advisory) + "\n\n" + threshold_report_text(calibrated_rows, threshold_config) + "\n\n" + advisory_explanation_report_section(explained_rows)
-st.text_area(t("report"), value=combined_report, height=520)
+combined_report = (
+    advisory_report_text(advisory)
+    + "\n\n"
+    + threshold_report_text(calibrated_rows, threshold_config)
+    + "\n\n"
+    + advisory_explanation_report_section(explained_rows)
+    + "\n\n"
+    + candidate_review_report_section(candidate_rows)
+)
+st.text_area(t("report"), value=combined_report, height=560)
