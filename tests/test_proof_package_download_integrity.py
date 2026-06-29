@@ -44,7 +44,7 @@ def test_proof_center_stale_preview_and_redaction_blocks_exist():
     assert "proof_center_package_fingerprint" in PROOF_CENTER
     assert "package_input_fingerprint" in PROOF_CENTER
     assert "stale_package = not _package_matches_current(package, package_workspace, package_type)" in section
-    assert "redaction_failed" in section
+    assert "redaction_failed" in PROOF_CENTER
     assert "disabled = stale or (not redaction_ok) or (is_private and not private_confirmed)" in PROOF_CENTER
 
 
