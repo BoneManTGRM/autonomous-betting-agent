@@ -210,8 +210,6 @@ def normalize_decimal_odds(value: Any) -> float | None:
         number = float(text)
     except ValueError:
         return None
-    if number <= 0:
-        return None
     if number >= 100:
         return round(number / 100 + 1, 6)
     if number <= -100:
