@@ -44,6 +44,14 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def _records(rows_or_frame: Sequence[Mapping[str, Any]] | pd.DataFrame | None) -> list[dict[str, Any]]:
+    if rows_or_frame is None:
+        return []
+    if isinstance(rows_or_frame, pd.DataFrame):
+        return rows_or_frame.to_dict("records")
+    return [deepcopy(dict(row)) for row in rows_or_frame if isinstance(row, Mapping)]
+
+
 def _text(value: Any) -> str:
     if value is None:
         return ""
@@ -103,7 +111,7 @@ def slate_builder_diagnostics(row: Mapping[str, Any]) -> dict[str, Any]:
         "slate_builder_price_available": bool(price_available),
         "slate_builder_ready_for_advisory_pipeline": bool(ready),
         "slate_builder_missing_fields": ",".join(missing),
-        "slate_builder_safety_notes": "Streamlit/session-only slate row. No server, database, scheduler, background polling, persistent cache, key exposure, live betting, proof mutation, result mutation, or bankroll action.",
+        "slate_builder_safety_notes": "Streamlit/session-only slate row. No server, no database, no scheduler, no background polling, no persistent cache, no key exposure, no live betting, no proof mutation, no result mutation, and no bankroll action.",
     }
 
 
