@@ -62,6 +62,12 @@ from autonomous_betting_agent.advisory_threshold_calibration import (
     threshold_impact_summary,
     threshold_report_text,
 )
+from autonomous_betting_agent.advisory_validation_dashboard import (
+    advisory_validation_group_summary,
+    advisory_validation_overall_summary,
+    advisory_validation_report_section,
+    advisory_validation_rows,
+)
 from autonomous_betting_agent.commercial_platform_tools import normalize_workspace_id
 from autonomous_betting_agent.pick_hold_store import load_first_available
 from autonomous_betting_agent.row_normalizer import normalize_frame
@@ -74,7 +80,7 @@ LANG = render_app_sidebar("advisory_odds_value", language_key="advisory_odds_val
 TEXT = {
     "en": {
         "title": "Advisory Odds Value",
-        "caption": "Phase 3E.6.1 proof-safe advisory odds readiness, explanations, local candidate review, and manual CLV tracking.",
+        "caption": "Phase 3E.6.2 proof-safe advisory odds readiness, explanations, local candidate review, manual CLV, and read-only validation dashboard.",
         "input": "Input",
         "test_window": "Test Window ID",
         "use_session": "Use latest saved/session rows",
@@ -111,6 +117,16 @@ TEXT = {
         "clv_by_market": "CLV by Market",
         "clv_by_explanation": "CLV by Explanation Status",
         "clv_rows": "Row-Level Manual CLV",
+        "validation_dashboard": "Advisory Performance Validation Dashboard",
+        "validation_overall": "Overall Validation Summary",
+        "validation_by_status": "Validation by Advisory Status",
+        "validation_by_calibrated": "Validation by Calibrated Status",
+        "validation_by_explanation": "Validation by Explanation Status",
+        "validation_by_candidate": "Validation by Candidate Review Status",
+        "validation_by_clv": "Validation by CLV Status",
+        "validation_by_source": "Validation by Sportsbook Source Type",
+        "validation_by_market": "Validation by Market Completeness",
+        "validation_rows": "Row-Level Validation",
         "diagnostics": "Why no playable +EV rows?",
         "summary": "Advisory summary",
         "playable": "Original playable +EV advisory picks",
@@ -128,7 +144,7 @@ TEXT = {
     },
     "es": {
         "title": "Valor de Odds Asesoría",
-        "caption": "Fase 3E.6.1 preparación, explicaciones, revisión local de candidatos y CLV manual sin tocar prueba.",
+        "caption": "Fase 3E.6.2 preparación, explicaciones, candidatos, CLV manual y validacion solo lectura sin tocar prueba.",
         "input": "Entrada",
         "test_window": "ID de ventana de prueba",
         "use_session": "Usar ultimas filas guardadas/sesion",
@@ -165,6 +181,16 @@ TEXT = {
         "clv_by_market": "CLV por mercado",
         "clv_by_explanation": "CLV por estado de explicación",
         "clv_rows": "CLV manual por fila",
+        "validation_dashboard": "Dashboard de validacion asesoría",
+        "validation_overall": "Resumen general de validacion",
+        "validation_by_status": "Validacion por estado asesoría",
+        "validation_by_calibrated": "Validacion por estado calibrado",
+        "validation_by_explanation": "Validacion por explicación",
+        "validation_by_candidate": "Validacion por candidato",
+        "validation_by_clv": "Validacion por CLV",
+        "validation_by_source": "Validacion por fuente sportsbook",
+        "validation_by_market": "Validacion por mercado completo",
+        "validation_rows": "Validacion por fila",
         "diagnostics": "Por que no hay filas +EV jugables?",
         "summary": "Resumen asesoría",
         "playable": "Picks asesoría +EV originales",
@@ -312,6 +338,7 @@ explained_frame = pd.DataFrame(explained_rows)
 candidate_base_rows = candidate_review_rows(explained_rows)
 candidate_base_frame = pd.DataFrame(candidate_base_rows)
 clv_base_rows = apply_manual_clv_fields(candidate_base_rows)
+validation_base_rows = advisory_validation_rows(clv_base_rows)
 impact = threshold_impact_summary(advisory, calibrated_rows)
 validation = validate_advisory_rows(normalized)
 counts = advisory_summary_counts(advisory)
@@ -322,6 +349,8 @@ candidate_summary_base = candidate_review_summary(candidate_base_rows)
 top_candidate = candidate_summary_base.iloc[0].to_dict() if not candidate_summary_base.empty else {}
 clv_base_summary = manual_clv_summary(clv_base_rows)
 top_clv = clv_base_summary.iloc[0].to_dict() if not clv_base_summary.empty else {}
+validation_overall_base = advisory_validation_overall_summary(validation_base_rows)
+top_validation = validation_overall_base.iloc[0].to_dict() if not validation_overall_base.empty else {}
 readiness.update({
     "threshold_preset_used": threshold_config.get("advisory_threshold_preset"),
     "calibrated_playable_count": impact.get("calibrated_PLAYABLE_PLUS_EV", 0),
@@ -339,6 +368,10 @@ readiness.update({
     "manual_clv_row_count": len(clv_base_rows),
     "top_manual_clv_status": top_clv.get("advisory_clv_status"),
     "manual_clv_note": "Manual CLV fields are informational and do not make Fresh Slate Readiness stricter.",
+    "validation_dashboard_available": True,
+    "validation_dashboard_row_count": top_validation.get("row_count"),
+    "validation_dashboard_unique_event_count": top_validation.get("unique_event_count"),
+    "validation_dashboard_note": "Validation dashboard fields are read-only and do not make Fresh Slate Readiness stricter.",
 })
 diagnostics = advisory_real_file_diagnostics(advisory)
 
@@ -353,6 +386,7 @@ st.json({
     "explanation_only": True,
     "manual_candidate_review_only": True,
     "manual_clv_tracking_only": True,
+    "read_only_validation_dashboard": True,
     "odds_polling": "OFF",
     "live_application": "OFF",
     "applied_live_count": 0,
@@ -448,6 +482,27 @@ clv_cols = [
 ]
 show_table(t("clv_rows"), clv_frame[[col for col in clv_cols if col in clv_frame.columns]].copy() if not clv_frame.empty else pd.DataFrame(columns=clv_cols))
 
+st.subheader(t("validation_dashboard"))
+st.warning("This dashboard is read-only. It separates row count from unique event count and does not change results, proof, locks, bankroll/staking, or bets.")
+validation_rows = advisory_validation_rows(clv_rows)
+validation_frame = pd.DataFrame(validation_rows)
+show_table(t("validation_overall"), advisory_validation_overall_summary(validation_rows))
+show_table(t("validation_by_status"), advisory_validation_group_summary(validation_rows, "advisory_playable_status"))
+show_table(t("validation_by_calibrated"), advisory_validation_group_summary(validation_rows, "advisory_calibrated_playable_status"))
+show_table(t("validation_by_explanation"), advisory_validation_group_summary(validation_rows, "advisory_explanation_status"))
+show_table(t("validation_by_candidate"), advisory_validation_group_summary(validation_rows, "advisory_candidate_review_status"))
+show_table(t("validation_by_clv"), advisory_validation_group_summary(validation_rows, "advisory_clv_status"))
+show_table(t("validation_by_source"), advisory_validation_group_summary(validation_rows, "advisory_sportsbook_source_type"))
+show_table(t("validation_by_market"), advisory_validation_group_summary(validation_rows, "advisory_market_completeness_status"))
+validation_cols = [
+    "event", "prediction", "market_type", "sportsbook", "bookmaker", "advisory_validation_event_key",
+    "advisory_validation_result_status", "advisory_validation_is_graded", "advisory_validation_is_usable",
+    "advisory_validation_profit_units", "advisory_validation_roi_available", "advisory_validation_notes",
+    "advisory_playable_status", "advisory_calibrated_playable_status", "advisory_explanation_status",
+    "advisory_candidate_review_status", "advisory_clv_status",
+]
+show_table(t("validation_rows"), validation_frame[[col for col in validation_cols if col in validation_frame.columns]].copy() if not validation_frame.empty else pd.DataFrame(columns=validation_cols))
+
 st.subheader(t("diagnostics"))
 if diagnostics.get("show_no_playable_warning"):
     st.warning(diagnostics.get("explanation", "No playable advisory rows were found."))
@@ -478,7 +533,7 @@ show_table(t("conflicts"), duplicate_conflict_summary(advisory))
 st.subheader(t("validation"))
 st.json(validation)
 
-csv_link(t("download"), advisory_csv_frame(clv_frame), f"advisory_odds_value_{workspace_id}.csv")
+csv_link(t("download"), advisory_csv_frame(validation_frame), f"advisory_odds_value_{workspace_id}.csv")
 st.subheader(t("report"))
 combined_report = (
     advisory_report_text(advisory)
@@ -490,5 +545,7 @@ combined_report = (
     + candidate_review_report_section(candidate_rows)
     + "\n\n"
     + manual_clv_report_section(clv_rows)
+    + "\n\n"
+    + advisory_validation_report_section(validation_rows)
 )
-st.text_area(t("report"), value=combined_report, height=580)
+st.text_area(t("report"), value=combined_report, height=600)
