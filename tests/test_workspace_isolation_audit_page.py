@@ -89,7 +89,8 @@ def test_workspace_isolation_audit_sanitizes_object_results_for_ui():
     assert "error_count" in object_results_section
     assert "blocked_terms_count" in object_results_section
     assert "blocked_paths_count" in object_results_section
-    assert "errors" not in object_results_section
+    assert "st.dataframe(pd.DataFrame(object_rows)" in object_results_section
+    assert "st.json(report.get(\"object_results\"" not in SOURCE
 
 
 def test_workspace_isolation_audit_has_no_write_or_mutation_paths():
