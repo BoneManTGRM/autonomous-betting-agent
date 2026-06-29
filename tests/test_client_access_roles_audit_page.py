@@ -107,7 +107,9 @@ def test_client_access_roles_audit_sanitizes_check_display():
     checks_function = SOURCE[SOURCE.index("def _checks_frame"):SOURCE.index("st.title")]
     assert "error_count" in checks_function
     assert "warning_count" in checks_function
-    assert '"errors"' not in checks_function
+    display_section = SOURCE[SOURCE.index("st.dataframe(_checks_frame(report)"):SOURCE.index("with st.expander(t(\"validation\")")]
+    assert "errors" not in display_section
+    assert "warnings" not in display_section
 
 
 def test_client_access_roles_audit_has_no_write_or_mutation_paths():
