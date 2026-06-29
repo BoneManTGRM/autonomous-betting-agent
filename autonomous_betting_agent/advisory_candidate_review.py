@@ -99,6 +99,11 @@ def candidate_row_id(row: Mapping[str, Any]) -> str:
         "book": _text(row.get("sportsbook") or row.get("bookmaker") or row.get("book")),
         "status": _status(row),
         "price": _text(row.get("advisory_current_decimal_odds") or row.get("decimal_odds") or row.get("odds")),
+        "explanation": _text(row.get("advisory_explanation_status")),
+        "source": _text(row.get("advisory_sportsbook_source_type")),
+        "market_status": _text(row.get("advisory_market_completeness_status")),
+        "no_vig": _text(row.get("advisory_no_vig_available")),
+        "freshness": _text(row.get("advisory_stale_line_status")),
     }
     encoded = json.dumps(parts, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
