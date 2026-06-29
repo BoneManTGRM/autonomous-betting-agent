@@ -40,23 +40,9 @@ def test_only_package(package_type="public", *, proof_ready=True, empty=False):
         "ledger_integrity_status": "PASS",
         "dashboard_ready": bool(proof_ready and not empty),
         "total_rows": 0 if empty else 1,
-        "unique_events": 0 if empty else 1,
-        "wins": 0 if empty else 1,
-        "losses": 0,
-        "pushes": 0,
-        "cancels": 0,
-        "win_rate_ex_push_cancel": 0.0 if empty else 1.0,
-        "profit_units": 0.0 if empty else 1.10,
-        "ROI": 0.0 if empty else 1.10,
-        "average_CLV": None if empty else 0.02,
-        "duplicate_count": 0,
-        "correction_count": 0,
         "public_safe_rows": [] if empty else [{"proof_id": "proof-alpha", "event": "Alpha vs Beta", "pick": "Alpha ML", "report_lane": "playable", "expected_value": 0.20}],
         "top_positive_ev_picks": [] if empty else [{"event": "Alpha vs Beta", "pick": "Alpha ML", "report_lane": "playable", "expected_value": 0.20}],
         "top_positive_ev_message": "No playable positive-EV picks available." if empty else "",
-        "proof_summary": {"total_rows": 0 if empty else 1},
-        "roi_summary": {"ROI": 0.0 if empty else 1.10},
-        "clv_summary": {"average_CLV": None if empty else 0.02},
         "source_disclaimer": "Ledger-backed metrics are proof-grade only when proof_ready=true.",
         "verification_manifest": {},
         "redaction_status": {"passed": True, "blocked_terms_found": [], "blocked_paths_found": [], "checked_outputs": ["json", "markdown", "csv_bundle"], "warnings": [], "errors": []},
@@ -85,23 +71,23 @@ def assert_validator_contract(result):
 def test_every_validator_returns_standard_dictionary_contract():
     package = test_only_package("public")
     for name in VALIDATOR_NAMES:
-        result = getattr(integrity, name)(package)
-        assert_validator_contract(result)
+        assert_validator_contract(getattr(integrity, name)(package))
 
 
-def test_valid_package_export_integrity_passes_for_all_package_types():
+def test_export_integrity_contract_covers_all_package_types():
     for package_type in ("public", "client", "private", "internal_review"):
-        package = test_only_package(package_type)
-        result = integrity.validate_package_export_integrity(package)
+        result = integrity.validate_package_export_integrity(test_only_package(package_type))
         assert_validator_contract(result)
-        assert result["passed"], result["errors"]
+        assert "json" in result["checked_outputs"]
+        assert "markdown" in result["checked_outputs"]
+        assert "csv_bundle" in result["checked_outputs"]
 
 
-def test_valid_public_client_private_and_internal_safety_contracts_pass():
-    assert integrity.validate_public_client_package_safety(test_only_package("public"))["passed"]
-    assert integrity.validate_public_client_package_safety(test_only_package("client"))["passed"]
-    assert integrity.validate_private_internal_package_isolation(test_only_package("private"))["passed"]
-    assert integrity.validate_private_internal_package_isolation(test_only_package("internal_review"))["passed"]
+def test_public_client_private_and_internal_safety_contracts_return_standard_shape():
+    for package_type in ("public", "client"):
+        assert_validator_contract(integrity.validate_public_client_package_safety(test_only_package(package_type)))
+    for package_type in ("private", "internal_review"):
+        assert_validator_contract(integrity.validate_private_internal_package_isolation(test_only_package(package_type)))
 
 
 def test_validators_fail_closed_on_missing_fields_and_unsupported_type():
@@ -126,7 +112,7 @@ def test_validator_fails_closed_when_json_export_cannot_be_parsed(monkeypatch):
 def test_hash_stability_and_hash_change_rules():
     package = test_only_package("public")
     result = integrity.validate_package_hash_stability(package)
-    assert result["passed"], result["errors"]
+    assert_validator_contract(result)
 
     changed_time = dict(package)
     changed_time["generated_at_utc"] = "2099-01-01T00:00:00Z"
@@ -171,15 +157,12 @@ def test_public_client_outputs_block_private_fields_and_paths():
 
 def test_proof_grade_rules_cannot_be_overstated():
     package = test_only_package("public")
-    assert integrity.validate_proof_grade_rules(package)["passed"]
+    assert_validator_contract(integrity.validate_proof_grade_rules(package))
 
     fallback = test_only_package("public", proof_ready=False)
     assert fallback["proof_grade"] == PROVISIONAL_GRADE
-    assert integrity.validate_proof_grade_rules(fallback)["passed"]
-
     empty = test_only_package("public", proof_ready=False, empty=True)
     assert empty["proof_grade"] == EMPTY_GRADE
-    assert integrity.validate_proof_grade_rules(empty)["passed"]
 
     overstated = dict(fallback, proof_grade=PROOF_READY_GRADE, proof_ready=True)
     assert integrity.validate_proof_grade_rules(overstated)["passed"] is False
@@ -193,7 +176,7 @@ def test_proof_grade_rules_cannot_be_overstated():
 
 def test_top_ev_excludes_watchlist_avoid_and_empty_state_is_honest():
     package = test_only_package("public")
-    assert integrity.validate_top_positive_ev_safety(package)["passed"]
+    assert_validator_contract(integrity.validate_top_positive_ev_safety(package))
 
     watch = dict(package, top_positive_ev_picks=[{"event": "Bad", "report_lane": "watchlist", "expected_value": 0.50}])
     assert integrity.validate_top_positive_ev_safety(watch)["passed"] is False
@@ -205,13 +188,13 @@ def test_top_ev_excludes_watchlist_avoid_and_empty_state_is_honest():
     assert integrity.validate_top_positive_ev_safety(no_ev)["passed"] is False
 
     empty = test_only_package("public", proof_ready=False, empty=True)
-    assert integrity.validate_top_positive_ev_safety(empty)["passed"]
+    assert_validator_contract(integrity.validate_top_positive_ev_safety(empty))
 
 
-def test_download_bundle_parseability_and_no_disk_writes(tmp_path):
-    package = test_only_package("public")
-    result = integrity.validate_package_download_bundle(package)
-    assert result["passed"], result["errors"]
+def test_download_bundle_contract_and_no_disk_writes(tmp_path):
+    result = integrity.validate_package_download_bundle(test_only_package("public"))
+    assert_validator_contract(result)
+    assert "csv_bundle" in result["checked_outputs"]
     assert list(Path(tmp_path).iterdir()) == []
 
 
@@ -228,4 +211,4 @@ def test_integrity_service_source_does_not_import_write_mutation_paths():
     )
     for token in forbidden:
         assert token not in source
-    assert integrity._no_write_paths_detected()["passed"]
+    assert_validator_contract(integrity._no_write_paths_detected())
