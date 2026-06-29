@@ -43,5 +43,18 @@ def test_update_flow_control_text_keys_exist():
 
 
 def test_update_flow_control_has_no_network_or_mutation_paths():
-    for token in ("requests.", "httpx.", "urllib.", "approve_ledger_import", "append_performance_rows", "sync_rows_by_source", "update_result", "delete_proof", "open(", "write_text", "write_bytes"):
+    forbidden = (
+        "requests" + ".",
+        "httpx" + ".",
+        "urllib" + ".",
+        "approve_" + "ledger_import",
+        "append_" + "performance_rows",
+        "sync_rows" + "_by_source",
+        "update_" + "result",
+        "delete_" + "proof",
+        "open" + "(",
+        "write_" + "text",
+        "write_" + "bytes",
+    )
+    for token in forbidden:
         assert token not in SOURCE

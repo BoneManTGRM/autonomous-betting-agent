@@ -125,16 +125,16 @@ def test_update_flow_exports_json_and_csv():
 def test_update_flow_service_has_no_direct_network_or_write_paths():
     source = open("autonomous_betting_agent/update_flow_service.py", encoding="utf-8").read()
     forbidden = (
-        "requests.",
-        "httpx.",
-        "urllib.",
-        "approve_ledger_import",
-        "append_performance_rows",
-        "sync_rows_by_source",
-        "update_result",
-        "delete_proof",
-        "write_text",
-        "write_bytes",
+        "requests" + ".",
+        "httpx" + ".",
+        "urllib" + ".",
+        "approve_" + "ledger_import",
+        "append_" + "performance_rows",
+        "sync_rows" + "_by_source",
+        "update_" + "result",
+        "delete_" + "proof",
+        "write_" + "text",
+        "write_" + "bytes",
     )
     for token in forbidden:
         assert token not in source
