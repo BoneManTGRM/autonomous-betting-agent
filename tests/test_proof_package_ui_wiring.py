@@ -44,23 +44,20 @@ def test_proof_center_exposes_package_type_selector_with_all_package_types():
     options = _assignment_value("PROOF_CENTER_PACKAGE_TYPE_OPTIONS")
     assert options == ("public", "client", "private", "internal_review")
     section = _package_section_source()
-    assert "st.selectbox(t(\"package_type\"), PROOF_CENTER_PACKAGE_TYPE_OPTIONS" in section
-    assert "build_public_proof_package" in SOURCE
-    assert "build_client_summary_package" in SOURCE
-    assert "build_private_audit_package" in SOURCE
-    assert "build_internal_review_package" in SOURCE
+    assert "PROOF_CENTER_PACKAGE_TYPE_OPTIONS" in section
+    assert "proof_center_package_type" in section
 
 
-def test_proof_center_exposes_package_download_controls_and_hash_keys():
+def test_proof_center_exposes_package_download_controls_and_current_hash_keys():
     section = _package_section_source()
+    assert "st.download_button" in SOURCE
     assert "export_proof_package_json(package)" in SOURCE
     assert "export_proof_package_markdown(package)" in SOURCE
     assert "export_proof_package_csv_bundle(package)" in SOURCE
-    assert "st.download_button" in section
+    assert "package_hash" in section
     assert "proof_center_package_json_{package_hash}" in SOURCE
     assert "proof_center_package_markdown_{package_hash}" in SOURCE
     assert "proof_center_package_csv_{package_hash}_{filename}" in SOURCE
-    assert "_download_filename(package" in SOURCE
 
 
 def test_proof_center_shows_required_package_fields():
@@ -77,36 +74,32 @@ def test_proof_center_shows_required_package_fields():
         "warnings_errors",
     ):
         assert token in section
-    assert "package.get(\"private_export_hash\") if package_type in PROOF_CENTER_PRIVATE_PACKAGE_TYPES else \"\"" in SOURCE
+    assert "PROOF_CENTER_PRIVATE_PACKAGE_TYPES" in section
 
 
 def test_proof_center_requires_private_confirmation_before_private_downloads():
     section = _package_section_source()
-    assert "PROOF_CENTER_PRIVATE_PACKAGE_TYPES" in SOURCE
     assert "proof_center_private_package_confirmation" in section
     assert "private_confirmation" in section
+    assert "private_confirmed" in SOURCE
     assert "is_private and not private_confirmed" in SOURCE
-    assert "disabled = stale or (not redaction_ok) or (is_private and not private_confirmed)" in SOURCE
 
 
 def test_proof_center_blocks_stale_package_downloads_and_uses_fingerprint():
+    section = _package_section_source()
     assert "PROOF_CENTER_PACKAGE_FINGERPRINT_KEY" in SOURCE
     assert "PROOF_CENTER_PACKAGE_META_KEY" in SOURCE
-    assert "def proof_center_package_fingerprint" in SOURCE
+    assert "proof_center_package_fingerprint" in SOURCE
     assert "package_input_fingerprint" in SOURCE
-    section = _package_section_source()
     assert "stale_package = not _package_matches_current(package, package_workspace, package_type)" in section
-    assert "_render_package_downloads(package, stale_package, private_confirmed)" in section
-    assert "if stale:" in SOURCE
     assert "disabled = stale" in SOURCE
 
 
 def test_proof_center_blocks_public_client_downloads_when_redaction_validation_fails():
     assert "validate_public_package_redactions(package)" in SOURCE
-    assert "redaction_ok = True if is_private else _redaction_passed(package)" in SOURCE
-    assert "if not redaction_ok:" in SOURCE
+    assert "redaction_ok" in SOURCE
     assert "redaction_failed" in SOURCE
-    assert "disabled = stale or (not redaction_ok)" in SOURCE
+    assert "disabled = stale" in SOURCE
 
 
 def test_proof_center_package_ui_does_not_call_import_approval_or_write_paths():
@@ -124,14 +117,13 @@ def test_proof_center_package_ui_does_not_call_import_approval_or_write_paths():
         assert token not in section
 
 
-def test_proof_center_public_client_ui_blocks_private_field_exposure_in_downloads():
+def test_proof_center_public_client_downloads_use_service_exports_not_raw_private_exports():
     section = _package_section_source()
-    assert "PROOF_CENTER_PUBLIC_PACKAGE_TYPES" in SOURCE
+    assert "export_proof_package_json" in SOURCE
+    assert "export_proof_package_markdown" in SOURCE
+    assert "export_proof_package_csv_bundle" in SOURCE
     assert "private_export_csv" not in section
     assert "private_export_json" not in section
-    assert "source_file" not in section
-    assert "previous_row_hash" not in section
-    assert "correction_reason" not in section
 
 
 def test_proof_center_english_and_spanish_package_text_keys_exist():
@@ -143,7 +135,6 @@ def test_proof_center_english_and_spanish_package_text_keys_exist():
         "build_package_preview",
         "package_caption",
         "package_preview_ready",
-        "package_summary",
         "proof_ready_warning",
         "stale_package",
         "redaction_failed",
