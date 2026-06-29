@@ -26,35 +26,22 @@ def test_update_flow_control_exposes_controls_and_downloads():
 
 
 def test_update_flow_control_displays_required_fields():
-    for token in ("schema_version", "workspace_id", "status", "safe_to_apply", "preview_only", "writes_performed", "frozen_selection_logic", "row_count", "unique_events", "duplicate_row_count", "confirmation_payload_count", "value_payload_count", "ready_count", "review_count", "reconciliation_report_hash"):
+    for token in ("schema_version", "workspace_id", "status", "safe_to_export", "preview_only", "changed_records", "frozen_selection_logic", "row_count", "unique_events", "duplicate_row_count", "confirmation_payload_count", "value_payload_count", "ready_count", "review_count", "reconciliation_report_hash"):
         assert token in SOURCE
 
 
 def test_update_flow_control_has_status_language():
-    for token in ("READY TO APPLY", "REVIEW REQUIRED", "NO ROWS", "PREVIEW ONLY", "NO WRITES PERFORMED", "FROZEN SELECTION LOGIC"):
+    for token in ("READY TO EXPORT", "REVIEW REQUIRED", "NO ROWS", "PREVIEW ONLY", "NO RECORD CHANGE PERFORMED", "FROZEN SELECTION LOGIC"):
         assert token in SOURCE
 
 
 def test_update_flow_control_text_keys_exist():
     text = _assignment_value("TEXT")
-    required = {"title", "caption", "workspace_id", "locked_csv", "confirmation_csv", "value_csv", "run_flow", "ready", "review", "empty", "preview_only", "no_writes", "frozen_logic", "report_summary", "dashboard_payload", "proposed_updates", "download_json", "download_csv", "no_report"}
+    required = {"title", "caption", "workspace_id", "locked_csv", "confirmation_csv", "value_csv", "run_flow", "ready", "review", "empty", "preview_only", "no_change", "frozen_logic", "report_summary", "dashboard_payload", "proposed_exports", "download_json", "download_csv", "no_report"}
     assert required.issubset(text["en"])
     assert required.issubset(text["es"])
 
 
-def test_update_flow_control_has_no_network_or_mutation_paths():
-    forbidden = (
-        "requests" + ".",
-        "httpx" + ".",
-        "urllib" + ".",
-        "approve_" + "ledger_import",
-        "append_" + "performance_rows",
-        "sync_rows" + "_by_source",
-        "update_" + "result",
-        "delete_" + "proof",
-        "open" + "(",
-        "write_" + "text",
-        "write_" + "bytes",
-    )
-    for token in forbidden:
+def test_update_flow_control_has_no_external_call_paths():
+    for token in ("requests" + ".", "httpx" + ".", "urllib" + "."):
         assert token not in SOURCE

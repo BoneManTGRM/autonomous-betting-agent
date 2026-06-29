@@ -28,15 +28,15 @@ TEXT = {
         "confirmation_csv": "Confirmation CSV",
         "value_csv": "Value CSV",
         "run_flow": "Run full update preview",
-        "ready": "READY TO APPLY",
+        "ready": "READY TO EXPORT",
         "review": "REVIEW REQUIRED",
         "empty": "NO ROWS",
         "preview_only": "PREVIEW ONLY",
-        "no_writes": "NO WRITES PERFORMED",
+        "no_change": "NO RECORD CHANGE PERFORMED",
         "frozen_logic": "FROZEN SELECTION LOGIC",
         "report_summary": "Report summary",
         "dashboard_payload": "Dashboard update payload",
-        "proposed_updates": "Proposed updates",
+        "proposed_exports": "Proposed exports",
         "download_json": "Download clean JSON report",
         "download_csv": "Download proposed updates CSV",
         "no_report": "Run full update preview to view report details.",
@@ -49,15 +49,15 @@ TEXT = {
         "confirmation_csv": "CSV de confirmación",
         "value_csv": "CSV de valor",
         "run_flow": "Ejecutar vista previa de actualización completa",
-        "ready": "READY TO APPLY",
+        "ready": "READY TO EXPORT",
         "review": "REVIEW REQUIRED",
         "empty": "NO ROWS",
         "preview_only": "PREVIEW ONLY",
-        "no_writes": "NO WRITES PERFORMED",
+        "no_change": "NO RECORD CHANGE PERFORMED",
         "frozen_logic": "FROZEN SELECTION LOGIC",
         "report_summary": "Resumen del reporte",
         "dashboard_payload": "Payload de actualización del dashboard",
-        "proposed_updates": "Actualizaciones propuestas",
+        "proposed_exports": "Exportes propuestos",
         "download_json": "Descargar reporte JSON limpio",
         "download_csv": "Descargar CSV de actualizaciones propuestas",
         "no_report": "Ejecuta la vista previa de actualización completa para ver detalles.",
@@ -94,8 +94,8 @@ if not report:
     st.info(t("no_report"))
     st.stop()
 
-status_key = "ready" if report.get("status") == "READY TO APPLY" else "review" if report.get("status") == "REVIEW REQUIRED" else "empty"
-st.write({t(status_key): True, t("preview_only"): bool(report.get("preview_only")), t("no_writes"): not bool(report.get("writes_performed")), t("frozen_logic"): bool(report.get("frozen_selection_logic"))})
+status_key = "ready" if report.get("status") == "READY TO EXPORT" else "review" if report.get("status") == "REVIEW REQUIRED" else "empty"
+st.write({t(status_key): True, t("preview_only"): bool(report.get("preview_only")), t("no_change"): int(report.get("changed_records") or 0) == 0, t("frozen_logic"): bool(report.get("frozen_selection_logic"))})
 
 metrics = st.columns(6)
 metrics[0].metric("status", safe_text(report.get("status")))
@@ -110,9 +110,9 @@ st.json({
     "schema_version": report.get("schema_version"),
     "workspace_id": report.get("workspace_id"),
     "status": report.get("status"),
-    "safe_to_apply": report.get("safe_to_apply"),
+    "safe_to_export": report.get("safe_to_export"),
     "preview_only": report.get("preview_only"),
-    "writes_performed": report.get("writes_performed"),
+    "changed_records": report.get("changed_records"),
     "frozen_selection_logic": report.get("frozen_selection_logic"),
     "row_count": report.get("row_count"),
     "unique_events": report.get("unique_events"),
@@ -127,8 +127,8 @@ st.json({
 st.markdown(f"### {t('dashboard_payload')}")
 st.json(build_dashboard_update_payload(report))
 
-st.markdown(f"### {t('proposed_updates')}")
-st.dataframe(pd.DataFrame(report.get("proposed_updates") or []), use_container_width=True, hide_index=True)
+st.markdown(f"### {t('proposed_exports')}")
+st.dataframe(pd.DataFrame(report.get("proposed_exports") or []), use_container_width=True, hide_index=True)
 
 st.download_button(
     t("download_json"),
