@@ -26,6 +26,8 @@ def _row(**updates):
         "market_type": "h2h",
         "sportsbook": "Caliente",
         "bookmaker": "Caliente",
+        "decimal_odds": 2.1,
+        "model_probability": 0.58,
         "advisory_playable_status": "PLAYABLE_PLUS_EV",
         "advisory_calibrated_playable_status": "PLAYABLE_PLUS_EV",
         "advisory_explanation_status": "EXPLAINED_PLAYABLE_PLUS_EV",
