@@ -179,6 +179,8 @@ def candidate_review_diagnostics(row: Mapping[str, Any]) -> dict[str, Any]:
         eligible = False
         next_action = "Run the advisory value and explanation pipeline."
 
+    existing_status = _text(row.get("advisory_candidate_review_status")) or NOT_SELECTED
+    existing_created_at = _text(row.get("advisory_candidate_review_created_at"))
     return {
         "advisory_manual_review_eligible": eligible,
         "advisory_manual_review_status": review_status,
@@ -186,8 +188,8 @@ def candidate_review_diagnostics(row: Mapping[str, Any]) -> dict[str, Any]:
         "advisory_manual_review_blockers": _csv(blockers),
         "advisory_manual_review_warnings": _pipe(warnings),
         "advisory_manual_review_next_action": next_action,
-        "advisory_candidate_review_status": NOT_SELECTED,
-        "advisory_candidate_review_created_at": "",
+        "advisory_candidate_review_status": existing_status,
+        "advisory_candidate_review_created_at": existing_created_at,
         "advisory_candidate_review_source": "phase_3e6_manual_candidate_review_gate",
         "advisory_candidate_review_safety_notes": "Local review candidate only; no official lock, no proof publish, no ledger write, no stake or bankroll action.",
         "advisory_candidate_review_row_id": candidate_row_id(row),
