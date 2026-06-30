@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from autonomous_betting_agent.commercial_platform_tools import normalize_workspace_id
+from autonomous_betting_agent.commercial_platform_tools import load_persistent_ledger, normalize_workspace_id
 from autonomous_betting_agent.row_normalizer import safe_text
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 from autonomous_betting_agent.subscriber_ledger import (
@@ -27,63 +27,47 @@ REPORT_KEY = "subscriber_ledger_report"
 TEXT = {
     "en": {
         "title": "Subscriber Ledger",
-        "caption": "Track subscriber-specific results, ROI, win rate, unique events, sportsbook performance, and mistake patterns.",
+        "caption": "Builds subscriber-level result reports from the current proof ledger.",
+        "help": "Usually no CSV paste is needed. This page will use the current saved proof ledger for the selected workspace. Manual CSV input is under Advanced.",
         "workspace_id": "Workspace ID",
-        "ledger_csv": "Subscriber ledger CSV",
+        "source": "Automatic source check",
         "run": "Build ledger reports",
-        "summary": "Ledger summary",
-        "global": "Global summary",
+        "advanced": "Advanced manual input",
+        "ledger_csv": "Manual subscriber ledger CSV",
+        "summary": "Summary",
+        "global": "Global results",
         "subs": "Subscriber summaries",
-        "rows": "Normalized ledger rows",
+        "rows": "Ledger rows",
         "sports": "Sport performance",
-        "markets": "Market-type performance",
+        "markets": "Market performance",
         "books": "Sportsbook performance",
         "patterns": "Mistake patterns",
         "checks": "Checks",
-        "safety": "Safety gates",
-        "download_json": "Download ledger JSON",
-        "download_rows": "Download ledger rows CSV",
-        "download_subs": "Download subscriber summaries CSV",
-        "download_sports": "Download sport performance CSV",
-        "download_markets": "Download market-type performance CSV",
-        "download_books": "Download sportsbook performance CSV",
-        "download_patterns": "Download mistake patterns CSV",
-        "download_checks": "Download checks CSV",
-        "download_manifest": "Download manifest JSON",
-        "preview_only": "PREVIEW ONLY",
-        "no_files": "NO FILES WRITTEN",
-        "no_live": "NO LIVE CHANGES",
+        "safety": "Safety details",
         "no_report": "Build ledger reports to view outputs.",
+        "no_source": "No saved ledger rows found for this workspace. Lock picks in Odds Lock Pro first.",
     },
     "es": {
-        "title": "Subscriber Ledger",
-        "caption": "Rastrea resultados por subscriber, ROI, win rate, eventos únicos, sportsbook performance y mistake patterns.",
+        "title": "Ledger de Subscribers",
+        "caption": "Construye reportes por subscriber desde el ledger de prueba actual.",
+        "help": "Normalmente no necesitas pegar CSV. Esta página usa el proof ledger guardado del workspace. Entrada manual está en Avanzado.",
         "workspace_id": "ID de workspace",
-        "ledger_csv": "CSV subscriber ledger",
-        "run": "Construir ledger reports",
-        "summary": "Resumen ledger",
-        "global": "Resumen global",
+        "source": "Revisión de fuente automática",
+        "run": "Construir reportes ledger",
+        "advanced": "Entrada manual avanzada",
+        "ledger_csv": "CSV manual de subscriber ledger",
+        "summary": "Resumen",
+        "global": "Resultados globales",
         "subs": "Resumen por subscriber",
-        "rows": "Filas ledger normalizadas",
+        "rows": "Filas ledger",
         "sports": "Performance por deporte",
-        "markets": "Performance por market type",
+        "markets": "Performance por mercado",
         "books": "Performance por sportsbook",
-        "patterns": "Mistake patterns",
+        "patterns": "Patrones de errores",
         "checks": "Checks",
-        "safety": "Safety gates",
-        "download_json": "Descargar JSON ledger",
-        "download_rows": "Descargar CSV ledger rows",
-        "download_subs": "Descargar CSV subscriber summaries",
-        "download_sports": "Descargar CSV sport performance",
-        "download_markets": "Descargar CSV market-type performance",
-        "download_books": "Descargar CSV sportsbook performance",
-        "download_patterns": "Descargar CSV mistake patterns",
-        "download_checks": "Descargar CSV checks",
-        "download_manifest": "Descargar JSON manifest",
-        "preview_only": "PREVIEW ONLY",
-        "no_files": "NO FILES WRITTEN",
-        "no_live": "NO LIVE CHANGES",
-        "no_report": "Construye ledger reports para ver outputs.",
+        "safety": "Detalles de seguridad",
+        "no_report": "Construye reportes ledger para ver outputs.",
+        "no_source": "No hay filas guardadas para este workspace. Bloquea picks en Odds Lock Pro primero.",
     },
 }
 
@@ -96,21 +80,42 @@ def _fragment(value: str | None) -> str:
     return safe_text(value).split("_")[-1][:12] or "ledger"
 
 
+def _auto_ledger_csv(workspace_id: str) -> tuple[str, int]:
+    try:
+        frame = load_persistent_ledger(workspace_id=workspace_id, active_only=False)
+    except Exception:
+        frame = pd.DataFrame()
+    if frame.empty:
+        return "", 0
+    return frame.to_csv(index=False), int(len(frame))
+
+
 st.title(t("title"))
 st.caption(t("caption"))
-workspace_id = normalize_workspace_id(st.text_input(t("workspace_id"), value=st.session_state.get("aba_test_window_id", "test_01"), key="subscriber_ledger_workspace_id"))
-ledger_csv = st.text_area(t("ledger_csv"), value="", key="subscriber_ledger_csv", height=240)
+st.info(t("help"))
 
-if st.button(t("run"), key="subscriber_ledger_run"):
-    st.session_state[REPORT_KEY] = build_subscriber_ledger_reports_from_text(workspace_id, ledger_csv)
+workspace_id = normalize_workspace_id(st.text_input(t("workspace_id"), value=st.session_state.get("aba_test_window_id", "test_01"), key="subscriber_ledger_workspace_id"))
+auto_csv, auto_rows = _auto_ledger_csv(workspace_id)
+
+st.subheader(t("source"))
+cols = st.columns(2)
+cols[0].metric("saved ledger rows", auto_rows)
+cols[1].metric("workspace", workspace_id)
+if auto_rows <= 0:
+    st.warning(t("no_source"))
+
+with st.expander(t("advanced"), expanded=False):
+    ledger_csv = st.text_area(t("ledger_csv"), value=auto_csv, key="subscriber_ledger_csv", height=220)
+
+if st.button(t("run"), key="subscriber_ledger_run", type="primary"):
+    st.session_state[REPORT_KEY] = build_subscriber_ledger_reports_from_text(workspace_id, ledger_csv or auto_csv)
 
 report = st.session_state.get(REPORT_KEY, {})
 if not report:
     st.info(t("no_report"))
     st.stop()
 
-st.write({t("preview_only"): bool(report.get("preview_only")), t("no_files"): int(report.get("files_written") or 0) == 0, t("no_live"): int(report.get("live_changes") or 0) == 0})
-metrics = st.columns(8)
+metrics = st.columns(7)
 metrics[0].metric("status", report.get("ledger_status", ""))
 metrics[1].metric("rows", report.get("ledger_row_count", 0))
 metrics[2].metric("subscribers", report.get("subscriber_count", 0))
@@ -118,61 +123,45 @@ metrics[3].metric("unique events", report.get("unique_event_count", 0))
 metrics[4].metric("ROI", report.get("global_summary", {}).get("roi"))
 metrics[5].metric("win rate", report.get("global_summary", {}).get("win_rate_ex_push_cancel"))
 metrics[6].metric("fail", report.get("fail_count", 0))
-metrics[7].metric("hash", _fragment(report.get("ledger_hash")))
 
-st.markdown(f"### {t('summary')}")
-st.json({
-    "schema_version": report.get("schema_version"),
-    "workspace_id": report.get("workspace_id"),
-    "ledger_run_id": report.get("ledger_run_id"),
-    "ledger_hash": report.get("ledger_hash"),
-    "mode": report.get("mode"),
-    "ledger_status": report.get("ledger_status"),
-    "ledger_row_count": report.get("ledger_row_count"),
-    "subscriber_count": report.get("subscriber_count"),
-    "unique_event_count": report.get("unique_event_count"),
-    "pass_count": report.get("pass_count"),
-    "warn_count": report.get("warn_count"),
-    "fail_count": report.get("fail_count"),
-    "preview_only": report.get("preview_only"),
-    "files_written": report.get("files_written"),
-    "live_changes": report.get("live_changes"),
-})
+tabs = st.tabs([t("summary"), t("global"), t("subs"), t("rows"), t("sports"), t("markets"), t("books"), t("patterns"), t("checks")])
+with tabs[0]:
+    st.json({
+        "workspace_id": report.get("workspace_id"),
+        "ledger_status": report.get("ledger_status"),
+        "ledger_row_count": report.get("ledger_row_count"),
+        "subscriber_count": report.get("subscriber_count"),
+        "unique_event_count": report.get("unique_event_count"),
+        "preview_only": report.get("preview_only"),
+        "live_changes": report.get("live_changes"),
+    })
+with tabs[1]:
+    st.json(report.get("global_summary") or {})
+with tabs[2]:
+    st.dataframe(pd.DataFrame(report.get("subscriber_summaries") or []), use_container_width=True, hide_index=True)
+with tabs[3]:
+    st.dataframe(pd.DataFrame(report.get("ledger_rows") or []), use_container_width=True, hide_index=True)
+with tabs[4]:
+    st.dataframe(pd.DataFrame(report.get("sport_performance") or []), use_container_width=True, hide_index=True)
+with tabs[5]:
+    st.dataframe(pd.DataFrame(report.get("market_type_performance") or []), use_container_width=True, hide_index=True)
+with tabs[6]:
+    st.dataframe(pd.DataFrame(report.get("sportsbook_performance") or []), use_container_width=True, hide_index=True)
+with tabs[7]:
+    st.dataframe(pd.DataFrame(report.get("mistake_patterns") or []), use_container_width=True, hide_index=True)
+with tabs[8]:
+    st.dataframe(pd.DataFrame(report.get("ledger_checks") or []), use_container_width=True, hide_index=True)
 
-st.markdown(f"### {t('global')}")
-st.json(report.get("global_summary") or {})
-
-st.markdown(f"### {t('subs')}")
-st.dataframe(pd.DataFrame(report.get("subscriber_summaries") or []), use_container_width=True, hide_index=True)
-
-st.markdown(f"### {t('rows')}")
-st.dataframe(pd.DataFrame(report.get("ledger_rows") or []), use_container_width=True, hide_index=True)
-
-st.markdown(f"### {t('sports')}")
-st.dataframe(pd.DataFrame(report.get("sport_performance") or []), use_container_width=True, hide_index=True)
-
-st.markdown(f"### {t('markets')}")
-st.dataframe(pd.DataFrame(report.get("market_type_performance") or []), use_container_width=True, hide_index=True)
-
-st.markdown(f"### {t('books')}")
-st.dataframe(pd.DataFrame(report.get("sportsbook_performance") or []), use_container_width=True, hide_index=True)
-
-st.markdown(f"### {t('patterns')}")
-st.dataframe(pd.DataFrame(report.get("mistake_patterns") or []), use_container_width=True, hide_index=True)
-
-st.markdown(f"### {t('checks')}")
-st.dataframe(pd.DataFrame(report.get("ledger_checks") or []), use_container_width=True, hide_index=True)
-
-st.markdown(f"### {t('safety')}")
-st.json(report.get("safety_gates") or {})
+with st.expander(t("safety"), expanded=False):
+    st.json(report.get("safety_gates") or {})
 
 suffix = f"{safe_text(report.get('workspace_id'))}_{_fragment(report.get('ledger_hash'))}"
-st.download_button(t("download_json"), export_subscriber_ledger_json(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_{suffix}.json", mime="application/json", key=f"subscriber_ledger_json_{safe_text(report.get('ledger_hash'))}")
-st.download_button(t("download_rows"), export_ledger_rows_csv(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_rows_{suffix}.csv", mime="text/csv", key=f"subscriber_ledger_rows_{safe_text(report.get('ledger_hash'))}")
-st.download_button(t("download_subs"), export_subscriber_summaries_csv(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_summaries_{suffix}.csv", mime="text/csv", key=f"subscriber_ledger_subs_{safe_text(report.get('ledger_hash'))}")
-st.download_button(t("download_sports"), export_sport_performance_csv(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_sports_{suffix}.csv", mime="text/csv", key=f"subscriber_ledger_sports_{safe_text(report.get('ledger_hash'))}")
-st.download_button(t("download_markets"), export_market_type_performance_csv(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_markets_{suffix}.csv", mime="text/csv", key=f"subscriber_ledger_markets_{safe_text(report.get('ledger_hash'))}")
-st.download_button(t("download_books"), export_sportsbook_performance_csv(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_books_{suffix}.csv", mime="text/csv", key=f"subscriber_ledger_books_{safe_text(report.get('ledger_hash'))}")
-st.download_button(t("download_patterns"), export_mistake_patterns_csv(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_patterns_{suffix}.csv", mime="text/csv", key=f"subscriber_ledger_patterns_{safe_text(report.get('ledger_hash'))}")
-st.download_button(t("download_checks"), export_ledger_checks_csv(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_checks_{suffix}.csv", mime="text/csv", key=f"subscriber_ledger_checks_{safe_text(report.get('ledger_hash'))}")
-st.download_button(t("download_manifest"), export_ledger_manifest_json(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_manifest_{suffix}.json", mime="application/json", key=f"subscriber_ledger_manifest_{safe_text(report.get('ledger_hash'))}")
+st.download_button("Download ledger JSON", export_subscriber_ledger_json(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_{suffix}.json", mime="application/json", key=f"subscriber_ledger_json_{safe_text(report.get('ledger_hash'))}")
+st.download_button("Download ledger rows CSV", export_ledger_rows_csv(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_rows_{suffix}.csv", mime="text/csv", key=f"subscriber_ledger_rows_{safe_text(report.get('ledger_hash'))}")
+st.download_button("Download summaries CSV", export_subscriber_summaries_csv(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_summaries_{suffix}.csv", mime="text/csv", key=f"subscriber_ledger_subs_{safe_text(report.get('ledger_hash'))}")
+st.download_button("Download sport performance CSV", export_sport_performance_csv(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_sports_{suffix}.csv", mime="text/csv", key=f"subscriber_ledger_sports_{safe_text(report.get('ledger_hash'))}")
+st.download_button("Download market performance CSV", export_market_type_performance_csv(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_markets_{suffix}.csv", mime="text/csv", key=f"subscriber_ledger_markets_{safe_text(report.get('ledger_hash'))}")
+st.download_button("Download sportsbook performance CSV", export_sportsbook_performance_csv(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_books_{suffix}.csv", mime="text/csv", key=f"subscriber_ledger_books_{safe_text(report.get('ledger_hash'))}")
+st.download_button("Download mistake patterns CSV", export_mistake_patterns_csv(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_patterns_{suffix}.csv", mime="text/csv", key=f"subscriber_ledger_patterns_{safe_text(report.get('ledger_hash'))}")
+st.download_button("Download checks CSV", export_ledger_checks_csv(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_checks_{suffix}.csv", mime="text/csv", key=f"subscriber_ledger_checks_{safe_text(report.get('ledger_hash'))}")
+st.download_button("Download manifest JSON", export_ledger_manifest_json(report).encode("utf-8"), file_name=f"aba_subscriber_ledger_manifest_{suffix}.json", mime="application/json", key=f"subscriber_ledger_manifest_{safe_text(report.get('ledger_hash'))}")
