@@ -5,6 +5,11 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from autonomous_betting_agent.api_result_update_tools import (
+    auto_full_update_rows,
+    quality_checks_frame,
+    report_quality_checks,
+)
 from autonomous_betting_agent.commercial_platform_tools import (
     filter_locked_proof_rows,
     load_persistent_ledger,
@@ -147,6 +152,13 @@ def run_storage_tests(cleaned: pd.DataFrame, workspace_id: str) -> pd.DataFrame:
     return pd.DataFrame(results)
 
 
+def _secret_text(name: str) -> str:
+    try:
+        return str(st.secrets.get(name, '') or '')
+    except Exception:
+        return ''
+
+
 st.title(t('title'))
 st.caption(t('caption'))
 st.warning(t('warning'))
@@ -161,6 +173,7 @@ proof = filter_locked_proof_rows(raw)
 cleaned = supported_only(proof)
 rejected = unsupported_only(proof)
 summary = market_support_summary(proof)
+quality = report_quality_checks(cleaned)
 unique_loaded = len(proof)
 unique_github = _unique_github_count(workspace_id)
 physical_loaded = int(snapshot['loaded_rows'].sum()) if not snapshot.empty else 0
@@ -175,18 +188,41 @@ cols[3].metric(t('github'), unique_github)
 cols[4].metric(t('proof'), len(proof))
 cols[5].metric(t('unsupported'), summary['unsupported'])
 
-cols2 = st.columns(4)
+cols2 = st.columns(6)
 cols2[0].metric(t('supported'), len(cleaned))
-cols2[1].metric('Unsupported tennis', summary['unsupported_tennis'])
-cols2[2].metric(t('physical'), physical_loaded)
-cols2[3].metric('Physical GitHub copies', physical_github)
+cols2[1].metric('Unique events', quality['unique_events'])
+cols2[2].metric('Pick rows', quality['pick_rows'])
+cols2[3].metric('Duplicate pick rows', quality['duplicate_pick_rows'])
+cols2[4].metric(t('physical'), physical_loaded)
+cols2[5].metric('Physical GitHub copies', physical_github)
 
-button_cols = st.columns(2)
-if button_cols[0].button(t('consolidate'), type='primary', use_container_width=True, disabled=cleaned.empty):
+st.subheader('API result update + report quality')
+st.caption('Updates grading/CLV/proof reporting only. Pick-selection thresholds and locked pick inputs are protected.')
+api_cols = st.columns(3)
+api_cols[0].metric('Resolved pick rows', quality['resolved_pick_rows'])
+api_cols[1].metric('Pending pick rows', quality['pending_pick_rows'])
+api_cols[2].metric('Unique-event reporting', 'on' if quality['unique_event_reporting_enabled'] else 'off')
+with st.expander('Report-quality checks', expanded=True):
+    st.dataframe(quality_checks_frame(cleaned), use_container_width=True, hide_index=True)
+
+button_cols = st.columns(3)
+if button_cols[0].button('Run auto full update flow', type='primary', use_container_width=True, disabled=cleaned.empty):
+    updated, api_report = auto_full_update_rows(cleaned, odds_api_key=_secret_text('ODDS_API_KEY'), days_from=3)
+    if not updated.empty and api_report.get('protected_fields_ok'):
+        result = save_cleaned(updated, workspace_id)
+        cleaned = updated
+        st.success(f"API-safe update complete. Rows saved: {result['saved_rows']} / protected fields OK: {api_report['protected_fields_ok']}")
+    elif not api_report.get('protected_fields_ok'):
+        st.error('API update blocked because a protected lock/proof/pick field changed.')
+    else:
+        st.warning('API update found no rows to update.')
+    st.json(api_report)
+
+if button_cols[1].button(t('consolidate'), use_container_width=True, disabled=cleaned.empty):
     result = save_cleaned(cleaned, workspace_id)
     st.success(f"{t('cleaned')} Rows: {result['saved_rows']} / keys: {result['keys']}")
 
-if button_cols[1].button(t('test'), use_container_width=True, disabled=cleaned.empty):
+if button_cols[2].button(t('test'), use_container_width=True, disabled=cleaned.empty):
     test_frame = run_storage_tests(cleaned, workspace_id)
     st.subheader(t('tests'))
     st.dataframe(test_frame, use_container_width=True, hide_index=True)
@@ -201,7 +237,7 @@ else:
     st.download_button(t('download'), cleaned.to_csv(index=False), file_name=f'clean_official_proof_{workspace_id}.csv', mime='text/csv')
 
 with st.expander('Cleaned official proof rows', expanded=True):
-    show_cols = [col for col in ['proof_id', 'event', 'sport', 'market_type', 'prediction', 'decimal_price', 'model_probability', 'result_status', 'profit_units', 'market_supported_for_proof', 'unsupported_market_reason', 'source_store_key'] if col in cleaned.columns]
+    show_cols = [col for col in ['proof_id', 'event', 'sport', 'market_type', 'prediction', 'decimal_price', 'closing_decimal_price', 'clv_percent', 'beat_close', 'model_probability', 'result_status', 'winner', 'final_score', 'api_grade_status', 'profit_units', 'market_supported_for_proof', 'unsupported_market_reason', 'source_store_key'] if col in cleaned.columns]
     st.dataframe(cleaned[show_cols] if show_cols else cleaned, use_container_width=True, hide_index=True)
 
 with st.expander('Rejected unsupported rows', expanded=False):
