@@ -13,12 +13,6 @@ _ORIGINAL_RELOAD = importlib.reload
 
 
 def get_secret(*names: str) -> str:
-    """Read a secret from Streamlit secrets first, then environment variables.
-
-    This file intentionally does not monkey-patch Streamlit widgets. Uploaders,
-    buttons, forms, text inputs, radios, and selectboxes must stay native so the
-    app remains stable on mobile and desktop.
-    """
     try:
         import streamlit as st
     except Exception:
@@ -40,14 +34,93 @@ def get_secret(*names: str) -> str:
     return ''
 
 
-def _patch_live_enrichment_final_rows() -> None:
-    """Make Report Studio receive final_enriched_picks_df rows, not raw rows.
+def _patch_proof_hold_store() -> None:
+    """For proof ledgers, merge memory/disk/GitHub instead of first stale hit.
 
-    pages/report_studio imports enrich_rows_with_live_api_data by name before it
-    renders the magazine preview. Patching the module here makes that imported
-    function return canonical rows with run ids, hashes, provenance, explicit
-    fallback reasons, and recalculated odds math.
+    The deployed Streamlit process can keep an old 148-row pending list in
+    cache_resource memory. The old load_held_rows returned that memory list before
+    checking disk/GitHub, so a newly graded 145-row refresh could never reach Odds
+    Lock Pro until the process restarted. Proof keys now load all stores and keep
+    resolved win/loss/void rows over pending duplicates.
     """
+    try:
+        from autonomous_betting_agent import pick_hold_store as phs
+        from autonomous_betting_agent.row_normalizer import result_status
+    except Exception:
+        return
+    if getattr(phs, '_aba_proof_hold_merge_v1', False):
+        return
+
+    original_load = phs.load_held_rows
+    original_save = phs.save_held_rows
+
+    def proof_rank(row: dict[str, Any]) -> int:
+        status = result_status(row)
+        if status in {'win', 'loss'}:
+            return 5
+        if status == 'void':
+            return 4
+        if status == 'needs_review':
+            return 3
+        if str(row.get('graded_at_utc') or '').strip():
+            return 2
+        return 1
+
+    def proof_dedupe(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        by_key: dict[tuple[str, ...], dict[str, Any]] = {}
+        order: list[tuple[str, ...]] = []
+        for raw in rows:
+            if not isinstance(raw, dict):
+                continue
+            row = dict(raw)
+            key = phs._row_identity(row)
+            if key not in by_key:
+                by_key[key] = row
+                order.append(key)
+                continue
+            current = by_key[key]
+            if proof_rank(row) >= proof_rank(current):
+                by_key[key] = row
+        return [by_key[key] for key in order]
+
+    def merged_load_held_rows(key: str, workspace_id: Any = 'test_01') -> list[dict[str, Any]]:
+        if key not in phs.HELD_KEYS:
+            return []
+        if key not in phs.PROOF_KEYS:
+            return original_load(key, workspace_id)
+        workspace = phs.normalize_workspace_id(workspace_id)
+        store = phs._memory_store()
+        rows: list[dict[str, Any]] = []
+        for lookup_key, lookup_workspace in phs._candidate_lookups(key, workspace):
+            rows.extend(phs.dedupe_rows(store.get(phs._store_key(lookup_key, lookup_workspace), [])))
+            for path in [phs._path_for(lookup_key, lookup_workspace), phs._backup_path_for(lookup_key, lookup_workspace)]:
+                rows.extend(phs._load_payload(path))
+            try:
+                github_rows, _sha = phs._github_get_payload(lookup_key, lookup_workspace)
+                rows.extend(github_rows)
+            except Exception:
+                pass
+        merged = proof_dedupe(rows)
+        if merged:
+            store[phs._store_key(key, workspace)] = merged
+        return merged
+
+    def merged_save_held_rows(key: str, rows: Any, workspace_id: Any = 'test_01') -> int:
+        if key not in phs.HELD_KEYS:
+            return 0
+        if key not in phs.PROOF_KEYS:
+            return original_save(key, rows, workspace_id)
+        incoming = phs.rows_from_any(rows)
+        existing = merged_load_held_rows(key, workspace_id)
+        merged = proof_dedupe(existing + incoming)
+        return original_save(key, merged, workspace_id)
+
+    phs.load_held_rows = merged_load_held_rows
+    phs.save_held_rows = merged_save_held_rows
+    phs._aba_proof_hold_merge_v1 = True
+
+
+def _patch_live_enrichment_final_rows() -> None:
     try:
         from autonomous_betting_agent import magazine_live_api_enrichment as live
     except Exception:
@@ -69,14 +142,19 @@ def _patch_live_enrichment_final_rows() -> None:
 
 
 def _patch_commercial_pending_proof_mask() -> None:
-    """Keep raw pending rows from qualifying as proof solely by pending status."""
     try:
         import pandas as pd
         from autonomous_betting_agent import commercial_platform_tools as cpt
+        from autonomous_betting_agent import pick_hold_store as phs
     except Exception:
         return
-    if getattr(cpt, "_aba_pending_proof_mask_runtime_v2", False):
+    if getattr(cpt, "_aba_pending_proof_mask_runtime_v3", False):
         return
+
+    # Ensure commercial_platform_tools uses the merged proof-store functions even
+    # if it imported load_held_rows/save_held_rows before the store patch ran.
+    cpt.load_held_rows = phs.load_held_rows
+    cpt.save_held_rows = phs.save_held_rows
 
     def guarded_lock_ready_mask(frame):
         if frame.empty:
@@ -94,7 +172,7 @@ def _patch_commercial_pending_proof_mask() -> None:
         return mask
 
     cpt._lock_ready_mask = guarded_lock_ready_mask
-    cpt._aba_pending_proof_mask_runtime_v2 = True
+    cpt._aba_pending_proof_mask_runtime_v3 = True
 
 
 def _apply_if_target(module: ModuleType | None) -> ModuleType | None:
@@ -134,9 +212,12 @@ def _patched_import(name: str, globals: dict[str, Any] | None = None, locals: di
     imported = _ORIGINAL_IMPORT(name, globals, locals, fromlist, level)
     if name == _TARGET or name.startswith(f"{_TARGET}.") or (name == "autonomous_betting_agent" and "magazine_book_export" in fromlist):
         _apply_if_target(sys.modules.get(_TARGET))
+    if name == "autonomous_betting_agent.pick_hold_store" or (name == "autonomous_betting_agent" and "pick_hold_store" in fromlist):
+        _patch_proof_hold_store()
     if name == "autonomous_betting_agent.magazine_live_api_enrichment" or (name == "autonomous_betting_agent" and "magazine_live_api_enrichment" in fromlist):
         _patch_live_enrichment_final_rows()
     if name == "autonomous_betting_agent.commercial_platform_tools" or (name == "autonomous_betting_agent" and "commercial_platform_tools" in fromlist):
+        _patch_proof_hold_store()
         _patch_commercial_pending_proof_mask()
     return imported
 
@@ -146,9 +227,12 @@ def _patched_reload(module: ModuleType) -> ModuleType:
     name = getattr(reloaded, "__name__", "")
     if name == _TARGET:
         reloaded = _apply_if_target(reloaded) or reloaded
+    if name == "autonomous_betting_agent.pick_hold_store":
+        _patch_proof_hold_store()
     if name == "autonomous_betting_agent.magazine_live_api_enrichment":
         _patch_live_enrichment_final_rows()
     if name == "autonomous_betting_agent.commercial_platform_tools":
+        _patch_proof_hold_store()
         _patch_commercial_pending_proof_mask()
     return reloaded
 
@@ -159,5 +243,6 @@ if getattr(builtins, "_ABA_MAGAZINE_IMPORT_AND_RELOAD_PATCHED", False) is not Tr
     importlib.reload = _patched_reload
     builtins._ABA_MAGAZINE_IMPORT_AND_RELOAD_PATCHED = True
 
+_patch_proof_hold_store()
 _patch_live_enrichment_final_rows()
 _patch_commercial_pending_proof_mask()
