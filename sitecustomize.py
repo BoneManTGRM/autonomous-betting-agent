@@ -41,14 +41,6 @@ def get_secret(*names: str) -> str:
 
 
 def _patch_proof_hold_store() -> None:
-    """For proof ledgers, merge memory/disk/GitHub instead of first stale hit.
-
-    The deployed Streamlit process can keep an old 148-row pending list in
-    cache_resource memory. The old load_held_rows returned that memory list before
-    checking disk/GitHub, so a newly graded 145-row refresh could never reach Odds
-    Lock Pro until the process restarted. Proof keys now load all stores and keep
-    resolved win/loss/void rows over pending duplicates.
-    """
     try:
         from autonomous_betting_agent import pick_hold_store as phs
         from autonomous_betting_agent.row_normalizer import result_status
@@ -56,7 +48,6 @@ def _patch_proof_hold_store() -> None:
         return
     if getattr(phs, '_aba_proof_hold_merge_v1', False):
         return
-
     original_load = phs.load_held_rows
     original_save = phs.save_held_rows
 
@@ -83,9 +74,7 @@ def _patch_proof_hold_store() -> None:
             if key not in by_key:
                 by_key[key] = row
                 order.append(key)
-                continue
-            current = by_key[key]
-            if proof_rank(row) >= proof_rank(current):
+            elif proof_rank(row) >= proof_rank(by_key[key]):
                 by_key[key] = row
         return [by_key[key] for key in order]
 
@@ -118,8 +107,7 @@ def _patch_proof_hold_store() -> None:
             return original_save(key, rows, workspace_id)
         incoming = phs.rows_from_any(rows)
         existing = merged_load_held_rows(key, workspace_id)
-        merged = proof_dedupe(existing + incoming)
-        return original_save(key, merged, workspace_id)
+        return original_save(key, proof_dedupe(existing + incoming), workspace_id)
 
     phs.load_held_rows = merged_load_held_rows
     phs.save_held_rows = merged_save_held_rows
@@ -131,7 +119,7 @@ def _patch_live_enrichment_final_rows() -> None:
         from autonomous_betting_agent import magazine_live_api_enrichment as live
     except Exception:
         return
-    if getattr(live, "_aba_final_enriched_rows_wrapped", False):
+    if getattr(live, '_aba_final_enriched_rows_wrapped', False):
         return
     original = live.enrich_rows_with_live_api_data
 
@@ -139,7 +127,7 @@ def _patch_live_enrichment_final_rows() -> None:
         enriched = original(rows, *args, **kwargs)
         try:
             from autonomous_betting_agent.magazine_pipeline_runtime import build_final_enriched_picks_df
-            return build_final_enriched_picks_df(enriched, force_refresh=True).to_dict("records")
+            return build_final_enriched_picks_df(enriched, force_refresh=True).to_dict('records')
         except Exception:
             return enriched
 
@@ -154,11 +142,8 @@ def _patch_commercial_pending_proof_mask() -> None:
         from autonomous_betting_agent import pick_hold_store as phs
     except Exception:
         return
-    if getattr(cpt, "_aba_pending_proof_mask_runtime_v3", False):
+    if getattr(cpt, '_aba_pending_proof_mask_runtime_v3', False):
         return
-
-    # Ensure commercial_platform_tools uses the merged proof-store functions even
-    # if it imported load_held_rows/save_held_rows before the store patch ran.
     cpt.load_held_rows = phs.load_held_rows
     cpt.save_held_rows = phs.save_held_rows
 
@@ -170,11 +155,9 @@ def _patch_commercial_pending_proof_mask() -> None:
             if field in frame.columns:
                 mask = mask | frame[field].map(cpt._truthy).fillna(False)
         if 'verified_grade' in frame.columns:
-            grade = frame['verified_grade'].map(cpt.safe_text).str.lower()
-            mask = mask | grade.isin(['win', 'loss', 'void', 'push', 'needs_review'])
+            mask = mask | frame['verified_grade'].map(cpt.safe_text).str.lower().isin(['win', 'loss', 'void', 'push', 'needs_review'])
         if 'result_status' in frame.columns:
-            status = frame['result_status'].map(cpt.safe_text).str.lower()
-            mask = mask | status.isin(['win', 'loss', 'void', 'push', 'needs_review'])
+            mask = mask | frame['result_status'].map(cpt.safe_text).str.lower().isin(['win', 'loss', 'void', 'push', 'needs_review'])
         return mask
 
     cpt._lock_ready_mask = guarded_lock_ready_mask
@@ -182,7 +165,7 @@ def _patch_commercial_pending_proof_mask() -> None:
 
 
 def _apply_if_target(module: ModuleType | None) -> ModuleType | None:
-    if module is None or getattr(module, "__name__", "") != _TARGET:
+    if module is None or getattr(module, '__name__', '') != _TARGET:
         return module
     try:
         from autonomous_betting_agent.magazine_api_sources import apply_magazine_api_patch
@@ -193,8 +176,8 @@ def _apply_if_target(module: ModuleType | None) -> ModuleType | None:
         from autonomous_betting_agent.magazine_live_api_enrichment import install as install_live_api_enrichment
         from autonomous_betting_agent.magazine_parlay_footer_override import install as install_parlay_footer_override
         from autonomous_betting_agent.magazine_sale_ready_patch import apply_magazine_sale_ready_patch
+        from autonomous_betting_agent.magazine_truth_status_patch import install as install_truth_status_patch
         from autonomous_betting_agent.spanish_magazine_fixes import install as install_spanish_magazine_fixes
-
         module = apply_magazine_api_patch(module)
         module = install_live_api_enrichment(module)
         module = apply_magazine_auto_sizer(module)
@@ -205,9 +188,11 @@ def _apply_if_target(module: ModuleType | None) -> ModuleType | None:
             install_final_enriched_pipeline()
         except Exception:
             pass
+        module = install_truth_status_patch(module) or module
         module = install_footer_cleanup(module)
         module = install_combo_section(module)
         module = install_parlay_footer_override(module)
+        module = install_truth_status_patch(module) or module
         install_spanish_magazine_fixes()
         return module
     except Exception:
@@ -216,13 +201,13 @@ def _apply_if_target(module: ModuleType | None) -> ModuleType | None:
 
 def _patched_import(name: str, globals: dict[str, Any] | None = None, locals: dict[str, Any] | None = None, fromlist: tuple[str, ...] = (), level: int = 0) -> Any:
     imported = _ORIGINAL_IMPORT(name, globals, locals, fromlist, level)
-    if name == _TARGET or name.startswith(f"{_TARGET}.") or (name == "autonomous_betting_agent" and "magazine_book_export" in fromlist):
+    if name == _TARGET or name.startswith(f'{_TARGET}.') or (name == 'autonomous_betting_agent' and 'magazine_book_export' in fromlist):
         _apply_if_target(sys.modules.get(_TARGET))
-    if name == "autonomous_betting_agent.pick_hold_store" or (name == "autonomous_betting_agent" and "pick_hold_store" in fromlist):
+    if name == 'autonomous_betting_agent.pick_hold_store' or (name == 'autonomous_betting_agent' and 'pick_hold_store' in fromlist):
         _patch_proof_hold_store()
-    if name == "autonomous_betting_agent.magazine_live_api_enrichment" or (name == "autonomous_betting_agent" and "magazine_live_api_enrichment" in fromlist):
+    if name == 'autonomous_betting_agent.magazine_live_api_enrichment' or (name == 'autonomous_betting_agent' and 'magazine_live_api_enrichment' in fromlist):
         _patch_live_enrichment_final_rows()
-    if name == "autonomous_betting_agent.commercial_platform_tools" or (name == "autonomous_betting_agent" and "commercial_platform_tools" in fromlist):
+    if name == 'autonomous_betting_agent.commercial_platform_tools' or (name == 'autonomous_betting_agent' and 'commercial_platform_tools' in fromlist):
         _patch_proof_hold_store()
         _patch_commercial_pending_proof_mask()
     return imported
@@ -230,21 +215,21 @@ def _patched_import(name: str, globals: dict[str, Any] | None = None, locals: di
 
 def _patched_reload(module: ModuleType) -> ModuleType:
     reloaded = _ORIGINAL_RELOAD(module)
-    name = getattr(reloaded, "__name__", "")
+    name = getattr(reloaded, '__name__', '')
     if name == _TARGET:
         reloaded = _apply_if_target(reloaded) or reloaded
-    if name == "autonomous_betting_agent.pick_hold_store":
+    if name == 'autonomous_betting_agent.pick_hold_store':
         _patch_proof_hold_store()
-    if name == "autonomous_betting_agent.magazine_live_api_enrichment":
+    if name == 'autonomous_betting_agent.magazine_live_api_enrichment':
         _patch_live_enrichment_final_rows()
-    if name == "autonomous_betting_agent.commercial_platform_tools":
+    if name == 'autonomous_betting_agent.commercial_platform_tools':
         _patch_proof_hold_store()
         _patch_commercial_pending_proof_mask()
     return reloaded
 
 
 builtins.get_secret = get_secret
-if getattr(builtins, "_ABA_MAGAZINE_IMPORT_AND_RELOAD_PATCHED", False) is not True:
+if getattr(builtins, '_ABA_MAGAZINE_IMPORT_AND_RELOAD_PATCHED', False) is not True:
     builtins.__import__ = _patched_import
     importlib.reload = _patched_reload
     builtins._ABA_MAGAZINE_IMPORT_AND_RELOAD_PATCHED = True
@@ -252,3 +237,4 @@ if getattr(builtins, "_ABA_MAGAZINE_IMPORT_AND_RELOAD_PATCHED", False) is not Tr
 _patch_proof_hold_store()
 _patch_live_enrichment_final_rows()
 _patch_commercial_pending_proof_mask()
+_apply_if_target(sys.modules.get(_TARGET))
