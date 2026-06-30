@@ -3,14 +3,14 @@ from __future__ import annotations
 import builtins
 import os
 
+# This file intentionally does not monkey-patch Streamlit widgets.
+# Keep it lightweight: Python imports sitecustomize before CI compile/import
+# checks, and the app-specific runtime hooks are loaded from usercustomize
+# outside CI.
+
 
 def get_secret(*names: str) -> str:
-    """Read secrets without exposing key values.
-
-    Keep this module intentionally lightweight. Python imports sitecustomize before
-    CI compile/import checks, so runtime Streamlit monkey patches must not run here.
-    App-specific patches are loaded from usercustomize outside CI.
-    """
+    """Read secrets without exposing key values."""
     try:
         import streamlit as st
     except Exception:
