@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from .ledger_types import classify_ledger_type
+from .ledger_types import classify_ledger_type, event_start_value
 
 DEFAULT_DB_PATH = Path("data/aba_signal_pro.sqlite")
 
@@ -26,15 +26,37 @@ def _json(row: Mapping[str, Any]) -> str:
     return json.dumps(dict(row), sort_keys=True, default=str)
 
 
+def _first(row: Mapping[str, Any], *names: str) -> str:
+    for name in names:
+        value = str(row.get(name) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _grade_value(row: Mapping[str, Any]) -> str:
+    return _first(
+        row,
+        "grade",
+        "result_status",
+        "verified_grade",
+        "verified_result",
+        "final_grade",
+        "proof_grade",
+        "result",
+        "outcome",
+    )
+
+
 def _proof_key(row: Mapping[str, Any]) -> str:
     proof_id = str(row.get("proof_id") or "").strip()
     if proof_id:
         return proof_id
     parts = [
-        str(row.get("event_name") or row.get("event") or row.get("matchup") or "").strip(),
-        str(row.get("prediction") or row.get("pick") or row.get("selection") or "").strip(),
-        str(row.get("market") or row.get("market_type") or "").strip(),
-        str(row.get("event_start_time") or row.get("commence_time") or "").strip(),
+        _first(row, "event_name", "event", "matchup"),
+        _first(row, "prediction", "pick", "selection"),
+        _first(row, "market", "market_type"),
+        event_start_value(row),
     ]
     return "|".join(parts)
 
@@ -91,6 +113,13 @@ class SQLiteStore:
         payload = dict(row)
         resolved_ledger = ledger_type or classify_ledger_type(payload)
         payload["ledger_type"] = resolved_ledger
+        if event_start_value(payload) and not payload.get("event_start_time"):
+            payload["event_start_time"] = event_start_value(payload)
+        grade = _grade_value(payload)
+        if grade and not payload.get("grade"):
+            payload["grade"] = grade
+        if grade and not payload.get("result_status"):
+            payload["result_status"] = grade
         proof_key = _proof_key(payload)
         now = _utc_now()
         with self.connect() as conn:
@@ -120,12 +149,12 @@ class SQLiteStore:
                     proof_key,
                     payload.get("proof_id"),
                     resolved_ledger,
-                    payload.get("event_name") or payload.get("event") or payload.get("matchup"),
-                    payload.get("prediction") or payload.get("pick") or payload.get("selection"),
-                    payload.get("market") or payload.get("market_type"),
-                    payload.get("event_start_time") or payload.get("commence_time"),
+                    _first(payload, "event_name", "event", "matchup"),
+                    _first(payload, "prediction", "pick", "selection"),
+                    _first(payload, "market", "market_type"),
+                    event_start_value(payload),
                     payload.get("locked_at_utc"),
-                    payload.get("grade") or payload.get("result"),
+                    grade,
                     payload.get("proof_hash"),
                     _json(payload),
                     created_at,
@@ -151,6 +180,10 @@ class SQLiteStore:
             for item in conn.execute(sql, params).fetchall():
                 row = json.loads(item["row_json"])
                 row.setdefault("ledger_type", item["ledger_type"])
+                if event_start_value(row) and not row.get("event_start_time"):
+                    row["event_start_time"] = event_start_value(row)
+                if _grade_value(row) and not row.get("result_status"):
+                    row["result_status"] = _grade_value(row)
                 out.append(row)
             return out
 
@@ -186,6 +219,7 @@ class SQLiteStore:
                 {
                     "grade": grade,
                     "result": grade,
+                    "result_status": grade,
                     "result_source_name": source_name,
                     "result_source_url": source_url,
                     "grade_confidence": confidence,
