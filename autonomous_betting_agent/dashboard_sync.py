@@ -6,9 +6,16 @@ import pandas as pd
 
 from .commercial_platform_tools import filter_locked_proof_rows, load_persistent_ledger, merge_ledgers, save_persistent_ledger
 from .pick_hold_store import save_held_rows
-from .row_normalizer import safe_text
+from .row_normalizer import result_status, safe_text
 
 SESSION_LEDGER_KEYS = ('odds_lock_pro_locked_rows', 'public_proof_dashboard_refresh_rows')
+RESOLVED = {'win', 'loss', 'void'}
+
+
+def _resolved_count(frame: pd.DataFrame) -> int:
+    if frame is None or frame.empty:
+        return 0
+    return int(sum(result_status(row) in RESOLVED for row in frame.to_dict(orient='records')))
 
 
 def _active_label(frame: pd.DataFrame) -> str:
@@ -39,22 +46,30 @@ def _drop_same_active_list(history: pd.DataFrame, active: pd.DataFrame) -> pd.Da
     return history
 
 
+def _write_session_rows(frame: pd.DataFrame, workspace_id: Any = '') -> None:
+    rows = filter_locked_proof_rows(frame).to_dict(orient='records')
+    for key in SESSION_LEDGER_KEYS:
+        save_held_rows(key, rows, workspace_id)
+    try:
+        import streamlit as st
+        for key in SESSION_LEDGER_KEYS:
+            st.session_state[key] = rows
+    except Exception:
+        pass
+
+
 def sync_dashboard_state(frame: pd.DataFrame | list[dict[str, Any]], workspace_id: Any = '') -> pd.DataFrame:
     active = filter_locked_proof_rows(frame)
     if active.empty:
         return pd.DataFrame()
     history = load_persistent_ledger(workspace_id=workspace_id, active_only=False)
-    history = _drop_same_active_list(history, active)
-    combined = merge_ledgers(history, active, active_only=False)
+    history_for_merge = _drop_same_active_list(history, active)
+    combined = merge_ledgers(history_for_merge, active, active_only=False)
     saved_all = save_persistent_ledger(combined, workspace_id=workspace_id)
-    active_rows = active.to_dict(orient='records')
-    # Session/dashboard keys should receive only the active list; persistent storage keeps all lists for learning.
-    for key in SESSION_LEDGER_KEYS:
-        save_held_rows(key, active_rows, workspace_id)
-    try:
-        import streamlit as st
-        for key in SESSION_LEDGER_KEYS:
-            st.session_state[key] = active_rows
-    except Exception:
-        pass
-    return active
+    # If the incoming source is raw/ungraded and saved history has resolved proof,
+    # publish the protected saved ledger to both dashboard stores instead.
+    dashboard_frame = active
+    if _resolved_count(active) == 0 and _resolved_count(saved_all) > 0:
+        dashboard_frame = saved_all
+    _write_session_rows(dashboard_frame, workspace_id)
+    return filter_locked_proof_rows(dashboard_frame)
