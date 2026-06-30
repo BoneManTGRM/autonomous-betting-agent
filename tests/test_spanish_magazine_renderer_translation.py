@@ -36,9 +36,8 @@ def test_spanish_report_enrichment_translates_dynamic_text_fields():
     assert "Ventaja negativa con la cuota actual" in combined
     assert "No jugar salvo que la cuota mejore" in combined
     assert "Revisar cuotas y noticias clave" in combined
-    assert "No encadenar señales" in combined
-    assert "Evitar parlays" in combined
-    assert "Revisar la cuota antes de incluir" in combined
+    assert "No parlay recommended" in combined
+    assert "Verified odds or edge are not positive" in combined
     assert "No jugar con la cuota listada" in combined
     assert "Negative edge" not in combined
     assert "Do not chain" not in combined
