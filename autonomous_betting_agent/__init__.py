@@ -53,11 +53,7 @@ class AutonomousBettingAgent:
         home_probability = min(0.99, max(0.01, home_probability))
         away_probability = 1.0 - home_probability
         favored_side = event.home.name if home_probability >= away_probability else event.away.name
-        return AgentAnalysisResult(
-            home_probability=round(home_probability, 6),
-            away_probability=round(away_probability, 6),
-            favored_side=favored_side,
-        )
+        return AgentAnalysisResult(round(home_probability, 6), round(away_probability, 6), favored_side)
 
     @staticmethod
     def _team_score(team: TeamSnapshot) -> float:
@@ -92,10 +88,7 @@ def _install_price_normalizer() -> None:
                 avg = float(outcome.average_price)
             except (TypeError, ValueError):
                 avg = None
-            if avg is not None and avg > 1.0:
-                rows.append(replace(outcome, best_price=avg, best_bookmaker='consensus_average'))
-            else:
-                rows.append(outcome)
+            rows.append(replace(outcome, best_price=avg, best_bookmaker='consensus_average') if avg is not None and avg > 1.0 else outcome)
         return replace(summary, outcomes=rows)
 
     live_odds.summarize_event = normalized_summary
@@ -135,48 +128,22 @@ def _install_mexico_spanish_terms() -> None:
         return
     try:
         rpl.COUNTRY_ES.update({
-            'qatar': 'Qatar',
-            'bosnia & herzegovina': 'Bosnia y Herzegovina',
-            'bosnia and herzegovina': 'Bosnia y Herzegovina',
-            'bosnia-herzegovina': 'Bosnia y Herzegovina',
-            'netherlands': 'Países Bajos',
-            'ivory coast': 'Costa de Marfil',
-            'iraq': 'Irak',
-            'france': 'Francia',
-            'germany': 'Alemania',
-            'tunisia': 'Túnez',
+            'qatar': 'Qatar', 'bosnia & herzegovina': 'Bosnia y Herzegovina',
+            'bosnia and herzegovina': 'Bosnia y Herzegovina', 'bosnia-herzegovina': 'Bosnia y Herzegovina',
+            'netherlands': 'Países Bajos', 'ivory coast': 'Costa de Marfil', 'iraq': 'Irak',
+            'france': 'Francia', 'germany': 'Alemania', 'tunisia': 'Túnez',
         })
-        rpl.SPORT_ES.update({
-            'boxing': 'Boxeo',
-            'mma': 'MMA',
-            'soccer': 'Fútbol',
-            'fifa world cup': 'Copa Mundial FIFA',
-            'baseball': 'Béisbol',
-            'basketball': 'Baloncesto',
-            'football': 'Fútbol americano',
-            'tennis': 'Tenis',
-        })
+        rpl.SPORT_ES.update({'boxing': 'Boxeo', 'mma': 'MMA', 'soccer': 'Fútbol', 'fifa world cup': 'Copa Mundial FIFA', 'baseball': 'Béisbol', 'basketball': 'Baloncesto', 'football': 'Fútbol americano', 'tennis': 'Tenis'})
         rpl.VALUE_ES.update({
-            'Odds': 'Momio',
-            'ODDS': 'MOMIO',
-            'Price Watch': 'Seguimiento de momio',
+            'Odds': 'Momio', 'ODDS': 'MOMIO', 'Price Watch': 'Seguimiento de momio',
             'Price Watch / Research': 'Seguimiento de momio / investigación',
             'Negative at listed odds': 'Negativo con el momio actual',
             'Missing or unverified odds': 'Momios faltantes o no verificados',
-            'Thin edge favorite': 'Ventaja delgada',
-            'THIN EDGE FAVORITE': 'VENTAJA DELGADA',
-            'Research Only': 'Investigación',
-            'RESEARCH ONLY': 'INVESTIGACIÓN',
-            'Watchlist Only': 'Seguimiento',
-            'WATCHLIST ONLY': 'SEGUIMIENTO',
-            'Low': 'Bajo',
-            'Medium': 'Medio',
-            'High': 'Alto',
-            'LOW': 'BAJO',
-            'MEDIUM': 'MEDIO',
-            'HIGH': 'ALTO',
-            'Review': 'Revisar',
-            'REVIEW': 'REVISAR',
+            'Thin edge favorite': 'Ventaja delgada', 'THIN EDGE FAVORITE': 'VENTAJA DELGADA',
+            'Research Only': 'Investigación', 'RESEARCH ONLY': 'INVESTIGACIÓN',
+            'Watchlist Only': 'Seguimiento', 'WATCHLIST ONLY': 'SEGUIMIENTO',
+            'Low': 'Bajo', 'Medium': 'Medio', 'High': 'Alto',
+            'LOW': 'BAJO', 'MEDIUM': 'MEDIO', 'HIGH': 'ALTO', 'Review': 'Revisar', 'REVIEW': 'REVISAR',
         })
         original_value_text = rpl.value_text
 
@@ -184,23 +151,14 @@ def _install_mexico_spanish_terms() -> None:
             text = original_value_text(value, language)
             if rpl.lang_code(language) != 'es' or not text:
                 return text
-            return (
-                text.replace('Seguimiento de precio', 'Seguimiento de momio')
-                .replace('cuota actual', 'momio actual')
-                .replace('Cuotas', 'Momios')
-                .replace('cuotas', 'momios')
-                .replace('Cuota', 'Momio')
-                .replace('cuota', 'momio')
-            )
+            return text.replace('Seguimiento de precio', 'Seguimiento de momio').replace('cuota actual', 'momio actual').replace('Cuotas', 'Momios').replace('cuotas', 'momios').replace('Cuota', 'Momio').replace('cuota', 'momio')
 
         rpl.value_text = mexico_value_text
         original_market_read = rpl.market_read
 
         def mexico_market_read(odds_ok, model_prob, market_prob, edge, language='en'):
             text = original_market_read(odds_ok, model_prob, market_prob, edge, language)
-            if rpl.lang_code(language) != 'es':
-                return text
-            return text.replace('Cuotas', 'Momios').replace('cuotas', 'momios').replace('cuota', 'momio')
+            return text if rpl.lang_code(language) != 'es' else text.replace('Cuotas', 'Momios').replace('cuotas', 'momios').replace('cuota', 'momio')
 
         rpl.market_read = mexico_market_read
         rpl._aba_mexico_spanish_terms_v2 = True
@@ -211,9 +169,6 @@ def _install_mexico_spanish_terms() -> None:
 def _install_chain_notes() -> None:
     try:
         from . import chain_notes
-    except Exception:
-        return
-    try:
         chain_notes.install()
     except Exception:
         return
@@ -258,25 +213,19 @@ def _install_weather_compaction_patch() -> None:
             if location_match:
                 location = location_match.group(1).strip(' .')
                 body = body[: location_match.start()].strip(' .')
-
             bits = [part.strip(' .') for part in body.split(';') if part.strip(' .')]
             if len(bits) <= 1:
-                expanded = re.sub(r'\.\s*', ', ', body)
-                bits = [part.strip(' .') for part in expanded.split(',') if part.strip(' .')]
-
-            deduped: list[str] = []
-            seen: set[str] = set()
+                bits = [part.strip(' .') for part in re.sub(r'\.\s*', ', ', body).split(',') if part.strip(' .')]
+            deduped, seen = [], set()
             for bit in bits:
                 clean = re.sub(r'\s+', ' ', bit).strip(' .')
                 key = clean.lower()
                 if clean and key not in seen:
                     deduped.append(clean)
                     seen.add(key)
-
             temperature = next((bit for bit in deduped if re.search(r'-?\d+(?:\.\d+)?\s*°\s*[CF]\b', bit, re.IGNORECASE)), '')
             wind = next((bit for bit in deduped if re.search(r'\bwind\s*-?\d+(?:\.\d+)?\s*kph\b', bit, re.IGNORECASE)), '')
             condition = next((bit for bit in deduped if bit not in {temperature, wind} and 'location:' not in bit.lower()), '')
-
             ordered = []
             if temperature:
                 ordered.append(temperature.replace(' ', ''))
@@ -286,7 +235,6 @@ def _install_weather_compaction_patch() -> None:
                 ordered.append(wind.lower())
             if not ordered:
                 ordered = deduped[:3]
-
             out = ['Weather: ' + ', '.join(ordered[:3]) + '.']
             if location:
                 out.append('Location: ' + mas._shorten_location(location) + '.')
@@ -308,16 +256,9 @@ def _install_result_grade_aliases() -> None:
     except Exception:
         return
     aliases = list(rn.ALIASES.get('result_status', ()))
-    extra_aliases = [
-        'verified_outcome', 'verified_result_status', 'grade', 'final_grade',
-        'proof_grade', 'pick_grade', 'row_grade', 'result_grade', 'manual_grade',
-    ]
+    extra_aliases = ['verified_outcome', 'verified_result_status', 'grade', 'final_grade', 'proof_grade', 'pick_grade', 'row_grade', 'result_grade', 'manual_grade']
     rn.ALIASES['result_status'] = tuple(dict.fromkeys(extra_aliases + aliases))
-    rn.RESULT_MAP.update({
-        'ungraded': 'pending',
-        'not_graded': 'pending',
-        'not graded': 'pending',
-    })
+    rn.RESULT_MAP.update({'ungraded': 'pending', 'not_graded': 'pending', 'not graded': 'pending'})
     if getattr(rn, '_aba_pending_raw_proof_guard_v1', False):
         return
 
@@ -353,6 +294,85 @@ def _install_final_enriched_report_rows() -> None:
     live._aba_final_enriched_report_rows_v1 = True
 
 
+def _install_proof_ledger_source_priority_guard() -> None:
+    try:
+        import pandas as pd
+        from . import commercial_platform_tools as cpt
+        from .row_normalizer import result_status
+    except Exception:
+        return
+    if getattr(cpt, '_aba_proof_ledger_truth_source_v4', False):
+        return
+
+    def _as_frame(value):
+        if isinstance(value, pd.DataFrame):
+            return value.copy()
+        if value is None:
+            return pd.DataFrame()
+        try:
+            return pd.DataFrame(value)
+        except Exception:
+            return pd.DataFrame()
+
+    def _resolved_count(value) -> int:
+        frame = _as_frame(value)
+        if frame.empty:
+            return 0
+        count = 0
+        for row in frame.to_dict('records'):
+            if result_status(row) in {'win', 'loss', 'void'}:
+                count += 1
+        return count
+
+    def _read_disk(path=None, workspace_id=''):
+        disk = pd.DataFrame()
+        try:
+            p = cpt.persistent_ledger_path(workspace_id, path)
+            if p.exists():
+                disk = pd.read_csv(p)
+        except Exception:
+            pass
+        return disk
+
+    def protected_load_persistent_ledger(path=None, workspace_id='', active_only=True):
+        disk = _read_disk(path=path, workspace_id=workspace_id)
+        held_locked = cpt.load_held_rows(cpt.LOCKED_STORE_KEY, workspace_id)
+        held_refresh = cpt.load_held_rows(cpt.REFRESH_STORE_KEY, workspace_id)
+        session_locked = []
+        session_refresh = []
+        try:
+            import streamlit as st
+            session_locked = st.session_state.get(cpt.LOCKED_STORE_KEY, []) or []
+            session_refresh = st.session_state.get(cpt.REFRESH_STORE_KEY, []) or []
+        except Exception:
+            pass
+        return cpt.merge_ledgers(disk, held_locked, held_refresh, session_locked, session_refresh, active_only=active_only)
+
+    def protected_save_persistent_ledger(frame, path=None, workspace_id=''):
+        incoming = cpt.filter_locked_proof_rows(frame)
+        if incoming.empty:
+            return pd.DataFrame()
+        existing = protected_load_persistent_ledger(path=path, workspace_id=workspace_id, active_only=False)
+        if not existing.empty and _resolved_count(existing) > 0 and _resolved_count(incoming) == 0:
+            out = existing
+        else:
+            out = cpt.merge_ledgers(existing, incoming, active_only=False) if not existing.empty else incoming
+        rows = out.to_dict('records')
+        cpt.save_held_rows(cpt.LOCKED_STORE_KEY, rows, workspace_id)
+        cpt.save_held_rows(cpt.REFRESH_STORE_KEY, rows, workspace_id)
+        try:
+            p = cpt.persistent_ledger_path(workspace_id, path)
+            cpt.ensure_data_dir(p)
+            out.to_csv(p, index=False)
+        except Exception:
+            pass
+        return out
+
+    cpt.load_persistent_ledger = protected_load_persistent_ledger
+    cpt.save_persistent_ledger = protected_save_persistent_ledger
+    cpt._aba_proof_ledger_truth_source_v4 = True
+
+
 _install_price_normalizer()
 _install_adaptive_learning_area_key_normalizer()
 _install_magazine_renderer_patches()
@@ -362,3 +382,4 @@ _install_magazine_dynamic_sources_and_autosizer()
 _install_weather_compaction_patch()
 _install_result_grade_aliases()
 _install_final_enriched_report_rows()
+_install_proof_ledger_source_priority_guard()
