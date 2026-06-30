@@ -19,10 +19,12 @@ ALIASES = {
     'prediction_timestamp': ('prediction_timestamp', 'locked_at_utc', 'odds_timestamp', 'created_at', 'scan_timestamp'),
     'event_start_utc': ('event_start_utc', 'known_start_utc', 'start', 'commence_time', 'game_start', 'match_start', 'scheduled_start'),
     'odds_timestamp': ('odds_timestamp', 'price_timestamp', 'last_odds_update', 'last_update'),
-    'result_status': ('result_status', 'outcome', 'result', 'win_loss', 'graded_result', 'status', 'resultado'),
+    # Keep verified_grade before generic status fields so manually verified CSVs are
+    # the source of truth instead of stale pending/result fields.
+    'result_status': ('verified_grade', 'verified_result', 'verified_status', 'result_status', 'outcome', 'result', 'win_loss', 'graded_result', 'status', 'resultado'),
     'winner': ('winner', 'actual_winner', 'winning_side', 'final_winner', 'ganador'),
-    'final_score': ('final_score', 'score', 'actual_score', 'result_note'),
-    'stake_units': ('stake_units', 'stake'),
+    'final_score': ('verified_final_result', 'final_score', 'score', 'actual_score', 'result_note'),
+    'stake_units': ('stake_units', 'recommended_stake_units', 'suggested_stake_units', 'stake'),
     'recommended_stake_units': ('recommended_stake_units', 'suggested_stake_units'),
     'profit_units': ('profit_units', 'units'),
     'decision': ('decision', 'agent_decision'),
@@ -34,7 +36,7 @@ ALIASES = {
     'agent_score': ('agent_score', 'decision_score'),
     'scanner_strength_score': ('scanner_strength_score', 'scanner_score'),
     'model_edge': ('model_edge', 'model_market_edge', 'edge_probability', 'edge'),
-    'computed_ev_decimal': ('computed_ev_decimal', 'estimated_ev_decimal', 'estimated_ev_value', 'estimated_ev', 'expected_value_per_unit', 'ev'),
+    'computed_ev_decimal': ('computed_ev_decimal', 'estimated_ev_decimal', 'estimated_ev_value', 'estimated_ev', 'expected_value_per_unit', 'ev', 'profit_expected_value'),
     'closing_decimal_price': ('closing_decimal_price', 'closing_price', 'close_decimal', 'closing_odds'),
     '_robust_decimal_price': ('_robust_decimal_price', 'robust_decimal_price', 'worst_price'),
     '_robust_expected_value': ('_robust_expected_value', 'robust_expected_value'),
@@ -53,7 +55,7 @@ RESULT_MAP = {
     'lost': 'loss', 'loss': 'loss', 'l': 'loss', 'incorrect': 'loss', 'miss': 'loss', 'false': 'loss', 'no': 'loss', '0': 'loss', '0.0': 'loss',
     'perdida': 'loss', 'perdio': 'loss', 'perdió': 'loss', 'derrota': 'loss', 'fallo': 'loss',
     **{label: 'void' for label in VOID_LABELS},
-    'pending': 'pending', 'unknown': 'pending', 'scheduled': 'pending', 'live': 'pending',
+    'pending': 'pending', 'unknown': 'pending', 'scheduled': 'pending', 'live': 'pending', 'unverified_or_pending': 'pending',
 }
 
 DEDUPLICATION_COLUMNS = [
