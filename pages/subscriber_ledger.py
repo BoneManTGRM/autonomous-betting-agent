@@ -26,20 +26,27 @@ PAGE_CONTRACT_FIELDS = ("schema_version", "workspace_id", "ledger_run_id", "ledg
 
 TEXT = {
     "en": {
-        "title": "Subscriber Ledger", "caption": "Builds subscriber-level result reports from the current proof ledger.", "help": "Usually no CSV paste is needed. This page will use the current saved proof ledger for the selected workspace. Manual CSV input is under Advanced.",
+        "title": "Subscriber Ledger",
+        "caption": "Builds client-style result reports from the current proof ledger.",
+        "help": "The single subscriber shown right now is the default test subscriber for workspace test_01. In plain terms, that is you / your test workspace until real client profiles are added. No CSV paste is needed for normal use.",
         "workspace_id": "Workspace ID", "source": "Automatic source check", "run": "Build ledger reports", "advanced": "Advanced manual input", "ledger_csv": "Manual subscriber ledger CSV", "summary": "Summary", "global": "Global results", "subs": "Subscriber summaries", "rows": "Ledger rows", "sports": "Sport performance", "markets": "Market performance", "books": "Sportsbook performance", "patterns": "Mistake patterns", "checks": "Checks", "safety": "Safety details", "download_json": "Download ledger JSON", "download_rows": "Download rows CSV", "download_subs": "Download summaries CSV", "download_sports": "Download sport CSV", "download_markets": "Download market CSV", "download_books": "Download sportsbook CSV", "download_patterns": "Download patterns CSV", "download_checks": "Download checks CSV", "download_manifest": "Download manifest JSON", "preview_only": "Preview only", "no_files": "No files written.", "no_live": "No live changes.", "no_report": "Build ledger reports to view outputs.", "no_source": "No saved ledger rows found for this workspace. Lock picks in Odds Lock Pro first.",
     },
     "es": {
-        "title": "Ledger de Subscribers", "caption": "Construye reportes por subscriber desde el ledger de prueba actual.", "help": "Normalmente no necesitas pegar CSV. Esta página usa el proof ledger guardado del workspace. Entrada manual está en Avanzado.",
+        "title": "Ledger de Subscribers",
+        "caption": "Construye reportes tipo cliente desde el proof ledger actual.",
+        "help": "El subscriber único que aparece ahora es el subscriber de prueba del workspace test_01. En términos simples, eres tú / tu workspace de prueba hasta que agregues perfiles reales de clientes. Normalmente no necesitas pegar CSV.",
         "workspace_id": "ID de workspace", "source": "Revisión de fuente automática", "run": "Construir reportes ledger", "advanced": "Entrada manual avanzada", "ledger_csv": "CSV manual de subscriber ledger", "summary": "Resumen", "global": "Resultados globales", "subs": "Resumen por subscriber", "rows": "Filas ledger", "sports": "Performance por deporte", "markets": "Performance por mercado", "books": "Performance por sportsbook", "patterns": "Patrones de errores", "checks": "Checks", "safety": "Detalles de seguridad", "download_json": "Descargar JSON ledger", "download_rows": "Descargar CSV filas", "download_subs": "Descargar CSV summaries", "download_sports": "Descargar CSV deportes", "download_markets": "Descargar CSV mercados", "download_books": "Descargar CSV books", "download_patterns": "Descargar CSV patrones", "download_checks": "Descargar CSV checks", "download_manifest": "Descargar JSON manifest", "preview_only": "Solo preview", "no_files": "No escribe archivos.", "no_live": "No hace cambios live.", "no_report": "Construye reportes ledger para ver outputs.", "no_source": "No hay filas guardadas para este workspace. Bloquea picks en Odds Lock Pro primero.",
     },
 }
 
+
 def t(key: str) -> str:
     return TEXT.get(LANG, TEXT["en"]).get(key, key)
 
+
 def _fragment(value: str | None) -> str:
     return safe_text(value).split("_")[-1][:12] or "ledger"
+
 
 def _auto_ledger_csv(workspace_id: str) -> tuple[str, int]:
     try:
@@ -50,10 +57,11 @@ def _auto_ledger_csv(workspace_id: str) -> tuple[str, int]:
         return "", 0
     return frame.to_csv(index=False), int(len(frame))
 
+
 st.title(t("title")); st.caption(t("caption")); st.info(t("help"))
 workspace_id = normalize_workspace_id(st.text_input(t("workspace_id"), value=st.session_state.get("aba_test_window_id", "test_01"), key="subscriber_ledger_workspace_id"))
 auto_csv, auto_rows = _auto_ledger_csv(workspace_id)
-st.subheader(t("source")); cols = st.columns(2); cols[0].metric("saved ledger rows", auto_rows); cols[1].metric("workspace", workspace_id)
+st.subheader(t("source")); cols = st.columns(3); cols[0].metric("saved ledger rows", auto_rows); cols[1].metric("subscriber mode", "default test"); cols[2].metric("workspace", workspace_id)
 if auto_rows <= 0: st.warning(t("no_source"))
 with st.expander(t("advanced"), expanded=False):
     ledger_csv = st.text_area(t("ledger_csv"), value=auto_csv, key="subscriber_ledger_csv", height=220)
