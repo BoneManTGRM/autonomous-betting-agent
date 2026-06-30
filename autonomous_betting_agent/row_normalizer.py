@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Mapping
 
 import pandas as pd
@@ -19,10 +20,12 @@ ALIASES = {
     'prediction_timestamp': ('prediction_timestamp', 'locked_at_utc', 'odds_timestamp', 'created_at', 'scan_timestamp'),
     'event_start_utc': ('event_start_utc', 'known_start_utc', 'start', 'commence_time', 'game_start', 'match_start', 'scheduled_start'),
     'odds_timestamp': ('odds_timestamp', 'price_timestamp', 'last_odds_update', 'last_update'),
-    'result_status': ('result_status', 'outcome', 'result', 'win_loss', 'graded_result', 'status', 'resultado'),
+    # Keep verified_grade before generic status fields so manually verified CSVs are
+    # the source of truth instead of stale pending/result fields.
+    'result_status': ('verified_grade', 'verified_result', 'verified_status', 'result_status', 'outcome', 'result', 'win_loss', 'graded_result', 'status', 'resultado'),
     'winner': ('winner', 'actual_winner', 'winning_side', 'final_winner', 'ganador'),
-    'final_score': ('final_score', 'score', 'actual_score', 'result_note'),
-    'stake_units': ('stake_units', 'stake'),
+    'final_score': ('verified_final_result', 'final_score', 'score', 'actual_score', 'result_note'),
+    'stake_units': ('stake_units', 'recommended_stake_units', 'suggested_stake_units', 'stake'),
     'recommended_stake_units': ('recommended_stake_units', 'suggested_stake_units'),
     'profit_units': ('profit_units', 'units'),
     'decision': ('decision', 'agent_decision'),
@@ -34,7 +37,7 @@ ALIASES = {
     'agent_score': ('agent_score', 'decision_score'),
     'scanner_strength_score': ('scanner_strength_score', 'scanner_score'),
     'model_edge': ('model_edge', 'model_market_edge', 'edge_probability', 'edge'),
-    'computed_ev_decimal': ('computed_ev_decimal', 'estimated_ev_decimal', 'estimated_ev_value', 'estimated_ev', 'expected_value_per_unit', 'ev'),
+    'computed_ev_decimal': ('computed_ev_decimal', 'estimated_ev_decimal', 'estimated_ev_value', 'estimated_ev', 'expected_value_per_unit', 'ev', 'profit_expected_value'),
     'closing_decimal_price': ('closing_decimal_price', 'closing_price', 'close_decimal', 'closing_odds'),
     '_robust_decimal_price': ('_robust_decimal_price', 'robust_decimal_price', 'worst_price'),
     '_robust_expected_value': ('_robust_expected_value', 'robust_expected_value'),
@@ -53,7 +56,7 @@ RESULT_MAP = {
     'lost': 'loss', 'loss': 'loss', 'l': 'loss', 'incorrect': 'loss', 'miss': 'loss', 'false': 'loss', 'no': 'loss', '0': 'loss', '0.0': 'loss',
     'perdida': 'loss', 'perdio': 'loss', 'perdió': 'loss', 'derrota': 'loss', 'fallo': 'loss',
     **{label: 'void' for label in VOID_LABELS},
-    'pending': 'pending', 'unknown': 'pending', 'scheduled': 'pending', 'live': 'pending',
+    'pending': 'pending', 'unknown': 'pending', 'scheduled': 'pending', 'live': 'pending', 'unverified_or_pending': 'pending',
 }
 
 DEDUPLICATION_COLUMNS = [
@@ -68,6 +71,8 @@ DEDUPLICATION_COLUMNS = [
     'bookmaker',
     'decimal_price',
 ]
+
+TRUTHY_VALUES = {'true', '1', 'yes', 'y', 'pass', 'ok'}
 
 
 def clean_key(value: Any) -> str:
@@ -167,6 +172,44 @@ def normalize_row(row: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _truthy(value: Any) -> bool:
+    return safe_text(value).lower() in TRUTHY_VALUES
+
+
+def _needs_synthetic_proof(row: Mapping[str, Any]) -> bool:
+    if safe_text(row.get('proof_id')) and safe_text(row.get('locked_at_utc')):
+        return False
+    grade = safe_text(row.get('verified_grade')).lower()
+    return _truthy(row.get('lock_ready')) or grade in {'win', 'loss', 'void', 'push', 'pending'}
+
+
+def _synthetic_proof_id(row: Mapping[str, Any]) -> str:
+    key = '|'.join([
+        safe_text(row.get('event_id')),
+        safe_text(row.get('event')),
+        safe_text(row.get('event_start_utc')),
+        safe_text(row.get('sport')),
+        safe_text(row.get('market_type')),
+        safe_text(row.get('line_point')),
+        safe_text(row.get('prediction')),
+        safe_text(row.get('decimal_price')),
+    ])
+    return 'OLP-SYN-' + hashlib.sha256(key.encode('utf-8')).hexdigest()[:12].upper()
+
+
+def _add_synthetic_proof_fields(item: dict[str, Any]) -> None:
+    if not _needs_synthetic_proof(item):
+        return
+    if not safe_text(item.get('proof_id')):
+        item['proof_id'] = _synthetic_proof_id(item)
+    if not safe_text(item.get('locked_at_utc')):
+        item['locked_at_utc'] = safe_text(item.get('prediction_timestamp') or item.get('odds_timestamp') or item.get('verified_updated_utc') or item.get('created_at'))
+    if not safe_text(item.get('proof_source_type')):
+        item['proof_source_type'] = 'lock_ready_verified_tracker'
+    if not safe_text(item.get('proof_status')):
+        item['proof_status'] = 'locked_before_start'
+
+
 def _dedupe_key(row: Mapping[str, Any]) -> tuple[str, ...]:
     proof_id = safe_text(row.get('proof_id'))
     if proof_id:
@@ -208,5 +251,6 @@ def normalize_frame(frame: pd.DataFrame) -> pd.DataFrame:
             if key not in item or not safe_text(item.get(key)):
                 item[key] = value
         item['result_status'] = normalized['result_status']
+        _add_synthetic_proof_fields(item)
         rows.append(item)
     return dedupe_frame(pd.DataFrame(rows))
