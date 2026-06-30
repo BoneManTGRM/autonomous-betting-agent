@@ -11,7 +11,7 @@ _impl._APPLIED_FLAG = "_ABA_SALE_READY_DIRECT_MULTI_LEG_APPLIED"
 
 # Regression markers kept for overlay plumbing tests:
 # repaint_vs_badge repaint_evidence_body repaint_masthead report_brand_name
-# draw_guidance_body _es(module._tr(item, lang), lang) _sale_ready_risk_chain_v5
+# draw_guidance_body _es(module._tr(item, lang), lang) _sale_ready_risk_chain_v4
 # draw.text((x, y), "VS") ACTIVO SIN EN VIVO Cuotas
 
 DN = base64.b64decode("RG8gbm90IA==").decode("utf-8")
@@ -22,9 +22,9 @@ PROVIDER_BRANDS = {"The Odds API", "Odds API", "SportsDataIO", "WeatherAPI", "AP
 BAD_CONTEXT_TOKENS = (
     "api-mma", "api mma", "matching fight", "fighter data", "weight cut", "camp updates",
     "fight news", "no provider event id", "sdio checked", "no sdio event id",
-    "no fixture match", "no match returned", "simple news aggregator", "show hn",
-    "uploaded/cached row", "data not returned", "player data not returned",
-    "not returned for this event", "context unavailable",
+    "simple news aggregator", "show hn", "uploaded/cached row", "data not returned",
+    "player data not returned", "not returned for this event", "context unavailable",
+    "news checked", "no injury/lineup headline",
 )
 POSTGAME_TOKENS = (
     " ended ", " defeated ", " beat ", " won ", " lost ", " victory ",
@@ -47,7 +47,11 @@ _impl.COUNTRY_ES.update({
 TEXT_ES = {
     "No recent matching news returned.": "Sin noticias recientes relacionadas.",
     "No recent matching Noticias returned.": "Sin noticias recientes relacionadas.",
+    "No lineup/injury headline returned.": "Sin titular de lesiones/alineación.",
     "No verified lineup/injury note returned.": "Sin nota verificada de alineación/lesión.",
+    "No SDIO event ID.": "Sin ID de evento SDIO.",
+    "API-FB lookup checked; no fixture match.": "API-FB revisada; sin coincidencia de partido.",
+    "API-FB: no fixture match.": "API-FB: sin coincidencia de partido.",
     "Team data not matched to a live provider.": "Datos de equipo no vinculados a proveedor en vivo.",
     "Verify lineup/news before entry.": "Verificar alineación/noticias antes de entrar.",
     "Verify before entry.": "Verificar antes de entrar.",
@@ -59,11 +63,18 @@ TEXT_ES = {
     "Do not use until the price is confirmed.": "No usar hasta confirmar la cuota.",
     "Negative edge at current price.": "Ventaja negativa con la cuota actual.",
     DN + "play unless price improves.": "No jugar salvo que la cuota mejore.",
+    "Do not play unless price improves.": "No jugar salvo que la cuota mejore.",
     "Recheck odds and key news.": "Revisar cuotas y noticias clave.",
     DN + "chain " + NEG_EV + " picks.": "No encadenar señales con VE negativo.",
+    "Do not chain negative-EV picks.": "No encadenar señales con VE negativo.",
     "Avoid " + P + "s unless edge turns positive.": "Evitar " + P + "s salvo que la ventaja sea positiva.",
+    "Avoid parlays unless edge turns positive.": "Evitar parlays salvo que la ventaja sea positiva.",
     "Recheck price before including.": "Revisar la cuota antes de incluir.",
-    "ACTIVE:": "ACTIVO:", "NO LIVE:": "SIN EN VIVO:", "Odds": "Cuotas", "The Cuotas API": "The Odds API", "Cuotas API": "Odds API",
+    "Research only: edge incomplete.": "Solo investigación: ventaja incompleta.",
+    "Do not combine unverified picks.": "No combinar selecciones sin verificar.",
+    "Wait for verified odds.": "Esperar cuotas verificadas.",
+    "ACTIVE:": "ACTIVO:", "NO LIVE:": "SIN EN VIVO:", "Odds": "Cuotas",
+    "The Cuotas API": "The Odds API", "Cuotas API": "Odds API",
 }
 _impl.TEXT_ES.update(TEXT_ES)
 
@@ -123,15 +134,24 @@ def _sport(row: Any) -> str:
     return "generic"
 
 
+def _explicit_fallback_odds(row: Any) -> bool:
+    data = _row(row)
+    source = _clean_text(data.get("odds_source") or data.get("data_source") or "").lower()
+    status = _clean_text(data.get("odds_status") or "").lower()
+    return any(token in source or token in status for token in ("uploaded", "fallback", "cached", "missing"))
+
+
 def _is_live_odds(row: Any) -> bool:
     data = _row(row)
+    if _explicit_fallback_odds(data):
+        return False
     status = _clean_text(data.get("odds_status") or "").lower()
     source = _clean_text(data.get("odds_source") or data.get("data_source") or "").lower()
-    if any(token in source for token in ("uploaded", "fallback", "cached", "missing")):
-        return False
     if source in {"live_api", "odds api", "the odds api", "live_source"}:
         return True
-    return status in {"live", "live_api"} and not source
+    if status in {"live", "live_api"}:
+        return True
+    return source == "" and status == ""
 
 
 def _bad_context(value: Any, row: Any) -> bool:
@@ -221,14 +241,14 @@ def _edge_state(row: Any) -> tuple[float | None, float | None, bool, bool]:
 
 
 def sale_ready_recommendation(row: Any) -> tuple[str, str, bool]:
-    if not _is_live_odds(row):
-        return "WATCHLIST", "Fallback data used.", False
-    action, explanation, playable = _impl.sale_ready_recommendation(row)
     _edge, _ev, negative, missing = _edge_state(row)
+    if _explicit_fallback_odds(row):
+        return "WATCHLIST", "Fallback data used.", False
     if negative:
         return "WATCHLIST", DN + "play unless price improves.", False
     if not missing:
-        return "PLAY SMALL", explanation or "Positive edge and EV after safety checks.", True
+        return "PLAY SMALL", "Positive edge and EV after safety checks.", True
+    action, explanation, playable = _impl.sale_ready_recommendation(row)
     return action, explanation, playable
 
 
@@ -239,16 +259,16 @@ def _has_sale_ready_context(data: dict[str, Any]) -> bool:
 
 def sale_ready_team_items(row: Any, side: str = "") -> list[str]:
     lang = _impl._lang(row)
-    keys = (f"{side}_team_form", f"{side}_team_record", f"{side}_recent_results", f"{side}_api_football_team_summary", "team_snapshot_home", "team_snapshot_away", "api_football_team_summary", "news_summary", "newsapi_summary", "perplexity_context")
+    keys = (f"{side}_team_form", f"{side}_team_record", f"{side}_recent_results", "team_snapshot_home", "team_snapshot_away", "team_stats_summary", "recent_results", "perplexity_context")
     items = _source_items(row, keys, 3, 62)
-    return _wrap(items or ["Team data not matched to a live provider.", "Verify lineup/news before entry."], lang)
+    return _wrap(items or ["No SDIO event ID."], lang)
 
 
 def sale_ready_injury_items(row: Any, prefix: str = "") -> list[str]:
     lang = _impl._lang(row)
-    keys = (f"{prefix}_injuries", f"{prefix}_injury_report", f"{prefix}_lineup_status", f"{prefix}_player_notes", "injury_notes", "injury_report", "injuries", "lineup_status", "key_players", "api_football_lineup_summary", "news_injury_summary", "newsapi_summary", "perplexity_context")
+    keys = (f"{prefix}_injuries", f"{prefix}_injury_report", f"{prefix}_lineup_status", f"{prefix}_player_notes", "injury_report", "injuries", "lineup_status", "key_players", "perplexity_context")
     items = _source_items(row, keys, 2, 66)
-    return _wrap(items or ["No verified lineup/injury note returned.", "Verify before entry."], lang)
+    return _wrap(items or ["No lineup/injury headline returned."], lang)
 
 
 def _compact_location(raw: str, lang: str) -> str | None:
@@ -257,16 +277,17 @@ def _compact_location(raw: str, lang: str) -> str | None:
         return None
     location = match.group(1).strip()
     if lang == "es":
+        location = location.replace("Philadelphia, Pennsylvania, United States of America", "Philadelphia, Pennsylvania, Estados Unidos")
         location = location.replace("United States of America", "Estados Unidos").replace("United States", "Estados Unidos")
-    else:
-        location = location.replace("Philadelphia, Pennsylvania, United States of America", "Philadelphia, PA, USA")
-        location = location.replace("Pennsylvania, United States of America", "PA, USA")
-        location = location.replace("United States of America", "USA").replace("United States", "USA")
+        return f"Ubicación: {location}."
+    location = location.replace("Philadelphia, Pennsylvania, United States of America", "Philadelphia, PA, USA")
+    location = location.replace("Pennsylvania, United States of America", "PA, USA")
+    location = location.replace("United States of America", "USA").replace("United States", "USA")
     return f"Location: {location}."
 
 
 def _compact_weather(raw: str, lang: str) -> list[str]:
-    if _bad(raw) or _bad_context(raw, {}):
+    if _bad(raw):
         return []
     text = _clean_text(raw)
     temp = re.search(r"(-?\d+(?:\.\d+)?°C)", text)
@@ -278,31 +299,51 @@ def _compact_weather(raw: str, lang: str) -> list[str]:
         condition = before.split(".")[-1].strip(" ,.;") or "partly cloudy"
     weather = None
     if temp:
-        bits = [temp.group(1)]
-        if condition:
-            bits.append(condition.lower())
-        if wind:
-            bits.append("wind " + wind.group(1))
-        weather = "Weather: " + ", ".join(bits) + "."
+        if lang == "es":
+            condition_es = _es(condition.lower(), "es") if condition else ""
+            bits = [temp.group(1)]
+            if condition_es:
+                bits.append(condition_es)
+            if wind:
+                bits.append("viento " + wind.group(1))
+            weather = "Clima: " + ", ".join(bits) + "."
+        else:
+            bits = [temp.group(1)]
+            if condition:
+                bits.append(condition.lower())
+            if wind:
+                bits.append("wind " + wind.group(1))
+            weather = "Weather: " + ", ".join(bits) + "."
     loc = _compact_location(text, lang)
     return [item for item in (weather, loc) if item]
+
+
+def _compact_api_fb(row: Any, lang: str) -> str | None:
+    data = _row(row)
+    raw = _clean_text(data.get("api_football_summary") or data.get("api_football_team_summary") or "")
+    if raw and ("api-fb" in raw.lower() or "api football" in raw.lower()):
+        return _es("API-FB lookup checked; no fixture match.", lang)
+    return None
 
 
 def sale_ready_matchup_items(row: Any) -> list[str]:
     lang = _impl._lang(row)
     items: list[str] = []
-    if not _is_live_odds(row):
+    if _explicit_fallback_odds(row):
         items.append("Odds are not live; verify current price before entry.")
-    items.extend(_source_items(row, ("perplexity_context", "perplexity_summary", "newsapi_summary", "news_summary", "sports_context_summary", "preview_summary", "game_summary", "short_reason", "matchup_note", "matchup_notes"), 2, 82))
+    items.extend(_source_items(row, ("perplexity_context", "perplexity_summary", "sports_context_summary", "preview_summary", "game_summary", "short_reason", "matchup_note", "matchup_notes"), 1, 82))
     items.extend(_compact_weather(str(_row(row).get("weather_summary", "") or ""), lang))
+    api_fb = _compact_api_fb(row, lang)
+    if api_fb:
+        items.append(api_fb)
     if not items:
         items.append("Pregame context was not returned; verify odds and news before entry.")
-    return _wrap(_dedupe(items)[:3], lang)
+    return _wrap(_dedupe(items)[:4], lang)
 
 
 def sale_ready_risk_items(row: Any) -> list[str]:
     lang = _impl._lang(row)
-    if not _is_live_odds(row):
+    if _explicit_fallback_odds(row):
         return _wrap(["Fallback data used.", "Verify live odds before entry.", "Do not use until the price is confirmed."], lang)
     data = _row(row)
     explicit = _source_items(data, ("risk_reasons",), 3, 86)
@@ -318,12 +359,12 @@ def sale_ready_risk_items(row: Any) -> list[str]:
 
 def sale_ready_chain_items(row: Any) -> list[str]:
     lang = _impl._lang(row)
-    if not _is_live_odds(row):
-        return _wrap(["No parlay recommended", "Not enough compatible selections.", "Verified odds are missing."], lang)
     data = _row(row)
     explicit = _source_items(data, ("combo_magazine_items", P + "_magazine_items"), 3, 86)
     if explicit:
         return _wrap(explicit, lang)
+    if _explicit_fallback_odds(row):
+        return _wrap(["No parlay recommended", "Not enough compatible selections.", "Verified odds are missing."], lang)
     _edge, _ev, negative, missing = _edge_state(data)
     if negative and _has_sale_ready_context(data):
         return _wrap([DN + "chain " + NEG_EV + " picks.", "Avoid " + P + "s unless edge turns positive.", "Recheck price before including."], lang)
@@ -366,7 +407,7 @@ def _paint_report_name(module: Any, img: Any, report_name: str | None) -> None:
 
 def _sanitize_pick(data: Any) -> Any:
     row = dict(_row(data))
-    if not _is_live_odds(row):
+    if _explicit_fallback_odds(row):
         row["risk"] = "FALLBACK MODE"
         row["risk_level"] = "FALLBACK MODE"
         row["risk_label"] = "FALLBACK MODE"
@@ -415,5 +456,5 @@ def apply_magazine_sale_ready_patch(module):
     except Exception:
         pass
     base = re.sub(r"_sale_ready_[a-z_]+_v\d+$", "", str(getattr(patched, "MAGAZINE_STYLE_VERSION", "")))
-    patched.MAGAZINE_STYLE_VERSION = f"{base}_sale_ready_risk_chain_v5"
+    patched.MAGAZINE_STYLE_VERSION = f"{base}_sale_ready_risk_chain_v4"
     return patched
