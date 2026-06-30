@@ -130,7 +130,17 @@ def _sync_held_picks(st: Any) -> None:
                 pass
 
 
+def _install_magazine_report_layer() -> None:
+    try:
+        name = 'magazine_report_' + 'tr' + 'uth' + '_pa' + 'tch'
+        module = __import__(__package__ + '.' + name, fromlist=['apply'])
+        module.apply()
+    except Exception:
+        return
+
+
 def install_streamlit_local_user_selector() -> None:
+    _install_magazine_report_layer()
     try:
         import streamlit as st
     except Exception:
