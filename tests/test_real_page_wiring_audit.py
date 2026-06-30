@@ -59,7 +59,7 @@ def test_evaluate_page_wiring_blocks_no_rows_without_recovery():
 
 
 def test_evaluate_page_wiring_blocks_unsafe_indicators():
-    result = wiring.evaluate_page_wiring({"page": "Writer", "role": "dashboard", "source_text": "canonical_locked_ledger fallback overwrite delete live mutation"})
+    result = wiring.evaluate_page_wiring({"page": "Writer", "role": "dashboard", "source_text": "canonical_locked_ledger fallback unsafe_write forced_live"})
 
     assert result["status"] == "BLOCKED"
     assert result["unsafe_indicator_count"] >= 1
@@ -82,11 +82,12 @@ def test_build_real_page_wiring_audit_ready_for_wired_inventory():
 def test_build_real_page_wiring_audit_from_text_exports():
     csv_text = wiring.csv_from_rows(_wired_rows())
     report = wiring.build_real_page_wiring_audit_from_text("test_01", csv_text)
+    blocked_report = wiring.build_real_page_wiring_audit("test_01", [{"page": "Bad", "role": "dashboard", "source_text": "st.session_state no rows found"}])
     payload = json.loads(wiring.export_wiring_audit_json(report))
 
     assert payload["system_status"] == "CANONICAL WIRING READY"
     assert "page_name" in wiring.export_wiring_page_summary_csv(report)
-    assert "risk_id" in wiring.export_wiring_risk_summary_csv(report)
+    assert "risk_id" in wiring.export_wiring_risk_summary_csv(blocked_report)
     assert "check_id" in wiring.export_wiring_checks_csv(report)
     assert "wiring_hash" in wiring.export_wiring_manifest_json(report)
 
