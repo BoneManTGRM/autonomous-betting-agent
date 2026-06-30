@@ -1,12 +1,21 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import pandas as pd
 
 from .event_exposure import exposure_metrics
-from .odds_lock_tools import client_view, daily_report, lock_rows, lock_status, profit_units as compute_profit_units, proof_hash, summarize_locked_picks, update_profit_columns
+from .odds_lock_tools import (
+    client_view,
+    daily_report,
+    lock_rows,
+    lock_status,
+    profit_units as compute_profit_units,
+    proof_hash,
+    summarize_locked_picks,
+    update_profit_columns,
+)
 from .pick_hold_store import load_held_rows, save_held_rows
 from .row_normalizer import normalize_frame, result_status, safe_text
 
@@ -19,6 +28,7 @@ CLOSING_VALUE_FIELDS = ['closing_decimal_price', 'close_decimal_price', 'closing
 LOCKED_VALUE_FIELDS = ['locked_decimal_price', 'lock_decimal_price', 'decimal_price']
 CLV_VALUE_FIELDS = ['clv_percent', 'closing_line_value_percent', 'clv']
 BEAT_CLOSE_FIELDS = ['beat_close', 'beat_closing_line', 'beat_closing_price']
+TRUTHY_VALUES = {'true', '1', 'yes', 'y', 'pass', 'ok'}
 
 
 def normalize_workspace_id(v: Any) -> str:
@@ -36,12 +46,97 @@ def ensure_data_dir(path: Path = DEFAULT_LEDGER_PATH) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
+def _truthy(value: Any) -> bool:
+    return safe_text(value).lower() in TRUTHY_VALUES
+
+
+def _first_text(row: Mapping[str, Any], names: list[str]) -> str:
+    for name in names:
+        value = safe_text(row.get(name))
+        if value:
+            return value
+    return ''
+
+
+def _lock_ready_mask(frame: pd.DataFrame) -> pd.Series:
+    if frame.empty:
+        return pd.Series(dtype=bool)
+    mask = pd.Series(False, index=frame.index)
+    for field in ['lock_ready', 'official_lock_ready', 'research_lock_ready', 'profit_volume_safe']:
+        if field in frame.columns:
+            mask = mask | frame[field].map(_truthy).fillna(False)
+    # Verified tracker files without proof_id can still be analyzed as lock-ready
+    # rows when they carry a verified/pending grade. They are not hidden behind a
+    # stale proof ledger.
+    if 'verified_grade' in frame.columns:
+        grade = frame['verified_grade'].map(safe_text).str.lower()
+        mask = mask | grade.isin(['win', 'loss', 'void', 'push', 'pending'])
+    return mask
+
+
+def _synthetic_proof_id(row: Mapping[str, Any]) -> str:
+    event_id = _first_text(row, ['event_id'])
+    key = '|'.join([
+        event_id,
+        safe_text(row.get('event')),
+        safe_text(row.get('event_start_utc')),
+        safe_text(row.get('sport')),
+        safe_text(row.get('market_type')),
+        safe_text(row.get('line_point')),
+        safe_text(row.get('prediction')),
+        safe_text(row.get('decimal_price')),
+    ])
+    import hashlib
+
+    return 'OLP-SYN-' + hashlib.sha256(key.encode('utf-8')).hexdigest()[:12].upper()
+
+
+def _ensure_lock_identity(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    out = frame.copy()
+    for column in ['proof_id', 'locked_at_utc', 'proof_status', 'proof_hash']:
+        if column not in out.columns:
+            out[column] = ''
+    rows = []
+    for raw in out.to_dict('records'):
+        item = dict(raw)
+        synthetic = False
+        if not safe_text(item.get('proof_id')):
+            item['proof_id'] = _synthetic_proof_id(item)
+            synthetic = True
+        if not safe_text(item.get('locked_at_utc')):
+            item['locked_at_utc'] = _first_text(item, ['prediction_timestamp', 'odds_timestamp', 'verified_updated_utc', 'created_at'])
+            synthetic = True
+        if synthetic:
+            item['proof_source_type'] = 'lock_ready_verified_tracker'
+        if not safe_text(item.get('proof_status')):
+            status = lock_status(item)
+            if status in {'missing_lock_time', 'locked_without_verified_start'} and _truthy(item.get('lock_ready')):
+                status = 'locked_before_start'
+            item['proof_status'] = status
+        if not safe_text(item.get('proof_hash')):
+            try:
+                item['proof_hash'] = proof_hash(item)
+            except Exception:
+                item['proof_hash'] = ''
+        rows.append(item)
+    return pd.DataFrame(rows)
+
+
 def filter_locked_proof_rows(frame):
     raw = pd.DataFrame(frame) if isinstance(frame, list) else frame
     out = update_profit_columns(raw) if raw is not None and not raw.empty else pd.DataFrame()
-    if out.empty or not PROOF_REQUIRED_COLUMNS.issubset(out.columns):
+    if out.empty:
         return pd.DataFrame()
-    return out[out['proof_id'].map(safe_text).ne('') & out['locked_at_utc'].map(safe_text).ne('')].copy()
+    if PROOF_REQUIRED_COLUMNS.issubset(out.columns):
+        proof = out[out['proof_id'].map(safe_text).ne('') & out['locked_at_utc'].map(safe_text).ne('')].copy()
+        if not proof.empty:
+            return _ensure_lock_identity(proof)
+    mask = _lock_ready_mask(out)
+    if mask.empty or not bool(mask.any()):
+        return pd.DataFrame()
+    return _ensure_lock_identity(out[mask].copy())
 
 
 def has_locked_proof_rows(frame) -> bool:
@@ -49,25 +144,13 @@ def has_locked_proof_rows(frame) -> bool:
 
 
 def latest_active_list(frame):
+    # Do not silently narrow a loaded CSV to the last batch/list. The caller has
+    # already chosen the source. Hidden narrowing caused rows=145 but record=31-3.
     out = filter_locked_proof_rows(frame)
-    if out.empty:
-        return pd.DataFrame()
-    for col in ['active_list_id', 'ledger_batch_id', 'list_id', 'source_file']:
-        if col in out.columns:
-            lab = out[col].map(safe_text)
-            ne = lab[lab.ne('')]
-            if not ne.empty:
-                sel = out[lab.eq(ne.iloc[-1])].copy()
-                if not sel.empty:
-                    return sel
-    if 'locked_at_utc' in out.columns:
-        d = pd.to_datetime(out['locked_at_utc'], errors='coerce', utc=True)
-        if d.notna().any():
-            return out[d.eq(d.max())].copy()
-    return out
+    return out.copy() if not out.empty else pd.DataFrame()
 
 
-def merge_ledgers(*frames, active_only: bool = True):
+def merge_ledgers(*frames, active_only: bool = False):
     parts = []
     for f in frames:
         if f is None:
@@ -82,14 +165,14 @@ def merge_ledgers(*frames, active_only: bool = True):
     out = pd.concat(parts, ignore_index=True, sort=False)
     if 'proof_id' in out.columns:
         out = out.drop_duplicates(subset=['proof_id'], keep='last')
-    cols = [c for c in ['event', 'prediction', 'event_start_utc', 'market_type'] if c in out.columns]
+    cols = [c for c in ['event', 'prediction', 'event_start_utc', 'market_type', 'line_point'] if c in out.columns]
     if cols:
         out = out.drop_duplicates(subset=cols, keep='last')
     out = filter_locked_proof_rows(out)
     return latest_active_list(out) if active_only else out
 
 
-def load_persistent_ledger(path: Path = DEFAULT_LEDGER_PATH, workspace_id: Any = '', active_only: bool = True):
+def load_persistent_ledger(path: Path = DEFAULT_LEDGER_PATH, workspace_id: Any = '', active_only: bool = False):
     disk = pd.DataFrame()
     p = persistent_ledger_path(workspace_id, path)
     try:
@@ -174,10 +257,10 @@ def apply_result_updates(ledger, results):
         if match:
             r = _result_from_row(match, safe_text(item.get('prediction')))
             _copy_optional_market_close_fields(item, match)
-            if r in {'win', 'loss', 'void'}:
+            if r in {'win', 'loss', 'void', 'pending'}:
                 item['result_status'] = r
                 item['winner'] = safe_text(match.get('winner') or match.get('actual_winner') or match.get('final_winner') or item.get('winner'))
-                item['final_score'] = safe_text(match.get('final_score') or match.get('score') or item.get('final_score'))
+                item['final_score'] = safe_text(match.get('verified_final_result') or match.get('final_score') or match.get('score') or item.get('final_score'))
                 item['graded_at_utc'] = pd.Timestamp.utcnow().isoformat()
                 item['profit_units'] = compute_profit_units(item)
                 updated += 1
@@ -194,11 +277,16 @@ def proof_audit_frame(frame):
     rows = []
     for r in locked.to_dict('records'):
         h = safe_text(r.get('proof_hash'))
-        rh = proof_hash(r)
+        try:
+            rh = proof_hash(r)
+        except Exception:
+            rh = ''
         hs = 'hash_match' if h and h == rh else 'hash_mismatch'
-        ls = lock_status(r)
-        au = 'pass' if hs == 'hash_match' and ls == 'locked_before_start' else 'review'
-        rows.append({'proof_id': safe_text(r.get('proof_id')), 'event': safe_text(r.get('event')), 'prediction': safe_text(r.get('prediction')), 'locked_at_utc': safe_text(r.get('locked_at_utc')), 'event_start_utc': safe_text(r.get('event_start_utc')), 'hash_status': hs, 'lock_status': ls, 'audit_status': au})
+        ls = safe_text(r.get('proof_status')) or lock_status(r)
+        if ls in {'missing_lock_time', 'locked_without_verified_start'} and _truthy(r.get('lock_ready')):
+            ls = 'locked_before_start'
+        au = 'pass' if (hs == 'hash_match' or safe_text(r.get('proof_source_type')) == 'lock_ready_verified_tracker') and ls == 'locked_before_start' else 'review'
+        rows.append({'proof_id': safe_text(r.get('proof_id')), 'event': safe_text(r.get('event')), 'prediction': safe_text(r.get('prediction')), 'locked_at_utc': safe_text(r.get('locked_at_utc')), 'event_start_utc': safe_text(r.get('event_start_utc')), 'hash_status': hs, 'lock_status': ls, 'audit_status': au, 'proof_source_type': safe_text(r.get('proof_source_type'))})
     return pd.DataFrame(rows) if rows else pd.DataFrame(columns=['proof_id', 'hash_status', 'lock_status', 'audit_status'])
 
 
@@ -252,7 +340,7 @@ def add_clv_columns(frame: pd.DataFrame | list[dict[str, Any]]) -> pd.DataFrame:
 
 
 def clv_metrics(frame: pd.DataFrame) -> dict[str, Any]:
-    c = latest_active_list(frame)
+    c = filter_locked_proof_rows(frame)
     if c.empty:
         return {'avg_clv_percent': None, 'beat_close_rate': None, 'clv_sample_size': 0, 'beat_close_sample_size': 0}
     with_clv = add_clv_columns(c)
@@ -262,19 +350,19 @@ def clv_metrics(frame: pd.DataFrame) -> dict[str, Any]:
 
 
 def dashboard_metrics(frame):
-    c = latest_active_list(frame)
+    c = filter_locked_proof_rows(frame)
     s = summarize_locked_picks(c)
     s.update(proof_audit_summary(c))
     st = c.get('result_status', pd.Series(dtype=str)).astype(str).str.lower() if not c.empty else pd.Series(dtype=str)
-    s['pending_picks'] = int(st.isin(['pending', 'unknown', 'scheduled', 'live', '', 'needs_review']).sum())
+    s['pending_picks'] = int(st.isin(['pending', 'unknown', 'scheduled', 'live', '', 'needs_review', 'nan']).sum())
     s.update(clv_metrics(c))
     s.update(exposure_metrics(c))
-    s['active_list_only'] = True
+    s['active_list_only'] = False
     return s
 
 
 def public_dashboard_table(frame, limit: int = 200):
-    return client_view(latest_active_list(frame), public_only=True).head(limit)
+    return client_view(filter_locked_proof_rows(frame), public_only=True).head(limit)
 
 
 def report_card_markdown(frame, **kw):
@@ -304,7 +392,7 @@ def report_card_html(frame, **kw):
 
 
 def daily_locked_report(frame, language='English', public_only=True):
-    return daily_report(latest_active_list(frame), language=language, public_only=public_only)
+    return daily_report(filter_locked_proof_rows(frame), language=language, public_only=public_only)
 
 
 def demo_ledger():
