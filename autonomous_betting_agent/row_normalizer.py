@@ -10,21 +10,17 @@ from .audit import parse_float
 ALIASES = {
     'event': ('event', 'event_name', 'game', 'match', 'fixture', 'partido'),
     'sport': ('sport', 'sport_title', 'sport_key', 'league', 'competition', 'deporte'),
-    'market_type': ('market_type', 'market', 'bet_type', 'prop_type', 'tipo_mercado'),
+    'market_type': ('market_type', 'market', 'prop_type', 'tipo_mercado'),
     'prediction': ('prediction', 'pick', 'selection', 'predicted_side', 'predicted_winner', 'favorite', 'prediccion', 'pronostico'),
-    'model_probability': ('model_probability', 'final_probability', 'final_probability_value', 'calibrated_probability', 'probability', 'pick_probability', 'confidence_probability', 'model_probability_clean', 'probabilidad', 'prob_final'),
-    'decimal_price': ('decimal_price', 'best_price', 'decimal_odds', 'odds_decimal', 'odds', 'price', 'sportsbook_odds', 'average_price', 'avg_price', 'cuota', 'mejor_cuota'),
+    'model_probability': ('model_probability', 'final_probability', 'calibrated_probability', 'probability', 'pick_probability', 'confidence_probability', 'probabilidad', 'prob_final'),
+    'decimal_price': ('decimal_price', 'best_price', 'decimal_odds', 'odds_decimal', 'odds', 'price', 'average_price', 'avg_price', 'cuota', 'mejor_cuota'),
     'american_odds': ('american_odds', 'american_price', 'moneyline'),
     'bookmaker': ('bookmaker', 'best_bookmaker', 'sportsbook', 'book'),
     'odds_source': ('odds_source', 'source', 'source_file'),
     'prediction_timestamp': ('prediction_timestamp', 'locked_at_utc', 'odds_timestamp', 'created_at', 'scan_timestamp'),
     'event_start_utc': ('event_start_utc', 'known_start_utc', 'start', 'commence_time', 'game_start', 'match_start', 'scheduled_start'),
     'odds_timestamp': ('odds_timestamp', 'price_timestamp', 'last_odds_update', 'last_update'),
-    'result_status': (
-        'verified_grade', 'verified_result', 'verified_status', 'verified_outcome', 'verified_result_status',
-        'grade', 'final_grade', 'proof_grade', 'pick_grade', 'row_grade', 'result_grade', 'manual_grade',
-        'result_status', 'outcome', 'result', 'win_loss', 'graded_result', 'status', 'resultado',
-    ),
+    'result_status': ('verified_grade', 'verified_result', 'verified_status', 'verified_outcome', 'verified_result_status', 'grade', 'final_grade', 'proof_grade', 'pick_grade', 'row_grade', 'result_grade', 'manual_grade', 'result_status', 'outcome', 'result', 'win_loss', 'graded_result', 'status', 'resultado'),
     'winner': ('winner', 'actual_winner', 'winning_side', 'final_winner', 'ganador'),
     'final_score': ('verified_final_result', 'final_score', 'score', 'actual_score', 'result_note'),
     'stake_units': ('stake_units', 'recommended_stake_units', 'suggested_stake_units', 'stake'),
@@ -47,11 +43,7 @@ ALIASES = {
     '_price_range_risk': ('_price_range_risk', 'price_range_risk', 'price_range'),
 }
 
-VOID_LABELS = {
-    'void', 'push', 'pushed', 'draw_no_bet_push', 'cancelled', 'canceled',
-    'cancelation', 'cancellation', 'postponed', 'abandoned', 'no_action',
-}
-
+VOID_LABELS = {'void', 'push', 'pushed', 'draw_no_bet_push', 'cancelled', 'canceled', 'cancelation', 'cancellation', 'postponed', 'abandoned', 'no_action'}
 RESULT_MAP = {
     'won': 'win', 'winner': 'win', 'winning': 'win', 'win': 'win', 'w': 'win', 'correct': 'win', 'hit': 'win', 'true': 'win', 'yes': 'win', '1': 'win', '1.0': 'win',
     'ganada': 'win', 'gano': 'win', 'ganó': 'win', 'victoria': 'win', 'acierto': 'win',
@@ -60,23 +52,9 @@ RESULT_MAP = {
     **{label: 'void' for label in VOID_LABELS},
     'pending': 'pending', 'ungraded': 'pending', 'not_graded': 'pending', 'not graded': 'pending', 'unknown': 'pending', 'scheduled': 'pending', 'live': 'pending', 'unverified_or_pending': 'pending',
 }
-
 RESOLVED_RESULT_STATUSES = {'win', 'loss', 'void'}
 PENDING_RESULT_STATUSES = {'pending', 'unknown', 'scheduled', 'live', '', 'needs_review'}
-
-DEDUPLICATION_COLUMNS = [
-    'proof_id',
-    'event_id',
-    'event',
-    'event_start_utc',
-    'sport',
-    'market_type',
-    'line_point',
-    'prediction',
-    'bookmaker',
-    'decimal_price',
-]
-
+DEDUPLICATION_COLUMNS = ['proof_id', 'event_id', 'event', 'event_start_utc', 'sport', 'market_type', 'line_point', 'prediction', 'bookmaker', 'decimal_price']
 TRUTHY_VALUES = {'true', '1', 'yes', 'y', 'pass', 'ok'}
 
 
@@ -93,9 +71,7 @@ def safe_text(value: Any) -> str:
     except Exception:
         pass
     text = str(value).strip()
-    if text.lower() in {'nan', 'none', 'null', 'n/a', 'na'}:
-        return ''
-    return text
+    return '' if text.lower() in {'nan', 'none', 'null', 'n/a', 'na'} else text
 
 
 def normalized_mapping(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -125,9 +101,7 @@ def probability_value(row: Mapping[str, Any], canonical_name: str = 'model_proba
         return None
     if 1.0 < value <= 100.0:
         value /= 100.0
-    if 0.0 < value < 1.0:
-        return value
-    return None
+    return value if 0.0 < value < 1.0 else None
 
 
 def _mapped_status_values(row: Mapping[str, Any]) -> list[str]:
@@ -135,36 +109,27 @@ def _mapped_status_values(row: Mapping[str, Any]) -> list[str]:
     statuses: list[str] = []
     for alias in ALIASES['result_status']:
         raw = safe_text(normalized.get(clean_key(alias))).lower()
-        if not raw:
-            continue
-        statuses.append(RESULT_MAP.get(raw, raw))
+        if raw:
+            statuses.append(RESULT_MAP.get(raw, raw))
     return statuses
 
 
 def has_void_label(row: Mapping[str, Any]) -> bool:
     normalized = normalized_mapping(row)
-    aliases = ALIASES['result_status'] + ALIASES['final_score']
-    for alias in aliases:
+    for alias in ALIASES['result_status'] + ALIASES['final_score']:
         value = safe_text(normalized.get(clean_key(alias))).lower()
         if not value:
             continue
         mapped = RESULT_MAP.get(value, value)
-        if mapped == 'void' or value in VOID_LABELS:
-            return True
-        if any(label in value for label in VOID_LABELS):
+        if mapped == 'void' or value in VOID_LABELS or any(label in value for label in VOID_LABELS):
             return True
     return False
 
 
 def result_status(row: Mapping[str, Any]) -> str:
     statuses = _mapped_status_values(row)
-    # A void/push/cancellation label is a terminal settlement state and must not
-    # be counted as a loss even when another legacy field still says loss.
     if has_void_label(row):
         return 'void'
-    # API/result sync can set result_status=win/loss while older upload fields
-    # like verified_grade remain pending. Never let a pending alias overwrite a
-    # later resolved grade.
     for status in statuses:
         if status in {'win', 'loss'}:
             return status
@@ -175,11 +140,7 @@ def result_status(row: Mapping[str, Any]) -> str:
     winner = first_text(row, 'winner').lower()
     if pick and winner:
         return 'win' if pick == winner else 'loss'
-    # Preserve explicit pending labels, but do not manufacture a pending grade
-    # for raw prediction rows. Raw ungraded rows must not become proof rows.
-    if statuses:
-        return 'pending'
-    return ''
+    return 'pending' if statuses else ''
 
 
 def normalize_row(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -187,12 +148,7 @@ def normalize_row(row: Mapping[str, Any]) -> dict[str, Any]:
     prob = probability_value(row, 'model_probability')
     if prob is not None:
         out['model_probability'] = round(prob, 6)
-    for field in (
-        'decimal_price', 'api_coverage_score', 'books', 'agent_score', 'scanner_strength_score',
-        'model_edge', 'computed_ev_decimal', 'closing_decimal_price', '_robust_decimal_price',
-        '_robust_expected_value', '_robust_profit_at_80_percent', '_price_range_risk',
-        'recommended_stake_units', 'stake_units',
-    ):
+    for field in ('decimal_price', 'api_coverage_score', 'books', 'agent_score', 'scanner_strength_score', 'model_edge', 'computed_ev_decimal', 'closing_decimal_price', '_robust_decimal_price', '_robust_expected_value', '_robust_profit_at_80_percent', '_price_range_risk', 'recommended_stake_units', 'stake_units'):
         value = numeric_value(row, field)
         if value is not None:
             if field == 'api_coverage_score' and value > 1.0:
@@ -210,20 +166,11 @@ def _needs_synthetic_proof(row: Mapping[str, Any]) -> bool:
     if safe_text(row.get('proof_id')) and safe_text(row.get('locked_at_utc')):
         return False
     status = result_status(row)
-    return _truthy(row.get('lock_ready')) or status in {'win', 'loss', 'void', 'pending'}
+    return _truthy(row.get('lock_ready')) or status in {'win', 'loss', 'void'}
 
 
 def _synthetic_proof_id(row: Mapping[str, Any]) -> str:
-    key = '|'.join([
-        safe_text(row.get('event_id')),
-        safe_text(row.get('event')),
-        safe_text(row.get('event_start_utc')),
-        safe_text(row.get('sport')),
-        safe_text(row.get('market_type')),
-        safe_text(row.get('line_point')),
-        safe_text(row.get('prediction')),
-        safe_text(row.get('decimal_price')),
-    ])
+    key = '|'.join([safe_text(row.get('event_id')), safe_text(row.get('event')), safe_text(row.get('event_start_utc')), safe_text(row.get('sport')), safe_text(row.get('market_type')), safe_text(row.get('line_point')), safe_text(row.get('prediction')), safe_text(row.get('decimal_price'))])
     return 'OLP-SYN-' + hashlib.sha256(key.encode('utf-8')).hexdigest()[:12].upper()
 
 
@@ -246,13 +193,7 @@ def _dedupe_key(row: Mapping[str, Any]) -> tuple[str, ...]:
         return ('proof_id', proof_id)
     event_id = safe_text(row.get('event_id'))
     if event_id:
-        return (
-            'event_id',
-            event_id,
-            safe_text(row.get('market_type')).lower(),
-            safe_text(row.get('line_point')).lower(),
-            safe_text(row.get('prediction')).lower(),
-        )
+        return ('event_id', event_id, safe_text(row.get('market_type')).lower(), safe_text(row.get('line_point')).lower(), safe_text(row.get('prediction')).lower())
     return tuple(safe_text(row.get(column)).lower() for column in DEDUPLICATION_COLUMNS if column != 'proof_id')
 
 
