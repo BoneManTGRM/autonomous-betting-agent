@@ -175,7 +175,11 @@ def result_status(row: Mapping[str, Any]) -> str:
     winner = first_text(row, 'winner').lower()
     if pick and winner:
         return 'win' if pick == winner else 'loss'
-    return 'pending'
+    # Preserve explicit pending labels, but do not manufacture a pending grade
+    # for raw prediction rows. Raw ungraded rows must not become proof rows.
+    if statuses:
+        return 'pending'
+    return ''
 
 
 def normalize_row(row: Mapping[str, Any]) -> dict[str, Any]:
