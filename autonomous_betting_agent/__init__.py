@@ -318,6 +318,18 @@ def _install_result_grade_aliases() -> None:
         'not_graded': 'pending',
         'not graded': 'pending',
     })
+    if getattr(rn, '_aba_pending_raw_proof_guard_v1', False):
+        return
+
+    def protected_needs_synthetic_proof(row):
+        if rn.safe_text(row.get('proof_id')) and rn.safe_text(row.get('locked_at_utc')):
+            return False
+        status = rn.result_status(row)
+        ready = rn.safe_text(row.get('lock_ready')).lower() in {'true', '1', 'yes', 'y', 'pass', 'ok'}
+        return ready or status in {'win', 'loss', 'void'}
+
+    rn._needs_synthetic_proof = protected_needs_synthetic_proof
+    rn._aba_pending_raw_proof_guard_v1 = True
 
 
 _install_price_normalizer()
