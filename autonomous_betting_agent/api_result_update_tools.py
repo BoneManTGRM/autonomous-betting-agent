@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+import re
+from datetime import datetime, timezone
+from typing import Any, Iterable, Mapping
 
 import pandas as pd
+import requests
 
 from .odds_lock_tools import profit_units
 from .row_normalizer import normalize_frame, safe_text
 
 SUPPORTED_RESULT_MARKETS = {'h2h', 'moneyline', 'winner', 'match_winner'}
+TEAM_SPLIT_RE = re.compile(r'\s+(?:at|vs\.?|v\.?|@)\s+', re.IGNORECASE)
 
 
 def _safe_float(value: Any) -> float | None:
@@ -18,6 +22,93 @@ def _safe_float(value: Any) -> float | None:
     if pd.isna(parsed):
         return None
     return parsed
+
+
+def _norm(value: Any) -> str:
+    return re.sub(r'[^a-z0-9]+', ' ', safe_text(value).lower()).strip()
+
+
+def _parse_utc(value: Any) -> datetime | None:
+    text = safe_text(value)
+    if not text:
+        return None
+    try:
+        if text.endswith('Z'):
+            text = text[:-1] + '+00:00'
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _event_parts(value: Any) -> tuple[str, str]:
+    parts = [part.strip() for part in TEAM_SPLIT_RE.split(safe_text(value), maxsplit=1)]
+    if len(parts) != 2:
+        return '', ''
+    return _norm(parts[0]), _norm(parts[1])
+
+
+def fetch_the_odds_scores(*, sport_key: str, api_key: str, days_from: int = 3, timeout: int = 12) -> list[dict[str, Any]]:
+    if not api_key or not sport_key:
+        return []
+    url = f'https://api.the-odds-api.com/v4/sports/{sport_key}/scores/'
+    response = requests.get(url, params={'apiKey': api_key, 'daysFrom': int(days_from)}, timeout=timeout)
+    response.raise_for_status()
+    payload = response.json()
+    return payload if isinstance(payload, list) else []
+
+
+def _fetch_score_map(sport_keys: Iterable[str], *, api_key: str, days_from: int) -> tuple[dict[str, list[dict[str, Any]]], list[str]]:
+    scores: dict[str, list[dict[str, Any]]] = {}
+    errors: list[str] = []
+    for sport_key in sorted({safe_text(value) for value in sport_keys if safe_text(value)}):
+        try:
+            scores[sport_key] = fetch_the_odds_scores(sport_key=sport_key, api_key=api_key, days_from=days_from)
+        except Exception as exc:
+            scores[sport_key] = []
+            errors.append(f'{sport_key}: {exc}')
+    return scores, errors
+
+
+def _score_winner(score_event: Mapping[str, Any]) -> tuple[str, str]:
+    scores = score_event.get('scores') or []
+    if not isinstance(scores, list) or len(scores) < 2:
+        return '', ''
+    parsed: list[tuple[str, int]] = []
+    for item in scores:
+        if isinstance(item, Mapping):
+            value = _safe_float(item.get('score'))
+            name = safe_text(item.get('name'))
+            if name and value is not None:
+                parsed.append((name, int(value)))
+    if len(parsed) < 2:
+        return '', ''
+    final_score = f'{parsed[0][0]} {parsed[0][1]} - {parsed[1][1]} {parsed[1][0]}'
+    if parsed[0][1] == parsed[1][1]:
+        return 'draw/push', final_score
+    return (parsed[0][0] if parsed[0][1] > parsed[1][1] else parsed[1][0]), final_score
+
+
+def _match_score_event(row: Mapping[str, Any], score_events: Iterable[Mapping[str, Any]]) -> Mapping[str, Any] | None:
+    event_id = safe_text(row.get('event_id') or row.get('api_event_id'))
+    row_away, row_home = _event_parts(row.get('event'))
+    row_start = _parse_utc(row.get('event_start_utc'))
+    for score_event in score_events:
+        if not isinstance(score_event, Mapping):
+            continue
+        if event_id and event_id == safe_text(score_event.get('id')):
+            return score_event
+        away = _norm(score_event.get('away_team'))
+        home = _norm(score_event.get('home_team'))
+        if not away or not home or not row_away or not row_home or {away, home} != {row_away, row_home}:
+            continue
+        score_start = _parse_utc(score_event.get('commence_time'))
+        if row_start and score_start and abs((row_start - score_start).total_seconds()) > 18 * 3600:
+            continue
+        return score_event
+    return None
 
 
 def closing_line_metrics(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -58,7 +149,10 @@ def grade_moneyline_row(row: Mapping[str, Any], *, winner: str, final_score: str
     item['winner'] = clean_winner
     if final_score:
         item['final_score'] = final_score
-    item['result_status'] = 'win' if pick == clean_winner.lower() else 'loss'
+    if clean_winner.lower() == 'draw/push':
+        item['result_status'] = 'void'
+    else:
+        item['result_status'] = 'win' if pick == clean_winner.lower() else 'loss'
     item['api_grade_source'] = source
     item['api_grade_status'] = 'graded_from_api_score'
     item['profit_units'] = profit_units(item)
@@ -70,13 +164,20 @@ def auto_full_update_rows(rows: pd.DataFrame | list[dict[str, Any]], *, odds_api
     frame = apply_clv_columns(rows)
     if frame.empty:
         return pd.DataFrame(), {'input_rows': 0, 'updated_rows': 0, 'api_errors': []}
+    score_map, api_errors = _fetch_score_map(frame.get('sport_key', pd.Series(dtype=str)).tolist(), api_key=odds_api_key or '', days_from=days_from) if odds_api_key else ({}, ['ODDS_API_KEY missing'])
     updated = []
     changed = 0
     protected = {'locked_at_utc', 'proof_hash', 'proof_id', 'model_probability', 'decimal_price', 'prediction'}
     for row in frame.to_dict('records'):
         before = {key: row.get(key) for key in protected}
         item = dict(row)
-        if safe_text(item.get('api_winner')) and safe_text(item.get('result_status')).lower() in {'', 'pending', 'scheduled'}:
+        score_event = _match_score_event(item, score_map.get(safe_text(item.get('sport_key')), []))
+        if score_event and str(score_event.get('completed')).lower() in {'true', '1', 'yes'}:
+            winner, final_score = _score_winner(score_event)
+            if winner:
+                item = grade_moneyline_row(item, winner=winner, final_score=final_score, source='the_odds_api_scores')
+                changed += 1
+        elif safe_text(item.get('api_winner')) and safe_text(item.get('result_status')).lower() in {'', 'pending', 'scheduled'}:
             item = grade_moneyline_row(item, winner=safe_text(item.get('api_winner')), final_score=safe_text(item.get('api_final_score')), source=safe_text(item.get('api_grade_source')) or 'verified_api_column')
             changed += 1
         item['api_update_protected_fields_ok'] = all(item.get(key) == before.get(key) for key in protected)
@@ -85,7 +186,8 @@ def auto_full_update_rows(rows: pd.DataFrame | list[dict[str, Any]], *, odds_api
     return out, {
         'input_rows': int(len(frame)),
         'updated_rows': int(changed),
-        'api_errors': [] if odds_api_key else ['ODDS_API_KEY not used in offline-safe helper path'],
+        'api_errors': api_errors,
+        'api_sports_checked': int(len(score_map)),
         'protected_fields_ok': bool(out.get('api_update_protected_fields_ok', pd.Series([True])).fillna(False).all()),
         'selection_thresholds_changed': False,
         'days_from': int(days_from),
