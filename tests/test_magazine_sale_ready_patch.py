@@ -6,6 +6,7 @@ from PIL import Image
 
 from autonomous_betting_agent import magazine_book_export
 from autonomous_betting_agent.magazine_sale_ready_patch import (
+    _decimal_text,
     _force_truthful_gate,
     apply_magazine_sale_ready_patch,
     sale_ready_chain_items,
@@ -149,6 +150,7 @@ def test_uploaded_positive_ev_row_is_forced_to_watchlist_not_play():
         risk_level="FALLBACK MODE",
         odds_source="uploaded row",
         odds_status="UPLOADED_ROW",
+        american_odds="-256",
         model_market_edge="0.013",
         expected_value_per_unit="0.018",
         units="0.2",
@@ -160,9 +162,18 @@ def test_uploaded_positive_ev_row_is_forced_to_watchlist_not_play():
     assert gated["recommendation"] == "WATCHLIST"
     assert gated["consumer_action"] == "WATCHLIST"
     assert gated["risk"] == "VERIFY PRICE"
-    assert gated["units"] == "0.0"
-    assert "No parlay recommended" in gated["chain_notes"]
+    assert gated["risk"] != "FALLBACK MODE"
+    assert gated["target_stake_units"] == "0.2"
+    assert gated["live_verified_stake_units"] == "0.0"
+    assert gated["units"] == "0.2"
+    assert gated["display_decimal_odds"] == "1.39"
     assert "NO LIVE ODDS MATCH" in gated["report_truth_severity"]
+
+
+def test_american_odds_convert_to_decimal_for_magazine_display():
+    assert _decimal_text("-256") == "1.39"
+    assert _decimal_text("+150") == "2.50"
+    assert _decimal_text("1.91") == "1.91"
 
 
 def test_magazine_preview_and_book_are_two_pages_per_pick():
