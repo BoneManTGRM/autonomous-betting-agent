@@ -49,4 +49,37 @@ jobs:
         run: python scripts/magazine_autofit_stress_test.py
 
       - name: Full test suite
-        run: python -m pytest -q
+        run: |
+          set +e
+          python -m pytest -q 2>&1 | tee pytest-output.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo '--- pytest failure tail ---'
+            tail -n 120 pytest-output.log
+            python - <<'PY'
+          from pathlib import Path
+          import re
+
+          log = Path('pytest-output.log').read_text(encoding='utf-8', errors='replace')
+          failed = re.findall(r'^(tests/[^\s]+)::([^\s]+)\s+FAILED', log, flags=re.MULTILINE)
+          if failed:
+              summary = '; '.join(f'{path}::{name}' for path, name in failed[:20])
+          else:
+              lines = [line for line in log.splitlines() if 'FAILED' in line or 'ERROR' in line or 'AssertionError' in line or 'ImportError' in line or 'ModuleNotFoundError' in line]
+              summary = ' | '.join(lines[-20:]) if lines else 'pytest failed; inspect pytest failure tail'
+          annotation = summary.replace('%', '%25').replace('\n', '%0A').replace('\r', '%0D')
+          Path('pytest-failure-summary.txt').write_text(summary + '\n\n--- tail ---\n' + '\n'.join(log.splitlines()[-120:]), encoding='utf-8')
+          print(f'::error title=pytest failed::{annotation}')
+          PY
+            exit "$status"
+          fi
+
+      - name: Upload pytest failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-failure-diagnostics
+          path: |
+            pytest-output.log
+            pytest-failure-summary.txt
+          if-no-files-found: warn
