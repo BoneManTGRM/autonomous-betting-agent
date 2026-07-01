@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 from typing import Any
 
@@ -58,6 +59,29 @@ def _current_rows_from_session() -> tuple[str, list[dict[str, Any]]]:
     return "", []
 
 
+def _current_source_present() -> bool:
+    source, rows = _current_rows_from_session()
+    if not rows:
+        return False
+    try:
+        import streamlit as st
+        st.session_state["report_studio_preferred_source"] = source
+        st.session_state["proof_center_preferred_source"] = source
+    except Exception:
+        pass
+    return True
+
+
+def _called_from_report_studio() -> bool:
+    try:
+        for frame in inspect.stack()[1:8]:
+            if str(frame.filename).replace("\\", "/").endswith("pages/report_studio.py"):
+                return True
+    except Exception:
+        return False
+    return False
+
+
 def _batch_id(source: str, rows: list[dict[str, Any]]) -> str:
     payload = json.dumps(rows[:25], sort_keys=True, default=str)
     digest = hashlib.sha256((source + "|" + payload).encode("utf-8")).hexdigest()[:12]
@@ -113,6 +137,28 @@ def _merge_current_first(current: list[dict[str, Any]], stored: list[dict[str, A
     return out
 
 
+def _patch_report_studio_ledger_source() -> None:
+    try:
+        from autonomous_betting_agent import commercial_platform_tools as cpt
+    except Exception:
+        return
+    original = getattr(cpt, "load_persistent_ledger", None)
+    if not callable(original) or getattr(original, "_ABA_REPORT_STUDIO_CURRENT_RUN_PATCH", False):
+        return
+
+    def load_persistent_ledger_report_studio_safe(*args: Any, **kwargs: Any):
+        if _called_from_report_studio() and _current_source_present():
+            try:
+                import pandas as pd
+                return pd.DataFrame()
+            except Exception:
+                return None
+        return original(*args, **kwargs)
+
+    load_persistent_ledger_report_studio_safe._ABA_REPORT_STUDIO_CURRENT_RUN_PATCH = True
+    cpt.load_persistent_ledger = load_persistent_ledger_report_studio_safe
+
+
 def _patch_local_storage() -> None:
     try:
         from autonomous_betting_agent.storage import LocalStorage
@@ -144,6 +190,7 @@ def install() -> None:
     global _PATCHED
     if _PATCHED:
         return
+    _patch_report_studio_ledger_source()
     _patch_local_storage()
     _PATCHED = True
 
