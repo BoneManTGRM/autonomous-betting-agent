@@ -14,7 +14,7 @@ from autonomous_betting_agent.report_background_image_service import (
 from autonomous_betting_agent.report_product_layer import MagazineBrand
 
 
-EXPECTED_SUMMARY_SIZE = (1080, 1620)
+EXPECTED_SUMMARY_SIZE = (1080, 3240)
 
 
 def _background_bytes() -> bytes:
