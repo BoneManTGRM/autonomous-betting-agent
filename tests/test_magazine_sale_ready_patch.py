@@ -101,10 +101,13 @@ def test_negative_edge_risk_and_chain_notes_are_not_provider_fallbacks():
         "Recheck odds and key news.",
     ]
     assert chain_items == [
-        "Do not chain negative-EV picks.",
-        "Avoid parlays unless edge turns positive.",
-        "Recheck price before including.",
+        "No parlay recommended",
+        "Negative edge at current price.",
+        "Use as straight-bet research only.",
     ]
+    assert "Do not chain" not in text
+    assert "turns positive" not in text
+    assert "before including" not in text
     assert all(term not in text for term in _provider_terms())
 
 
