@@ -19,6 +19,8 @@ from autonomous_betting_agent.proof_performance_store import (
     validate_ledger_integrity as _validate_ledger_integrity,
 )
 
+LEGACY_FALLBACK_WORKSPACES = {"", "default", "test_01", "public", "main"}
+
 
 def append_performance_rows(
     rows: pd.DataFrame | Sequence[Mapping[str, Any]],
@@ -36,12 +38,18 @@ def read_performance_ledger(workspace_id: str | None = None) -> pd.DataFrame:
 
 def read_workspace_rows(workspace_id: str) -> pd.DataFrame:
     frame = _read_workspace_rows(workspace_id)
-    return frame if not frame.empty else _legacy_performance_frame(workspace_id)
+    if not frame.empty or not _allow_legacy_fallback(workspace_id):
+        return frame
+    return _legacy_performance_frame(workspace_id)
 
 
 def _workspace(value: Any) -> str:
     cleaned = str(value or "").strip().replace(" ", "_").lower()
     return cleaned or "default"
+
+
+def _allow_legacy_fallback(workspace_id: str | None = None) -> bool:
+    return _workspace(workspace_id) in LEGACY_FALLBACK_WORKSPACES
 
 
 def _json_ready(value: Any) -> Any:
@@ -65,13 +73,9 @@ def _json_ready(value: Any) -> Any:
 
 
 def _legacy_performance_frame(workspace_id: str | None = None) -> pd.DataFrame:
-    """Bridge the older Odds Lock proof ledger into the proof-package dashboard.
-
-    The newer proof package stack reads proof_performance_ledger. Existing live
-    deployments may still have their durable proof rows in the legacy persistent
-    Odds Lock ledger. Treat those rows as ledger-backed dashboard rows instead of
-    falling back to transient session rows.
-    """
+    """Bridge older Odds Lock proof ledgers into live dashboard workspaces only."""
+    if not _allow_legacy_fallback(workspace_id):
+        return pd.DataFrame(columns=SCHEMA_FIELDS)
     workspace = _workspace(workspace_id)
     try:
         from autonomous_betting_agent.commercial_platform_tools import filter_locked_proof_rows, load_persistent_ledger
@@ -106,14 +110,14 @@ def _legacy_performance_frame(workspace_id: str | None = None) -> pd.DataFrame:
 
 def _performance_or_legacy_frame(workspace_id: str | None = None) -> pd.DataFrame:
     frame = read_performance_ledger(workspace_id=workspace_id)
-    if not frame.empty:
+    if not frame.empty or not _allow_legacy_fallback(workspace_id):
         return frame.copy(deep=True)
     return _legacy_performance_frame(workspace_id)
 
 
 def read_recent_rows(workspace_id: str | None = None, limit: int = 100) -> pd.DataFrame:
     frame = _read_recent_rows(workspace_id=workspace_id, limit=limit)
-    if frame.empty:
+    if frame.empty and _allow_legacy_fallback(workspace_id):
         frame = _legacy_performance_frame(workspace_id)
     if frame.empty:
         return frame
