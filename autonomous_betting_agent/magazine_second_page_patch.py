@@ -5,7 +5,7 @@ from typing import Any, Iterable
 import hashlib
 import re
 
-PATCH_VERSION = "direct_second_page_v4_truth_contract"
+PATCH_VERSION = "direct_second_page_v5_recommendation_board_truth_safe"
 GOLD = (241, 184, 45)
 
 ES = {
@@ -17,14 +17,23 @@ ES = {
     "HISTORY ONLY": "SOLO HISTORIAL",
     "PRICE": "CUOTA",
     "Primary Anchor": "Ancla principal",
-    "Chain Map": "Mapa parlay",
-    "Live Watch": "Monitoreo en vivo",
-    "Prop Board": "Tablero props",
-    "Quality Gate": "Filtro de calidad",
-    "All-Sport Menu": "Menú multi-deporte",
+    "Chain / Parlay Map": "Mapa Parlay / Cadena",
+    "Prop / Side Market Board": "Tablero de Props / Mercados Secundarios",
+    "Live Trade Triggers": "Gatillos en Vivo",
+    "Flash Bets": "Apuestas Flash",
+    "Hedge / Middle Notes": "Notas de Hedge / Middle",
+    "Quality Gate": "Filtro de Calidad",
+    "Cancel Conditions": "Condiciones de Cancelación",
+    "ADVANCED MARKETS ACTIVE": "MERCADOS AVANZADOS ACTIVOS",
     "ADVANCED MARKETS NEED VERIFICATION": "MERCADOS AVANZADOS REQUIEREN VERIFICACIÓN",
-    "ADVANCED MARKETS READY FOR REVIEW": "MERCADOS AVANZADOS LISTOS PARA REVISIÓN",
-    "This page never creates a source claim from missing data and is safe for review.": "Esta página no crea afirmaciones desde datos faltantes y es segura para revisión.",
+    "TRIGGER-BASED WATCHLIST": "LISTA DE SEGUIMIENTO POR GATILLO",
+    "MENU ONLY": "SOLO MENÚ",
+    "VERIFIED RECOMMENDATION": "RECOMENDACIÓN VERIFICADA",
+    "WATCHLIST": "LISTA DE SEGUIMIENTO",
+    "WATCHLIST IDEA": "IDEA EN LISTA DE SEGUIMIENTO",
+    "NOT RECOMMENDED": "NO RECOMENDADO",
+    "+ MORE WATCHLIST IDEAS AVAILABLE": "+ MÁS IDEAS EN LISTA DE SEGUIMIENTO DISPONIBLES",
+    "This page lists recommendation candidates only; unverified markets stay watchlist, trigger-based, or menu only.": "Esta página muestra candidatos de recomendación; mercados no verificados quedan como lista, gatillo o solo menú.",
 }
 
 
@@ -57,25 +66,34 @@ def _tr(value: Any, lang: str) -> str:
         return ES[text]
     replacements = (
         ("Primary read", "Lectura principal"),
-        ("Page one remains the official anchor", "La página uno sigue siendo el ancla oficial"),
-        ("Add-ons require exact event and line match", "Los agregados requieren coincidencia exacta de evento y línea"),
-        ("Missing feeds stay verification-only", "Feeds faltantes quedan solo para verificación"),
-        ("No verified chain notes attached", "Sin notas parlay verificadas"),
-        ("No compatible add-on selections attached", "Sin selecciones agregadas compatibles"),
-        ("Use as watchlist until source match is verified", "Usar como lista de seguimiento hasta verificar la fuente"),
-        ("No verified in-game trigger attached", "Sin gatillo en vivo verificado"),
-        ("Refresh source data before use", "Actualizar datos fuente antes de usar"),
-        ("Use only after event and market match", "Usar solo tras coincidir evento y mercado"),
-        ("Source gate", "Filtro fuente"),
-        ("Value gate", "Filtro valor"),
-        ("Market gate", "Filtro mercado"),
-        ("Context gate", "Filtro contexto"),
-        ("requires positive EV and edge", "requiere EV y ventaja positivos"),
-        ("requires exact event, line, selection", "requiere evento, línea y selección exactos"),
-        ("requires current news/status check", "requiere revisión actual de noticias/estado"),
-        ("Prop ideas are menu-only until live odds and context are verified", "Las props son solo menú hasta verificar cuotas y contexto en vivo"),
-        ("No advanced prop recommendation without source match", "Sin recomendación prop avanzada sin coincidencia de fuente"),
-        ("Use Page 1 straight-bet anchor only", "Usar solo el ancla de apuesta directa de Página 1"),
+        ("Page one remains the official straight-bet anchor", "La página uno sigue siendo el ancla oficial de apuesta directa"),
+        ("Status", "Estado"),
+        ("Source", "Fuente"),
+        ("Scope", "Alcance"),
+        ("WATCHLIST", "LISTA DE SEGUIMIENTO"),
+        ("MENU ONLY", "SOLO MENÚ"),
+        ("TRIGGER-BASED", "POR GATILLO"),
+        ("NOT RECOMMENDED", "NO RECOMENDADO"),
+        ("VERIFIED RECOMMENDATION", "RECOMENDACIÓN VERIFICADA"),
+        ("Two-leg idea", "Idea de dos selecciones"),
+        ("Same-game parlay", "Parlay del mismo partido"),
+        ("Team total", "Total de equipo"),
+        ("First-half", "Primer tiempo"),
+        ("Second-half", "Segundo tiempo"),
+        ("next score", "próximo anotador/equipo"),
+        ("favorite scores first", "favorito anota primero"),
+        ("underdog scores first", "no favorito anota primero"),
+        ("halftime", "medio tiempo"),
+        ("hedge", "hedge"),
+        ("middle", "middle"),
+        ("cashout", "cashout"),
+        ("Cancel", "Cancelar"),
+        ("Verify", "Verificar"),
+        ("requires", "requiere"),
+        ("price", "cuota"),
+        ("line", "línea"),
+        ("market", "mercado"),
+        ("context", "contexto"),
     )
     for old, new in replacements:
         text = re.sub(re.escape(old), new, text, flags=re.I)
@@ -85,7 +103,7 @@ def _tr(value: Any, lang: str) -> str:
 def _get(data: dict[str, Any], *keys: str, default: str = "") -> str:
     for key in keys:
         text = _clean(data.get(key))
-        if text and text.lower() not in {"nan", "none", "null", "n/a", "na", "--"}:
+        if text and text.lower() not in {"nan", "none", "null", "n/a", "na", "--", "data unavailable"}:
             return text
     return default
 
@@ -109,14 +127,14 @@ def _decimal_text(value: Any) -> str | None:
         num = 1.0 + num / 100.0
     elif num <= 1:
         return None
-    return f"{num:.2f}".rstrip("0").rstrip(".")
+    return f"{num:.2f}"
 
 
 def _ok(data: dict[str, Any]) -> bool:
     status = _get(data, "odds_status", "odds_api_status").lower()
-    flag = _get(data, "odds_api_live", "the_odds_api_live").lower()
+    flag = _get(data, "odds_api_live", "the_odds_api_live", "odds_verified").lower()
     mode = _get(data, "report_source_mode").lower()
-    return mode == "current-run" and (status in {"live", "live_match", "live_api", "odds_api_live_match"} or flag in {"1", "true", "yes", "live"})
+    return mode == "current-run" and (status in {"live", "live_match", "live_api", "odds_api_live_match"} or flag in {"1", "true", "yes", "live", "verified"})
 
 
 def _source_status(data: dict[str, Any], lang: str) -> tuple[str, tuple[int, int, int]]:
@@ -128,20 +146,115 @@ def _source_status(data: dict[str, Any], lang: str) -> tuple[str, tuple[int, int
     return _tr("VERIFY SOURCE", lang), GOLD
 
 
-def _items(data: dict[str, Any], keys: tuple[str, ...], fallback: list[str], lang: str = "en") -> list[str]:
+def _field_items(data: dict[str, Any], keys: tuple[str, ...], fallback: list[str], lang: str, limit: int = 4) -> list[str]:
     out: list[str] = []
     for key in keys:
         out.extend(_split(data.get(key)))
-    out = [item for item in out if not any(token in item.lower() for token in ("not returned", "data unavailable", "context unavailable"))]
-    return [_tr(item, lang) for item in (out or fallback)[:4]]
+    out = [item for item in out if not any(token in item.lower() for token in ("not returned", "data unavailable", "context unavailable", "api key missing"))]
+    return [_tr(item, lang) for item in (out or fallback)[:limit]]
 
 
 def _source_rows(data: dict[str, Any], lang: str) -> list[str]:
     return [
         _tr("Source: ", lang) + _tr(_get(data, "report_source_label", "report_source_mode", default="VERIFY"), lang),
         _tr("Scope: ", lang) + _tr(_get(data, "report_data_scope", default="VERIFY"), lang),
-        _tr("Odds: ", lang) + _tr(_get(data, "odds_status", "odds_source", default="VERIFY"), lang),
-        _tr("Context: ", lang) + _tr(_get(data, "context_status", "context_source", default="VERIFY"), lang),
+        _tr("Status: ", lang) + _tr(_get(data, "report_truth_severity", "verification_status", default="VERIFY SOURCE"), lang),
+    ]
+
+
+def _status_prefix(data: dict[str, Any]) -> str:
+    return "VERIFIED RECOMMENDATION" if _ok(data) else "WATCHLIST"
+
+
+def _chain_rows(data: dict[str, Any], lang: str) -> list[str]:
+    status = _status_prefix(data)
+    fallback = [
+        f"{status} · Two-leg idea: anchor + alternate total only after event and line match.",
+        "MENU ONLY · Same-game parlay: anchor + team total if book confirms both markets.",
+        "WATCHLIST IDEA · Correlated angle: anchor + second-half total after pace confirmation.",
+        "NOT RECOMMENDED · Avoid aggressive multi-leg chains until price gate passes.",
+    ]
+    return _field_items(data, ("advanced_chain_ideas", "correlated_markets", "add_on_legs", "parlay_notes"), fallback, lang, 4)
+
+
+def _prop_rows(data: dict[str, Any], lang: str) -> list[str]:
+    fallback = [
+        "MENU ONLY · Team total: compare projected tempo with live team total before entry.",
+        "MENU ONLY · Game total alternate line: wait for a better number than fair price.",
+        "TRIGGER-BASED · Team to qualify / next score only if live price beats target.",
+        "WATCHLIST IDEA · Corners, throw-ins, free kicks, shots only when book and context support them.",
+    ]
+    return _field_items(data, ("prop_market_ideas", "side_market_ideas", "prop_market_notes", "advanced_market_notes", "team_to_qualify_angle", "next_score_angle", "corners_angle", "throw_ins_angle", "free_kicks_angle"), fallback, lang, 4)
+
+
+def _live_rows(data: dict[str, Any], lang: str) -> list[str]:
+    fallback = [
+        "TRIGGER-BASED · If favorite scores first, watch alternate total and hedge price.",
+        "TRIGGER-BASED · If underdog scores first, watch favorite live moneyline drift.",
+        "TRIGGER-BASED · If tied at halftime, watch second-half total and next score.",
+        "TRIGGER-BASED · If tempo/pressure rises, watch short-window totals or pressure markets.",
+    ]
+    return _field_items(data, ("live_trade_triggers", "live_betting_notes", "minute_window_angles", "in_game_notes"), fallback, lang, 4)
+
+
+def _flash_rows(data: dict[str, Any], lang: str) -> list[str]:
+    fallback = [
+        "TRIGGER-BASED · Next team to score after pressure spike; cancel if momentum fades.",
+        "TRIGGER-BASED · Short-window total after two sustained attacks or price drop.",
+        "MENU ONLY · Live alternate total if market overreacts to slow early pace.",
+        "WATCHLIST IDEA · Momentum trade only inside the valid timing window.",
+    ]
+    return _field_items(data, ("flash_bets", "flash_market_notes"), fallback, lang, 4)
+
+
+def _hedge_rows(data: dict[str, Any], lang: str) -> list[str]:
+    fallback = [
+        "WATCHLIST IDEA · Hedge only after a favorable score state, not from fear.",
+        "MENU ONLY · Middle becomes possible only after line moves across the original number.",
+        "WATCHLIST IDEA · Cashout only if price no longer beats fair value.",
+        "NOT RECOMMENDED · Do not chase if the trigger window expires.",
+    ]
+    return _field_items(data, ("hedge_notes", "middle_notes", "cashout_notes"), fallback, lang, 4)
+
+
+def _quality_rows(data: dict[str, Any], lang: str) -> list[str]:
+    status, _color = _source_status(data, lang)
+    fallback = [
+        "Source gate: " + status,
+        "Price gate: requires current price above target price.",
+        "Value gate: requires positive EV and edge.",
+        "Market gate: requires exact event, market, line, and selection match.",
+    ]
+    return _field_items(data, ("quality_gate_notes",), fallback, lang, 4)
+
+
+def _cancel_rows(data: dict[str, Any], lang: str) -> list[str]:
+    fallback = [
+        "Cancel if live odds cannot be matched to the same event.",
+        "Cancel if price moves below fair value or target price.",
+        "Cancel if lineup/news/weather context changes materially.",
+        "Cancel if tempo does not match the trigger condition.",
+        "+ MORE WATCHLIST IDEAS AVAILABLE",
+    ]
+    return _field_items(data, ("do_not_bet_conditions", "cancel_conditions", "risk_notes"), fallback, lang, 5)
+
+
+def _page_two_sections(data: dict[str, Any], lang: str) -> list[tuple[str, list[str], tuple[int, int, int]]]:
+    pick = _get(data, "prediction", "exact_bet", "pick", "selection", default="Primary pick")
+    anchor = [
+        "Primary read: " + pick + ".",
+        "Page one remains the official straight-bet anchor.",
+        *_source_rows(data, lang),
+    ]
+    return [
+        ("Primary Anchor", [_tr(item, lang) for item in anchor[:4]], (190, 30, 28)),
+        ("Chain / Parlay Map", _chain_rows(data, lang), (19, 66, 108)),
+        ("Prop / Side Market Board", _prop_rows(data, lang), (19, 66, 108)),
+        ("Live Trade Triggers", _live_rows(data, lang), GOLD),
+        ("Flash Bets", _flash_rows(data, lang), GOLD),
+        ("Hedge / Middle Notes", _hedge_rows(data, lang), (19, 66, 108)),
+        ("Quality Gate", _quality_rows(data, lang), (190, 30, 28)),
+        ("Cancel Conditions", _cancel_rows(data, lang), (190, 30, 28)),
     ]
 
 
@@ -160,7 +273,7 @@ def _draw_second_page(module: Any, pick: Any, background_image: Any = None, repo
     blue = getattr(module, "BLUE", (19, 66, 108))
     cream = getattr(module, "CREAM", (255, 248, 230))
     paper = getattr(module, "PAPER", (244, 235, 211))
-    seed = int(hashlib.sha256((_get(data, "event", "game", "matchup", default="advanced") + "page2").encode()).hexdigest()[:8], 16)
+    seed = int(hashlib.sha256((_get(data, "event", "game", "matchup", "event_name", default="advanced") + "page2").encode()).hexdigest()[:8], 16)
     img = module._paper(seed).convert("RGBA")
     draw = ImageDraw.Draw(img, "RGBA")
     draw.rectangle((18, 18, 1062, 82), fill=black)
@@ -171,47 +284,59 @@ def _draw_second_page(module: Any, pick: Any, background_image: Any = None, repo
     page_text = f"{_tr('PAGE', lang)} {page_number} {_tr('OF', lang)} {total_pages}"
     draw.rounded_rectangle((840, 24, 1050, 74), radius=5, fill=cream, outline=black)
     draw.text((862, 32), page_text, font=module._fit(page_text, 174, 28, 16, True), fill=black)
+
     away, home = module._teams(data)
-    pick_text = module._pick(data)
     matchup = f"{away} vs {home}".upper()
-    draw.text((42, 106), matchup, font=module._fit(matchup, 690, 58, 20, True), fill=red)
-    draw.text((42, 176), _tr(pick_text.upper(), lang), font=module._fit(_tr(pick_text.upper(), lang), 650, 42, 16, True), fill=blue)
+    module._txt_auto(draw, 42, 104, matchup, 660, 58, 52, 16, red, True, 2)
+    pick_text = _tr(module._pick(data).upper(), lang)
+    module._txt_auto(draw, 42, 172, pick_text, 650, 42, 36, 14, blue, True, 2)
+
     status, status_color = _source_status(data, lang)
-    draw.rounded_rectangle((710, 106, 1042, 224), radius=14, fill=black, outline=status_color, width=3)
-    draw.text((730, 124), status, font=module._fit(status, 292, 25, 11, True), fill=status_color)
-    price = _decimal_text(_get(data, "decimal_price", "decimal_odds", "odds", "best_price", "odds_at_pick", "american_odds", "odds_american")) or "N/A"
+    draw.rounded_rectangle((720, 104, 1042, 222), radius=14, fill=black, outline=status_color, width=3)
+    draw.text((740, 122), status, font=module._fit(status, 282, 25, 11, True), fill=status_color)
+    price = _decimal_text(_get(data, "display_decimal_odds", "decimal_price", "decimal_odds", "odds", "best_price", "odds_at_pick", "american_odds", "odds_american")) or "N/A"
     price_text = f"{_tr('PRICE', lang)} {price}"
-    draw.text((730, 164), price_text, font=module._fit(price_text, 250, 30, 13, True), fill=cream)
+    draw.text((740, 163), price_text, font=module._fit(price_text, 250, 30, 13, True), fill=cream)
 
-    def box(x: int, y: int, w: int, h: int, title: str, rows: list[str], color: tuple[int, int, int]) -> None:
+    note = _get(data, "report_truth_warning", default="This page lists recommendation candidates only; unverified markets stay watchlist, trigger-based, or menu only.")
+    draw.rounded_rectangle((42, 246, 1042, 312), radius=12, fill=GOLD + (245,), outline=black, width=2)
+    module._txt_auto(draw, 64, 263, _tr(note, lang), 956, 34, 21, 9, black, True, 2)
+
+    def box(x: int, y: int, w: int, h: int, title: str, rows: list[str], color: tuple[int, int, int], row_limit: int = 4) -> None:
         draw.rounded_rectangle((x, y, x + w, y + h), radius=14, fill=paper + (255,), outline=black + (220,), width=3)
-        draw.rounded_rectangle((x, y, x + w, y + 52), radius=10, fill=color)
+        draw.rounded_rectangle((x, y, x + w, y + 48), radius=10, fill=color)
         label = _tr(title, lang).upper()
-        draw.text((x + 16, y + 10), label, font=module._fit(label, w - 32, 28, 12, True), fill=cream)
-        cy = y + 72
-        for item in rows[:4]:
-            if cy > y + h - 32:
+        draw.text((x + 14, y + 9), label, font=module._fit(label, w - 28, 25, 10, True), fill=cream)
+        cy = y + 62
+        font_start = 15 if h <= 218 else 16
+        for item in rows[:row_limit]:
+            if cy > y + h - 28:
                 break
-            draw.ellipse((x + 18, cy + 6, x + 31, cy + 19), fill=color)
-            module._txt_auto(draw, x + 42, cy, _tr(item, lang), w - 62, 44, 17, 7, black, False, 2)
-            cy += 54
+            draw.ellipse((x + 15, cy + 5, x + 27, cy + 17), fill=color)
+            module._txt_auto(draw, x + 36, cy, _tr(item, lang), w - 50, 38, font_start, 7, black, False, 2)
+            cy += 42
 
-    note = _get(data, "report_truth_warning", default="Page two adds advanced market context without changing the page one straight-bet anchor.")
-    draw.rounded_rectangle((42, 248, 1042, 312), radius=12, fill=GOLD + (245,), outline=black, width=2)
-    module._txt_auto(draw, 64, 264, _tr(note, lang), 956, 32, 22, 9, black, True, 1)
-    box(42, 340, 488, 300, "Primary Anchor", ["Primary read: " + pick_text + ".", "Page one remains the official anchor.", *_source_rows(data, lang)[:2]], red)
-    box(552, 340, 488, 300, "Chain Map", _items(data, ("chain_notes", "main_read", "add_on_legs", "parlay_notes"), ["No verified chain notes attached.", "No compatible add-on selections attached.", "Use as watchlist until source match is verified."], lang), blue)
-    box(42, 668, 488, 318, "Live Watch", _items(data, ("live_betting_notes", "flash_market_notes", "in_game_notes"), ["No verified in-game trigger attached.", "Refresh source data before use.", "Use only after event and market match."], lang), GOLD)
-    prop_fallback = ["Prop ideas are menu-only until live odds and context are verified.", "No advanced prop recommendation without source match.", "Use Page 1 straight-bet anchor only."]
-    prop_rows = _items(data, ("prop_market_notes", "advanced_market_notes", "player_prop_notes"), prop_fallback, lang) if _ok(data) else [_tr(item, lang) for item in prop_fallback]
-    box(552, 668, 488, 318, "Prop Board", prop_rows, blue)
-    box(42, 1014, 488, 300, "Quality Gate", ["Source gate: " + status, "Value gate: requires positive EV and edge.", "Market gate: requires exact event, line, selection.", "Context gate: requires current news/status check."], red)
-    menu = ["Soccer: cards, corners, throw-ins, free kicks, next score, qualifying.", "Baseball: pitcher Ks, first five, team totals, player bases.", "Basketball/football/hockey: player props, team totals, line movement."]
-    box(552, 1014, 488, 300, "All-Sport Menu", [_tr(item, lang) for item in menu], blue)
-    draw.rounded_rectangle((42, 1340, 1042, 1518), radius=16, fill=black, outline=status_color, width=4)
-    verdict = _tr("ADVANCED MARKETS READY FOR REVIEW" if _ok(data) else "ADVANCED MARKETS NEED VERIFICATION", lang)
-    draw.text((68, 1364), verdict, font=module._fit(verdict, 914, 44, 16, True), fill=status_color)
-    module._txt_auto(draw, 68, 1430, _tr("This page never creates a source claim from missing data and is safe for review.", lang), 914, 58, 23, 8, cream, False, 2)
+    sections = _page_two_sections(data, lang)
+    coords = [
+        (42, 336, 488, 218),
+        (552, 336, 488, 218),
+        (42, 574, 488, 238),
+        (552, 574, 488, 238),
+        (42, 832, 488, 238),
+        (552, 832, 488, 238),
+        (42, 1090, 488, 238),
+        (552, 1090, 488, 238),
+    ]
+    for (title, rows, color), (x, y, w, h) in zip(sections, coords):
+        box(x, y, w, h, title, rows, color, 5 if title == "Cancel Conditions" else 4)
+
+    draw.rounded_rectangle((42, 1352, 1042, 1518), radius=16, fill=black, outline=status_color, width=4)
+    verdict = _tr("ADVANCED MARKETS ACTIVE" if _ok(data) else "ADVANCED MARKETS NEED VERIFICATION", lang)
+    draw.text((68, 1375), verdict, font=module._fit(verdict, 914, 40, 15, True), fill=status_color)
+    final = "Verified markets may be used only when source, price, value, market, context, and execution gates all pass."
+    if not _ok(data):
+        final = "No fake verified props/parlays/live trades. Use these as menu-only, watchlist, or trigger-based candidates until source match is confirmed."
+    module._txt_auto(draw, 68, 1432, _tr(final, lang), 914, 56, 22, 8, cream, False, 2)
     draw.rectangle((20, 1542, 1060, 1581), fill=black)
     module._txt_auto(draw, 42, 1550, getattr(module, "SAFETY_FOOTER", "Informational only."), 890, 20, 15, 8, cream, False, 1)
     return img.convert("RGB")
@@ -225,6 +350,10 @@ def install(module: Any | None = None) -> Any:
             return None
     if getattr(module, "_ABA_DIRECT_SECOND_PAGE_PATCH", "") == PATCH_VERSION:
         return module
+    try:
+        module.ES.update(ES)
+    except Exception:
+        pass
     original_fmt = getattr(module, "_fmt", None)
     if callable(original_fmt) and not getattr(original_fmt, "_ABA_DECIMAL_ODDS_DIRECT", False):
         def fmt_decimal_first(value: Any, kind: str = "") -> str:
@@ -235,19 +364,8 @@ def install(module: Any | None = None) -> Any:
             return original_fmt(value, kind)
         fmt_decimal_first._ABA_DECIMAL_ODDS_DIRECT = True  # type: ignore[attr-defined]
         module._fmt = fmt_decimal_first
-    original_cells = getattr(module, "magazine_metric_cells", None)
-    if callable(original_cells) and not getattr(original_cells, "_ABA_GOLD_WATCHLIST_DIRECT", False):
-        def metric_cells(odds: str, conf: str, edge: str, ev: str, units: str, risk: str):
-            fixed = []
-            for label, value, color, x, width in list(original_cells(odds, conf, edge, ev, units, risk)):
-                if str(label).upper() == "RISK" and any(token in str(risk).lower() for token in ("fallback", "verify", "watch", "volume")):
-                    color = GOLD
-                fixed.append((label, value, color, x, width))
-            return fixed
-        metric_cells._ABA_GOLD_WATCHLIST_DIRECT = True  # type: ignore[attr-defined]
-        module.magazine_metric_cells = metric_cells
     original_page_png = getattr(module, "render_full_pick_magazine_page_png", None)
-    if callable(original_page_png) and not getattr(original_page_png, "_ABA_TWO_PAGE_DIRECT", False):
+    if callable(original_page_png):
         def two_page_png(pick: Any, background_image: Any = None, report_name: str | None = None, page_number: int = 1, total_pages: int = 1, logo_image: Any = None, background_mode: str = "hero_right", logo_mode: str = "header", background_opacity: float = 0.9, logo_opacity: float = 1.0, use_team_logo: bool = True, language: str | None = None) -> bytes:
             page_total = max(2, int(total_pages or 1) * 2)
             first = max(1, int(page_number or 1) * 2 - 1)
