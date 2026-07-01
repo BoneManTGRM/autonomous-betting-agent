@@ -152,6 +152,11 @@ def _patched_weather(row: dict[str, Any]) -> None:
 def install() -> None:
     import autonomous_betting_agent.magazine_live_api_enrichment as live
     if getattr(live, "_PROVIDER_USAGE_PATCH", "") == PATCH_VERSION:
+        try:
+            from autonomous_betting_agent.magazine_display_guard import install as install_display_guard
+            install_display_guard()
+        except Exception:
+            pass
         return
     if not hasattr(live, "_enrich_weather_original_provider_usage"):
         live._enrich_weather_original_provider_usage = live._enrich_weather  # type: ignore[attr-defined]
@@ -180,3 +185,8 @@ def install() -> None:
 
     live.enrich_row_with_live_api_data = enrich_row  # type: ignore[assignment]
     live._PROVIDER_USAGE_PATCH = PATCH_VERSION
+    try:
+        from autonomous_betting_agent.magazine_display_guard import install as install_display_guard
+        install_display_guard()
+    except Exception:
+        pass
