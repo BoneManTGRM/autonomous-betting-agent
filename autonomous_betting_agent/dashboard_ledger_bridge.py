@@ -12,6 +12,7 @@ SESSION_DASHBOARD_KEYS = (
     "pro_predictor_latest_rows",
     "report_studio_latest_rows",
     "proof_center_latest_rows",
+    "dashboard_saved_handoff_rows",
     "learning_memory_rows",
     "ara_latest_predictions",
 )
@@ -155,7 +156,7 @@ def choose_dashboard_rows(
     elif not session_rows.empty:
         selected_source = "session"
         selected = session_rows
-        warnings.append("Using session fallback because persistent ledger rows are empty.")
+        warnings.append("Using session/saved handoff rows because persistent ledger rows are empty.")
     elif not uploaded_rows.empty:
         selected_source = "uploaded"
         selected = uploaded_rows
