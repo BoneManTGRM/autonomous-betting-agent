@@ -230,6 +230,37 @@ def _compat_dashboard_data(rows: pd.DataFrame, learning_rows: pd.DataFrame, api_
     return build_dashboard_data(rows, learning_rows=learning_rows, api_usage=api_usage, bankroll=bankroll, unit_size=unit_size, max_daily_fraction=max_daily_fraction)
 
 
+def _proof_status_for_display(raw_status: Mapping[str, Any], dashboard: Mapping[str, Any]) -> dict[str, Any]:
+    proof = dict(raw_status or {})
+    has_proof_values = any(float(proof.get(key) or 0) for key in ("unique_events", "wins", "losses", "profit_units", "risked_units"))
+    if has_proof_values:
+        return proof
+    roi = dict(dashboard.get("roi_summary") or {})
+    summary = dict(dashboard.get("proof_summary") or {})
+    clv = dict(dashboard.get("clv_summary") or {})
+    if not roi and not summary:
+        return proof
+    total = int(float(roi.get("total_picks") or summary.get("total_rows") or 0))
+    unique = int(float(summary.get("unique_events") or dashboard.get("events_scanned") or 0))
+    if total <= 0 and unique <= 0:
+        return proof
+    proof.update({
+        "unique_events": unique,
+        "wins": int(float(roi.get("wins") or 0)),
+        "losses": int(float(roi.get("losses") or 0)),
+        "pushes": int(float(roi.get("pushes") or 0)),
+        "cancels": int(float(roi.get("cancels") or 0)),
+        "win_rate_ex_push_cancel": float(roi.get("win_rate_ex_push_cancel") or 0.0),
+        "profit_units": float(roi.get("profit_units") or 0.0),
+        "risked_units": float(roi.get("risked_units") or 0.0),
+        "roi": float(roi.get("roi") or 0.0),
+        "average_clv": clv.get("average_clv"),
+        "duplicate_count": int(float(summary.get("duplicate_count") or 0)),
+        "provisional_from_selected_rows": True,
+    })
+    return proof
+
+
 def _render_card_rows(cards: list[dict[str, Any]], columns_per_row: int = 4) -> None:
     for start in range(0, len(cards), columns_per_row):
         columns = st.columns(columns_per_row)
@@ -282,7 +313,11 @@ with st.expander(t("input"), expanded=True):
     dashboard_uploads = st.file_uploader(t("upload"), type=["csv"], accept_multiple_files=True, key="dashboard_rows_upload")
     uploaded_rows = _read_uploads(dashboard_uploads)
     saved_fallback_rows = _load_saved_fallback_rows(workspace_id)
-    uploaded_frames = [frame for frame in (saved_fallback_rows, uploaded_rows) if frame is not None and not frame.empty]
+    if not saved_fallback_rows.empty:
+        st.session_state["dashboard_saved_handoff_rows"] = saved_fallback_rows.to_dict(orient="records")
+    elif "dashboard_saved_handoff_rows" in st.session_state:
+        del st.session_state["dashboard_saved_handoff_rows"]
+    uploaded_frames = [frame for frame in (uploaded_rows,) if frame is not None and not frame.empty]
     learning_uploads = st.file_uploader(t("learning_upload"), type=["csv"], accept_multiple_files=True, key="dashboard_learning_upload")
     uploaded_learning_rows = _read_uploads(learning_uploads)
     learning_rows = _load_learning_rows(uploaded_learning_rows)
@@ -312,7 +347,8 @@ if source_summary.get("selected_source") == "empty":
 else:
     dashboard.setdefault("sync_summary", source_summary)
 
-proof_status = get_proof_center_status(workspace_id)
+raw_proof_status = get_proof_center_status(workspace_id)
+proof_status = _proof_status_for_display(raw_proof_status, dashboard)
 ledger_health = get_ledger_health(workspace_id)
 dashboard_readiness = get_dashboard_readiness(workspace_id)
 sync_summary = dashboard.get("sync_summary") or source_summary
@@ -382,7 +418,7 @@ with st.expander(t("raw_diagnostics"), expanded=False):
     st.subheader(t("ledger_health"))
     st.json(ledger_health)
     st.subheader(t("proof_center_status"))
-    st.json(proof_status)
+    st.json({"durable_proof_status": raw_proof_status, "display_proof_status": proof_status})
     st.subheader(t("json_contract"))
     st.code(json_text, language="json")
     st.download_button(
