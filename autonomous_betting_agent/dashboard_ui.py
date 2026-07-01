@@ -5,11 +5,11 @@ import pandas as pd
 
 STATUS_CARD_KEYS = (
     ("events_scanned", "Events Scanned"),
-    ("positive_ev_picks", "Current +EV Picks"),
-    ("watchlist_picks", "Current Watchlist Picks"),
-    ("avoid_picks", "Gate Avoid Rows"),
+    ("positive_ev_picks", "Positive EV Picks"),
+    ("watchlist_picks", "Watchlist Picks"),
+    ("avoid_picks", "Avoid Picks"),
     ("best_edge_today", "Best Edge Today"),
-    ("model_status", "Model Mutation"),
+    ("model_status", "Model Status"),
     ("drift_status", "Drift Status"),
     ("learning_rows_scanned", "Learning Rows"),
     ("bankroll_risk", "Bankroll Risk"),
@@ -98,9 +98,9 @@ NOT_PROOF_READY = "NOT PROOF READY"
 LEDGER_HEALTHY = "LEDGER HEALTHY"
 LEDGER_WARNING = "LEDGER WARNING"
 LEDGER_FAIL = "LEDGER FAIL"
-DASHBOARD_LEDGER_BACKED = "LEDGER-BACKED"
-DASHBOARD_FALLBACK = "FALLBACK / SESSION"
-DASHBOARD_EMPTY = "EMPTY"
+DASHBOARD_LEDGER_BACKED = "DASHBOARD LEDGER-BACKED"
+DASHBOARD_FALLBACK = "DASHBOARD FALLBACK"
+DASHBOARD_EMPTY = "DASHBOARD EMPTY"
 RISK_OK = "RISK OK"
 RISK_ELEVATED = "RISK ELEVATED"
 RISK_HIGH = "RISK HIGH"
