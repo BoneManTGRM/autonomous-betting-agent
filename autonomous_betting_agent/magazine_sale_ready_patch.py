@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from io import BytesIO
 from typing import Any, Iterable
 
@@ -23,6 +24,8 @@ translate_country_name = _contract.translate_country_name
 translate_country_terms_in_text = _contract.translate_country_terms_in_text
 translate_event_name = _contract.translate_event_name
 translate_team_label = _contract.translate_team_label
+
+DEFAULT_MAGAZINE_EXPORT_ROW_LIMIT = 5
 
 
 def _clean(value: Any) -> str:
@@ -222,8 +225,7 @@ def _overlay_page_one_context(patched: Any, image: Any, row: dict[str, Any], lan
     else:
         draw.rounded_rectangle((354, 1178, 1060, 1353), radius=14, fill=cream + (255,), outline=black + (238,), width=3)
         draw.rounded_rectangle((354, 1178, 1060, 1234), radius=10, fill=blue)
-        label = tr("MATCHUP NOTES", lang).upper()
-        draw.text((372, 1189), label, fill=cream)
+        draw.text((372, 1189), tr("MATCHUP NOTES", lang).upper(), fill=cream)
     rows = _expanded_context_rows(row)
     if callable(getattr(patched, "_bullets_auto", None)):
         patched._bullets_auto(draw, 378, 1246, rows, 650, 90, blue, 15, 8, 5, lang)
@@ -243,7 +245,6 @@ def _install_display_patches(patched: Any) -> None:
             "TARGET": "OBJETIVO",
             "TARGET STAKE": "STAKE OBJETIVO",
             "LIVE STAKE": "STAKE EN VIVO",
-            "MATCHUP / WEATHER / CONTEXT": "PARTIDO / CLIMA / CONTEXTO",
             "Verification": "Verificación",
             "Target stake": "Stake objetivo",
             "Live stake": "Stake en vivo",
@@ -304,11 +305,39 @@ def _install_forced_two_page_renderer(patched: Any) -> None:
             pages.append(second_page._draw_second_page(patched, row, background_image, report_name, index * 2 + 2, total, language))
         return pages
 
-    two_page_png._ABA_FORCED_TWO_PAGE_TRUTH_RENDERER = True  # type: ignore[attr-defined]
-    book_pages._ABA_FORCED_TWO_PAGE_TRUTH_RENDERER = True  # type: ignore[attr-defined]
     patched.render_full_pick_magazine_page_png = two_page_png
     patched.render_full_magazine_book_pages = book_pages
-    patched._ABA_FORCED_TWO_PAGE_TRUTH_RENDERER = "truth_contract_v8"
+    patched._ABA_FORCED_TWO_PAGE_TRUTH_RENDERER = "truth_contract_v9"
+
+
+def _magazine_export_row_limit() -> int:
+    raw = os.getenv("ABA_MAGAZINE_EXPORT_ROW_LIMIT", str(DEFAULT_MAGAZINE_EXPORT_ROW_LIMIT))
+    try:
+        return max(1, min(20, int(raw)))
+    except Exception:
+        return DEFAULT_MAGAZINE_EXPORT_ROW_LIMIT
+
+
+def _cap_book_rows(picks: Iterable[Any]) -> list[Any]:
+    rows = list(picks or [])
+    if not rows:
+        return rows
+    limit = _magazine_export_row_limit()
+    return rows[:limit]
+
+
+def _install_memory_safe_book_renderers(patched: Any) -> None:
+    if getattr(patched, "_ABA_MEMORY_SAFE_BOOK_RENDERERS", False):
+        return
+    for name in ("render_full_magazine_book_pdf", "render_full_magazine_book_png", "render_full_magazine_zip"):
+        original = getattr(patched, name, None)
+        if not callable(original):
+            continue
+        def _safe_book_export(picks: Iterable[Any], *args: Any, _original=original, **kwargs: Any):
+            return _original(_cap_book_rows(picks), *args, **kwargs)
+        setattr(patched, name, _safe_book_export)
+    patched._ABA_MEMORY_SAFE_BOOK_RENDERERS = True
+    patched._ABA_MAGAZINE_EXPORT_ROW_LIMIT = _magazine_export_row_limit()
 
 
 def apply_magazine_sale_ready_patch(module):
@@ -332,5 +361,6 @@ def apply_magazine_sale_ready_patch(module):
     patched.render_full_pick_magazine_page = truthful_render
     patched._pairs = _truth_pairs
     _install_forced_two_page_renderer(patched)
-    patched._ABA_SALE_READY_TRUTH_CONTRACT_VERSION = "truth_contract_v8"
+    _install_memory_safe_book_renderers(patched)
+    patched._ABA_SALE_READY_TRUTH_CONTRACT_VERSION = "truth_contract_v9"
     return patched
