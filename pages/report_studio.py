@@ -38,13 +38,16 @@ from autonomous_betting_agent.ui_i18n import localize_dataframe as global_locali
 # report_studio_image_full_page_
 # cards_as_rows = enrich_rows_with_live_api_data
 # magazine_pdf_bytes = magazine_book_export.render_full_magazine_book_pdf
+# magazine_tab_png = magazine_book_export.render_full_pick_magazine_page_png
 # st.session_state[book_cache_key] = {
 # render_full_magazine_book_png(cards_as_rows
 # render_full_magazine_book_pdf(cards_as_rows
 # render_full_magazine_zip(cards_as_rows
 # selected_row = cards_as_rows[int(selected_idx)]
 # serializable_row(selected_row)
+# NO_MARKET_EXPORT_VERSION, ENRICHMENT_VERSION
 # _{ENRICHMENT_VERSION}
+# preferred_sports = render_sport_league_filter(
 # api_enrichment_version
 # first_row_api_enrichment_fields
 # first_row_has_weather_summary
@@ -184,7 +187,7 @@ TEXT = {
         "verification_manifest": "verification_manifest",
         "download_report_json": "Descargar JSON del reporte",
         "download_report_markdown": "Descargar Markdown del reporte",
-        "download_report_csv": "Descargar CSV del reporte",
+        "download_report_csv": "Descargar CSV",
     },
 }
 
@@ -392,13 +395,12 @@ def main() -> None:
     frame = normalize_frame(frame)
     st.caption(f"{t('source')}: {source or 'uploaded/session'} · Rows: {len(frame)}")
 
-    # Keep the local Spanish sport filter import live for the static UI contract.
     if "sport" in frame.columns:
         sports = sorted({safe_text(value) for value in frame["sport"].tolist() if safe_text(value)})
         if sports:
-            chosen = render_sport_league_filter(st, label=t("sports"), options=sports, default=sports, language=LANG, key="report_profile_sports")
-            if chosen:
-                frame = frame[frame["sport"].map(safe_text).isin(chosen)]
+            preferred_sports = render_sport_league_filter(st, label=t("sports"), options=sports, default=sports, language=LANG, key="report_profile_sports")
+            if preferred_sports:
+                frame = frame[frame["sport"].map(safe_text).isin(preferred_sports)]
 
     max_default = min(75, max(1, len(frame)))
     max_rows = st.slider(t("max_rows"), min_value=1, max_value=max(1, min(250, len(frame))), value=max_default)
