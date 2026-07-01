@@ -1,16 +1,17 @@
+import json
 from typing import Any, Mapping, Sequence
 
 import pandas as pd
 
 from autonomous_betting_agent.profitability_metrics import profitability_summary
 from autonomous_betting_agent.proof_performance_store import (
+    PUBLIC_SAFE_FIELDS,
+    SCHEMA_FIELDS,
     SCHEMA_VERSION,
     append_performance_rows as _append_performance_rows,
     build_duplicate_key,
     build_proof_id,
     build_row_hash,
-    export_performance_csv as _export_performance_csv,
-    export_performance_json as _export_performance_json,
     normalize_performance_record,
     read_performance_ledger as _read_performance_ledger,
     read_recent_rows as _read_recent_rows,
@@ -34,19 +35,90 @@ def read_performance_ledger(workspace_id: str | None = None) -> pd.DataFrame:
 
 
 def read_workspace_rows(workspace_id: str) -> pd.DataFrame:
-    return _read_workspace_rows(workspace_id)
+    frame = _read_workspace_rows(workspace_id)
+    return frame if not frame.empty else _legacy_performance_frame(workspace_id)
+
+
+def _workspace(value: Any) -> str:
+    cleaned = str(value or "").strip().replace(" ", "_").lower()
+    return cleaned or "default"
+
+
+def _legacy_performance_frame(workspace_id: str | None = None) -> pd.DataFrame:
+    """Bridge the older Odds Lock proof ledger into the proof-package dashboard.
+
+    The newer proof package stack reads proof_performance_ledger. Existing live
+    deployments may still have their durable proof rows in the legacy persistent
+    Odds Lock ledger. Treat those rows as ledger-backed dashboard rows instead of
+    falling back to transient session rows.
+    """
+    workspace = _workspace(workspace_id)
+    try:
+        from autonomous_betting_agent.commercial_platform_tools import filter_locked_proof_rows, load_persistent_ledger
+    except Exception:
+        return pd.DataFrame(columns=SCHEMA_FIELDS)
+
+    try:
+        legacy = load_persistent_ledger(workspace_id=workspace, active_only=False)
+        if legacy.empty and workspace != "default":
+            legacy = load_persistent_ledger(active_only=False)
+        locked = filter_locked_proof_rows(legacy)
+    except Exception:
+        return pd.DataFrame(columns=SCHEMA_FIELDS)
+    if locked.empty:
+        return pd.DataFrame(columns=SCHEMA_FIELDS)
+
+    records: list[dict[str, Any]] = []
+    for raw in locked.to_dict(orient="records"):
+        row = dict(raw)
+        source_key = str(row.get("source_key") or row.get("source_context") or "legacy_proof_ledger")
+        source_file = str(row.get("source_file") or row.get("filename") or "legacy_persistent_ledger")
+        record = normalize_performance_record(row, workspace, source_key=source_key, source_file=source_file)
+        if not record.get("record_type"):
+            record["record_type"] = "import"
+        records.append(record)
+    frame = pd.DataFrame(records)
+    for field in SCHEMA_FIELDS:
+        if field not in frame.columns:
+            frame[field] = ""
+    return frame[SCHEMA_FIELDS]
+
+
+def _performance_or_legacy_frame(workspace_id: str | None = None) -> pd.DataFrame:
+    frame = read_performance_ledger(workspace_id=workspace_id)
+    if not frame.empty:
+        return frame.copy(deep=True)
+    return _legacy_performance_frame(workspace_id)
 
 
 def read_recent_rows(workspace_id: str | None = None, limit: int = 100) -> pd.DataFrame:
-    return _read_recent_rows(workspace_id=workspace_id, limit=limit)
+    frame = _read_recent_rows(workspace_id=workspace_id, limit=limit)
+    if frame.empty:
+        frame = _legacy_performance_frame(workspace_id)
+    if frame.empty:
+        return frame
+    ordered = frame.copy(deep=True)
+    ordered["_seq"] = pd.to_numeric(ordered.get("ledger_sequence", 0), errors="coerce").fillna(0)
+    return ordered.sort_values("_seq", ascending=False).drop(columns=["_seq"], errors="ignore").head(limit).reset_index(drop=True)
+
+
+def _export_frame(workspace_id: str | None = None, public_safe: bool = False) -> pd.DataFrame:
+    frame = _performance_or_legacy_frame(workspace_id)
+    if public_safe:
+        for field in PUBLIC_SAFE_FIELDS:
+            if field not in frame.columns:
+                frame[field] = ""
+        return frame[PUBLIC_SAFE_FIELDS]
+    return frame
 
 
 def export_performance_csv(workspace_id: str | None = None, public_safe: bool = False) -> str:
-    return _export_performance_csv(workspace_id=workspace_id, public_safe=public_safe)
+    return _export_frame(workspace_id=workspace_id, public_safe=public_safe).to_csv(index=False)
 
 
 def export_performance_json(workspace_id: str | None = None, public_safe: bool = False) -> str:
-    return _export_performance_json(workspace_id=workspace_id, public_safe=public_safe)
+    frame = _export_frame(workspace_id=workspace_id, public_safe=public_safe)
+    return json.dumps({"schema_version": SCHEMA_VERSION, "rows": frame.to_dict(orient="records")}, indent=2, sort_keys=True)
 
 
 def validate_ledger_integrity(workspace_id: str | None = None) -> dict[str, Any]:
@@ -60,7 +132,7 @@ def _active_frame(frame: pd.DataFrame, include_corrections: bool = True) -> pd.D
 
 
 def rows_for_dashboard(workspace_id: str | None = None) -> pd.DataFrame:
-    frame = read_performance_ledger(workspace_id=workspace_id)
+    frame = _performance_or_legacy_frame(workspace_id)
     if frame.empty:
         return frame.copy(deep=True)
     rows = frame.copy(deep=True)
@@ -85,7 +157,7 @@ def _last_updated(frame: pd.DataFrame) -> str:
 
 
 def summarize_performance(workspace_id: str | None = None, include_corrections: bool = True) -> dict[str, Any]:
-    ledger = read_performance_ledger(workspace_id=workspace_id)
+    ledger = _performance_or_legacy_frame(workspace_id=workspace_id)
     active = _active_frame(ledger, include_corrections=include_corrections)
     dashboard_rows = rows_for_dashboard(workspace_id=workspace_id)
     if not include_corrections and not dashboard_rows.empty:
