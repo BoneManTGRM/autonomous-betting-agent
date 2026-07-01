@@ -24,12 +24,6 @@ else:
         pass
 
     try:
-        from autonomous_betting_agent.report_studio_fresh_handoff_patch import install as install_current_row_source_routing
-        install_current_row_source_routing()
-    except Exception:
-        pass
-
-    try:
         from autonomous_betting_agent.sidebar_tools import install_sidebar_tools
         install_sidebar_tools()
     except Exception:
