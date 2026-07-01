@@ -115,8 +115,6 @@ def _install_forced_two_page_renderer(patched: Any) -> None:
         from autonomous_betting_agent import magazine_second_page_patch as second_page
     except Exception:
         return
-    if getattr(patched, "_ABA_FORCED_TWO_PAGE_TRUTH_RENDERER", False):
-        return
 
     def two_page_png(pick: Any, background_image: Any = None, report_name: str | None = None, page_number: int = 1, total_pages: int = 1, logo_image: Any = None, background_mode: str = "hero_right", logo_mode: str = "header", background_opacity: float = 0.9, logo_opacity: float = 1.0, use_team_logo: bool = True, language: str | None = None) -> bytes:
         row = _force_truthful_gate(pick)
@@ -138,9 +136,11 @@ def _install_forced_two_page_renderer(patched: Any) -> None:
             pages.append(second_page._draw_second_page(patched, row, background_image, report_name, index * 2 + 2, total, language))
         return pages
 
+    two_page_png._ABA_FORCED_TWO_PAGE_TRUTH_RENDERER = True  # type: ignore[attr-defined]
+    book_pages._ABA_FORCED_TWO_PAGE_TRUTH_RENDERER = True  # type: ignore[attr-defined]
     patched.render_full_pick_magazine_page_png = two_page_png
     patched.render_full_magazine_book_pages = book_pages
-    patched._ABA_FORCED_TWO_PAGE_TRUTH_RENDERER = True
+    patched._ABA_FORCED_TWO_PAGE_TRUTH_RENDERER = "truth_contract_v7"
 
 
 def apply_magazine_sale_ready_patch(module):
@@ -158,5 +158,5 @@ def apply_magazine_sale_ready_patch(module):
     patched.render_full_pick_magazine_page = truthful_render
     patched._pairs = _truth_pairs
     _install_forced_two_page_renderer(patched)
-    patched._ABA_SALE_READY_TRUTH_CONTRACT_VERSION = "truth_contract_v6"
+    patched._ABA_SALE_READY_TRUTH_CONTRACT_VERSION = "truth_contract_v7"
     return patched
