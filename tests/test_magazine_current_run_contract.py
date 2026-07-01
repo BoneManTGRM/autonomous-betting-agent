@@ -3,27 +3,51 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_report_studio_runtime_patch_loads_before_pages():
+def _report_studio_text() -> str:
+    return (ROOT / "pages" / "report_studio.py").read_text(encoding="utf-8")
+
+
+def test_report_studio_full_feature_tabs_are_restored():
+    page = _report_studio_text()
+    for token in (
+        't("cards")',
+        't("magazine")',
+        't("copy")',
+        't("audit")',
+        't("proof")',
+        't("exports")',
+        't("images")',
+        't("profile_json")',
+        't("feed_json")',
+        't("diagnostics")',
+        't("publisher")',
+    ):
+        assert token in page
+
+
+def test_report_studio_source_priority_is_direct_not_startup_patch():
+    page = _report_studio_text()
+    assert "def load_current_session_rows" in page
+    assert "def load_saved_handoff_rows" in page
+    assert "def load_persistent_ledger_rows" in page
+    assert "def choose_report_studio_source" in page
+    assert "load_current_session_rows, lambda: load_saved_handoff_rows" in page
+    assert "lambda: load_persistent_ledger_rows" in page
+    assert page.find("load_current_session_rows") < page.find("load_saved_handoff_rows") < page.find("load_persistent_ledger_rows")
+
+
+def test_report_studio_upload_priority_and_ledger_warning_contract():
+    page = _report_studio_text()
+    assert "choose_report_studio_source(saved_source, saved_rows, upload_source, upload_rows)" in page
+    assert "if upload_rows is not None and not upload_rows.empty" in page
+    assert "persistent_proof_ledger" in page
+    assert "Magazine is using saved proof history because no current prediction rows were found" in page
+    assert "Source mode:" in page
+
+
+def test_startup_hooks_do_not_control_report_studio_source_selection():
     sitecustomize = (ROOT / "sitecustomize.py").read_text(encoding="utf-8")
     usercustomize = (ROOT / "usercustomize.py").read_text(encoding="utf-8")
-    assert "report_studio_fresh_handoff_patch" in sitecustomize
-    assert "report_studio_fresh_handoff_patch" in usercustomize
-
-
-def test_report_studio_current_run_patch_contract():
-    patch = (ROOT / "autonomous_betting_agent" / "report_studio_fresh_handoff_patch.py").read_text(encoding="utf-8")
-    assert "HANDOFF_KEYS" in patch
-    assert "pro_predictor_latest_rows" in patch
-    assert "pro_predictor_high_confidence_rows" in patch
-    assert "odds_lock_pro_locked_rows" in patch
-    assert "_patch_report_studio_ledger_source" in patch
-    assert "_called_from_report_studio" in patch
-    assert "pages/report_studio.py" in patch
-    assert "_patch_local_storage" in patch
-
-
-def test_report_studio_warns_when_only_ledger_history_is_available():
-    page = (ROOT / "pages" / "report_studio.py").read_text(encoding="utf-8")
-    assert "persistent_proof_ledger" in page
-    assert "rows_from_saved_sources" in page
-    assert "Source" in page or "source" in page
+    assert "intentionally does not monkey-patch Streamlit widgets" in sitecustomize
+    assert "report_studio_fresh_handoff_patch" not in sitecustomize
+    assert "report_studio_fresh_handoff_patch" not in usercustomize
