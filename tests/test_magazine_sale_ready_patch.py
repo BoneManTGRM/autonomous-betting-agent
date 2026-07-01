@@ -70,8 +70,8 @@ def test_team_and_injury_fallbacks_are_professional_and_compact():
     injury_items = sale_ready_injury_items(_row(), "away")
     text = "\n".join(team_items + injury_items)
 
-    assert "No SDIO event ID." in team_items
-    assert "No lineup/injury headline returned." in text
+    assert "No live team snapshot returned." in team_items
+    assert "No verified lineup/injury update returned." in text
     assert "SDIO checked; no provider event ID in row." not in text
     assert "News checked; no injury/lineup headline." not in text
     assert "team lookup matched" not in text
@@ -84,7 +84,7 @@ def test_matchup_weather_location_and_api_fb_are_compact():
     assert "Weather: 23.3°C, partly cloudy, wind 5.8 kph." in items
     assert "Weather: 23.3°C, partly cloudy, wind 5.8 kph. Partly cloudy." not in text
     assert "Location: Philadelphia, PA, USA." in items
-    assert "API-FB lookup checked; no fixture match." in items
+    assert "API-FB lookup checked; no fixture match." not in items
     assert text.count("Partly cloudy") <= 1
     assert "Pennsylvania, United States of America" not in text
     assert "team lookup matched" not in text
