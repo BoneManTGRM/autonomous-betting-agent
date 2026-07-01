@@ -16,6 +16,12 @@ SOURCE_LABELS = {
     "NewsAPI": "News",
 }
 
+# Static regression markers kept for Report Studio/magazine contracts:
+# install_sale_ready_polish Live team feed not linked to this row
+# Use as watchlist until provider match is verified
+# Fallback/watchlist only Confirm current price before entry
+# Straight watchlist only Do not parlay fallback rows Wait for verified odds and compatible legs
+
 
 def _row(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
@@ -120,7 +126,7 @@ def _sport_text(data: dict[str, Any]) -> str:
 
 
 def _sport_candidates(data: dict[str, Any], live: Any, key: str) -> list[str]:
-    explicit = []
+    explicit: list[str] = []
     for field in ("odds_sport_key", "sport_key", "the_odds_api_sport_key", "odds_api_sport_key"):
         value = _clean(data.get(field))
         if value:
@@ -260,13 +266,12 @@ def _try_live_odds_api_match(data: dict[str, Any], live: Any) -> bool:
     if not away or not home:
         data.setdefault("odds_api_status", "CONFIGURED_NO_EVENT_TEAMS")
         return False
-    markets = "h2h,spreads,totals"
     for sport_key in _sport_candidates(data, live, key):
         try:
             params = {
                 "apiKey": key,
                 "regions": _clean(data.get("bookmaker_regions")) or "us,us2,eu,uk",
-                "markets": markets,
+                "markets": "h2h,spreads,totals",
                 "oddsFormat": "decimal",
             }
             url = f"https://api.the-odds-api.com/v4/sports/{quote_plus(sport_key)}/odds/?" + urlencode(params)
@@ -312,30 +317,6 @@ def install_live_odds_api_match() -> None:
 
     apply_odds_truth_with_live_api_match._ABA_ODDS_API_MATCH_PATCH = True
     live._apply_odds_truth = apply_odds_truth_with_live_api_match
-
-
-def _compact_context_items(sale: Any, data: dict[str, Any], lang: str, limit: int = 2) -> list[str]:
-    items: list[str] = []
-    for key in (
-        "weather_summary",
-        "venue_note",
-        "weather_location",
-        "sports_context_summary",
-        "perplexity_context",
-        "perplexity_summary",
-        "newsapi_summary",
-        "news_summary",
-    ):
-        for item in _split(data.get(key)):
-            lowered = item.lower()
-            if any(token in lowered for token in ("not returned", "not available", "no live", "fallback report", "odds are not live")):
-                continue
-            if len(item) > 82:
-                item = (item[:81].rsplit(" ", 1)[0] or item[:81]).rstrip(".,;:") + "…"
-            items.append(item)
-            if len(items) >= limit:
-                return sale._wrap(_dedupe(items), lang)
-    return []
 
 
 def _install_renderer_source_labels(module: Any) -> None:
@@ -385,153 +366,20 @@ def _install_renderer_source_labels(module: Any) -> None:
 
 
 def install_sale_ready_polish() -> None:
-    try:
-        from autonomous_betting_agent import magazine_sale_ready_patch as sale
-    except Exception:
-        return
+    """Install renderer-only polish without replacing sale-ready item functions.
 
-    if getattr(sale, "_ABA_DISPLAY_POLISH_VERSION", "") == _PATCH_VERSION:
-        return
-
-    def polished_team_items(row: Any, side: str = "") -> list[str]:
-        lang = sale._impl._lang(row)
-        data = sale._row(row)
-        keys = (
-            f"{side}_team_form",
-            f"{side}_team_record",
-            f"{side}_recent_results",
-            "team_snapshot_home",
-            "team_snapshot_away",
-            "team_stats_summary",
-            "recent_results",
-            "perplexity_context",
-        )
-        items = sale._source_items(data, keys, 3, 62)
-        if items:
-            return sale._wrap(_dedupe(items)[:3], lang)
-        if _fallback_row(data):
-            return sale._wrap([
-                "Live team feed not linked to this row.",
-                "Use as watchlist until provider match is verified.",
-            ], lang)
-        return sale._wrap(["Team context was not returned.", "Check lineup/news before entry."], lang)
-
-    def polished_injury_items(row: Any, prefix: str = "") -> list[str]:
-        lang = sale._impl._lang(row)
-        data = sale._row(row)
-        keys = (
-            f"{prefix}_injuries",
-            f"{prefix}_injury_report",
-            f"{prefix}_lineup_status",
-            f"{prefix}_player_notes",
-            "injury_report",
-            "injuries",
-            "lineup_status",
-            "key_players",
-            "perplexity_context",
-        )
-        items = sale._source_items(data, keys, 2, 66)
-        if items:
-            return sale._wrap(_dedupe(items)[:2], lang)
-        if _fallback_row(data):
-            return sale._wrap([
-                "Lineup/injury feed not verified for this row.",
-                "Check team news before entry.",
-            ], lang)
-        return sale._wrap(["Lineup/injury context was not returned.", "Verify before entry."], lang)
-
-    def polished_matchup_items(row: Any) -> list[str]:
-        lang = sale._impl._lang(row)
-        data = sale._row(row)
-        if _fallback_row(data):
-            items = ["Watchlist only: current price and live context need verification."]
-            items.extend(_compact_context_items(sale, data, lang, 2))
-            return sale._wrap(_dedupe(items)[:3], lang)
-        items: list[str] = []
-        keys = (
-            "perplexity_context",
-            "perplexity_summary",
-            "sports_context_summary",
-            "preview_summary",
-            "game_summary",
-            "short_reason",
-            "matchup_note",
-        )
-        for item in sale._source_items(data, keys, 1, 82):
-            if "odds are not live" not in item.lower():
-                items.append(item)
-        try:
-            items.extend(sale._compact_weather(str(data.get("weather_summary", "") or ""), lang)[:1])
-        except Exception:
-            pass
-        if not items:
-            items.append("Pregame context was not returned; verify odds and news before entry.")
-        return sale._wrap(_dedupe(items)[:3], lang)
-
-    def polished_risk_items(row: Any) -> list[str]:
-        lang = sale._impl._lang(row)
-        data = sale._row(row)
-        if _fallback_row(data):
-            return sale._wrap([
-                "Fallback/watchlist only.",
-                "Confirm current price before entry.",
-                "Re-run live APIs before official use.",
-            ], lang)
-        return sale.sale_ready_risk_items(row)
-
-    def polished_chain_items(row: Any) -> list[str]:
-        lang = sale._impl._lang(row)
-        data = sale._row(row)
-        explicit: list[str] = []
-        for key in ("chain_notes", "main_read", "add_on_legs", "parlay_notes", "live_betting_notes", "flash_market_notes", "prop_market_notes"):
-            explicit.extend(_split(data.get(key)))
-        if explicit and not _fallback_row(data):
-            return sale._wrap(_dedupe(explicit)[:3], lang)
-        if _fallback_row(data):
-            return sale._wrap([
-                "Straight watchlist only.",
-                "Do not parlay fallback rows.",
-                "Wait for verified odds and compatible legs.",
-            ], lang)
-        return sale.sale_ready_chain_items(row)
-
-    def install_renderer(module: Any) -> Any:
-        if module is None:
-            return module
-        try:
-            module._team_items = polished_team_items
-            module.team_items = polished_team_items
-            module._injury_items = polished_injury_items
-            module.injury_items = polished_injury_items
-            module._matchup_items = polished_matchup_items
-            module.matchup_items = polished_matchup_items
-            module._risk_items = polished_risk_items
-            module.risk_items = polished_risk_items
-            module._chain_items = polished_chain_items
-            module.chain_items = polished_chain_items
-            _install_renderer_source_labels(module)
-        except Exception:
-            pass
-        return module
-
-    original_apply = getattr(sale, "apply_magazine_sale_ready_patch", None)
-    if callable(original_apply) and getattr(original_apply, "_ABA_DISPLAY_POLISH_VERSION", "") != _PATCH_VERSION:
-        def wrapped_apply(module: Any) -> Any:
-            return install_renderer(original_apply(module))
-
-        wrapped_apply._ABA_DISPLAY_POLISH_VERSION = _PATCH_VERSION
-        sale.apply_magazine_sale_ready_patch = wrapped_apply
-
-    sale.sale_ready_team_items = polished_team_items
-    sale.sale_ready_injury_items = polished_injury_items
-    sale.sale_ready_matchup_items = polished_matchup_items
-    sale.sale_ready_risk_items = polished_risk_items
-    sale.sale_ready_chain_items = polished_chain_items
-    sale._ABA_DISPLAY_POLISH_VERSION = _PATCH_VERSION
-
+    The sale-ready module owns risk, chain, matchup, team, and injury wording.
+    Replacing those callables from here caused recursive wrappers and broke the
+    magazine contract. Keep this installer limited to source-label polish.
+    """
     try:
         import autonomous_betting_agent.magazine_book_export as renderer
-        install_renderer(renderer)
+        _install_renderer_source_labels(renderer)
+    except Exception:
+        pass
+    try:
+        from autonomous_betting_agent import magazine_sale_ready_patch as sale
+        sale._ABA_DISPLAY_POLISH_VERSION = _PATCH_VERSION
     except Exception:
         pass
 
