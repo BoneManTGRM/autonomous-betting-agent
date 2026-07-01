@@ -58,19 +58,6 @@ def _current_rows_from_session() -> tuple[str, list[dict[str, Any]]]:
     return "", []
 
 
-def _has_fresh_handoff_rows() -> bool:
-    source, rows = _current_rows_from_session()
-    if not rows:
-        return False
-    try:
-        import streamlit as st
-        st.session_state["report_studio_preferred_source"] = source
-        st.session_state["proof_center_preferred_source"] = source
-    except Exception:
-        pass
-    return True
-
-
 def _batch_id(source: str, rows: list[dict[str, Any]]) -> str:
     payload = json.dumps(rows[:25], sort_keys=True, default=str)
     digest = hashlib.sha256((source + "|" + payload).encode("utf-8")).hexdigest()[:12]
@@ -140,6 +127,12 @@ def _patch_local_storage() -> None:
         source, rows = _current_rows_from_session()
         if not rows:
             return stored
+        try:
+            import streamlit as st
+            st.session_state["proof_center_preferred_source"] = source
+            st.session_state["report_studio_preferred_source"] = source
+        except Exception:
+            pass
         current = _with_batch_identity(rows, source)
         return _merge_current_first(current, [dict(row) for row in stored if isinstance(row, dict)])
 
@@ -151,24 +144,6 @@ def install() -> None:
     global _PATCHED
     if _PATCHED:
         return
-    try:
-        from autonomous_betting_agent import commercial_platform_tools as cpt
-    except Exception:
-        cpt = None
-    if cpt is not None:
-        original_load_persistent_ledger = getattr(cpt, "load_persistent_ledger", None)
-        if callable(original_load_persistent_ledger) and not getattr(original_load_persistent_ledger, "_ABA_FRESH_HANDOFF_PATCH", False):
-            def load_persistent_ledger_fresh_safe(*args: Any, **kwargs: Any):
-                if _has_fresh_handoff_rows():
-                    try:
-                        import pandas as pd
-                        return pd.DataFrame()
-                    except Exception:
-                        return None
-                return original_load_persistent_ledger(*args, **kwargs)
-
-            load_persistent_ledger_fresh_safe._ABA_FRESH_HANDOFF_PATCH = True
-            cpt.load_persistent_ledger = load_persistent_ledger_fresh_safe
     _patch_local_storage()
     _PATCHED = True
 
