@@ -70,3 +70,17 @@ def test_fallback_magazine_copy_is_presentation_safe():
     ):
         assert token in polish
     assert "module.api_provenance = polished_api_provenance" in polish
+
+
+def test_magazine_attempts_direct_odds_api_event_match_before_fallback():
+    polish = _polish_text()
+    for token in (
+        "def install_live_odds_api_match",
+        "def _try_live_odds_api_match",
+        "https://api.the-odds-api.com/v4/sports/",
+        "odds_api_status",
+        "LIVE_MATCH",
+        "CONFIGURED_NO_LIVE_EVENT_MATCH",
+        "live._apply_odds_truth = apply_odds_truth_with_live_api_match",
+    ):
+        assert token in polish
