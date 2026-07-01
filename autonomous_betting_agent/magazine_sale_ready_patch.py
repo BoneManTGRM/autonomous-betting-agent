@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from io import BytesIO
 from typing import Any, Iterable
 
@@ -24,8 +23,6 @@ translate_country_name = _contract.translate_country_name
 translate_country_terms_in_text = _contract.translate_country_terms_in_text
 translate_event_name = _contract.translate_event_name
 translate_team_label = _contract.translate_team_label
-
-DEFAULT_MAGAZINE_EXPORT_ROW_LIMIT = 5
 
 
 def _clean(value: Any) -> str:
@@ -307,37 +304,7 @@ def _install_forced_two_page_renderer(patched: Any) -> None:
 
     patched.render_full_pick_magazine_page_png = two_page_png
     patched.render_full_magazine_book_pages = book_pages
-    patched._ABA_FORCED_TWO_PAGE_TRUTH_RENDERER = "truth_contract_v9"
-
-
-def _magazine_export_row_limit() -> int:
-    raw = os.getenv("ABA_MAGAZINE_EXPORT_ROW_LIMIT", str(DEFAULT_MAGAZINE_EXPORT_ROW_LIMIT))
-    try:
-        return max(1, min(20, int(raw)))
-    except Exception:
-        return DEFAULT_MAGAZINE_EXPORT_ROW_LIMIT
-
-
-def _cap_book_rows(picks: Iterable[Any]) -> list[Any]:
-    rows = list(picks or [])
-    if not rows:
-        return rows
-    limit = _magazine_export_row_limit()
-    return rows[:limit]
-
-
-def _install_memory_safe_book_renderers(patched: Any) -> None:
-    if getattr(patched, "_ABA_MEMORY_SAFE_BOOK_RENDERERS", False):
-        return
-    for name in ("render_full_magazine_book_pdf", "render_full_magazine_book_png", "render_full_magazine_zip"):
-        original = getattr(patched, name, None)
-        if not callable(original):
-            continue
-        def _safe_book_export(picks: Iterable[Any], *args: Any, _original=original, **kwargs: Any):
-            return _original(_cap_book_rows(picks), *args, **kwargs)
-        setattr(patched, name, _safe_book_export)
-    patched._ABA_MEMORY_SAFE_BOOK_RENDERERS = True
-    patched._ABA_MAGAZINE_EXPORT_ROW_LIMIT = _magazine_export_row_limit()
+    patched._ABA_FORCED_TWO_PAGE_TRUTH_RENDERER = "truth_contract_v10"
 
 
 def apply_magazine_sale_ready_patch(module):
@@ -361,6 +328,5 @@ def apply_magazine_sale_ready_patch(module):
     patched.render_full_pick_magazine_page = truthful_render
     patched._pairs = _truth_pairs
     _install_forced_two_page_renderer(patched)
-    _install_memory_safe_book_renderers(patched)
-    patched._ABA_SALE_READY_TRUTH_CONTRACT_VERSION = "truth_contract_v9"
+    patched._ABA_SALE_READY_TRUTH_CONTRACT_VERSION = "truth_contract_v10"
     return patched
