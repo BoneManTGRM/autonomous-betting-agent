@@ -5,11 +5,11 @@ import pandas as pd
 
 STATUS_CARD_KEYS = (
     ("events_scanned", "Events Scanned"),
-    ("positive_ev_picks", "Positive EV Picks"),
-    ("watchlist_picks", "Watchlist Picks"),
-    ("avoid_picks", "Avoid Picks"),
+    ("positive_ev_picks", "Current +EV Picks"),
+    ("watchlist_picks", "Current Watchlist Picks"),
+    ("avoid_picks", "Gate Avoid Rows"),
     ("best_edge_today", "Best Edge Today"),
-    ("model_status", "Model Status"),
+    ("model_status", "Model Mutation"),
     ("drift_status", "Drift Status"),
     ("learning_rows_scanned", "Learning Rows"),
     ("bankroll_risk", "Bankroll Risk"),
@@ -98,9 +98,9 @@ NOT_PROOF_READY = "NOT PROOF READY"
 LEDGER_HEALTHY = "LEDGER HEALTHY"
 LEDGER_WARNING = "LEDGER WARNING"
 LEDGER_FAIL = "LEDGER FAIL"
-DASHBOARD_LEDGER_BACKED = "DASHBOARD LEDGER-BACKED"
-DASHBOARD_FALLBACK = "DASHBOARD FALLBACK"
-DASHBOARD_EMPTY = "DASHBOARD EMPTY"
+DASHBOARD_LEDGER_BACKED = "LEDGER-BACKED"
+DASHBOARD_FALLBACK = "FALLBACK / SESSION"
+DASHBOARD_EMPTY = "EMPTY"
 RISK_OK = "RISK OK"
 RISK_ELEVATED = "RISK ELEVATED"
 RISK_HIGH = "RISK HIGH"
@@ -109,6 +109,7 @@ API_WARNING = "API WARNING"
 API_HIGH_USAGE = "API HIGH USAGE"
 LEDGER_BACKED_PROOF_GRADE = "Ledger-backed proof-grade"
 PROVISIONAL_FALLBACK_NOT_FINAL_PROOF = "Provisional fallback — not final proof"
+MODEL_MUTATION_DISABLED = "Disabled / Safe Mode"
 
 
 def _safe(value: Any) -> str:
@@ -144,7 +145,19 @@ def _money(value: Any) -> str:
         return "N/A"
 
 
+def _model_mutation_value(value: Any) -> str:
+    text = _safe(value).strip()
+    lowered = text.lower()
+    if lowered in {"blocked", "disabled", "false", "0", "safe_mode", "safe mode"}:
+        return MODEL_MUTATION_DISABLED
+    if lowered in {"enabled", "active", "live"}:
+        return "Enabled"
+    return text or MODEL_MUTATION_DISABLED
+
+
 def metric_value(key: str, value: Any) -> str:
+    if key == "model_status":
+        return _model_mutation_value(value)
     if key == "best_edge_today" and isinstance(value, Mapping):
         return _safe(value.get("edge_display")) or "N/A"
     if key == "api_usage" and isinstance(value, Mapping):
@@ -168,7 +181,7 @@ def metric_help(key: str, value: Any) -> str:
     if key == "bankroll_risk":
         return "Risk from bankroll exposure rules"
     if key == "model_status":
-        return "Derived from current rows unless explicitly supplied"
+        return "Live model mutation status. Disabled / Safe Mode means proof and picks are protected from automatic mutation."
     if key == "drift_status":
         return "Derived from drift fields unless explicitly supplied"
     return ""
@@ -273,7 +286,7 @@ def operator_status_cards(
         {"key": "selected_rows", "label": "Selected Rows", "value": _safe(sync.get("selected_rows", ready.get("dashboard_rows", 0)))},
         {"key": "dashboard_ready", "label": "Dashboard Ready", "value": _safe(ready.get("dashboard_ready", False))},
         {"key": "ledger_integrity_status", "label": "Ledger Integrity Status", "value": _safe(health.get("status", (proof_status or {}).get("ledger_integrity_status", "PASS")))},
-        {"key": "model_status", "label": "Model Status", "value": metric_value("model_status", dashboard.get("model_status"))},
+        {"key": "model_status", "label": "Model Mutation", "value": metric_value("model_status", dashboard.get("model_status")), "help": metric_help("model_status", dashboard.get("model_status"))},
         {"key": "drift_status", "label": "Drift Status", "value": metric_value("drift_status", dashboard.get("drift_status"))},
     ]
 
@@ -281,14 +294,14 @@ def operator_status_cards(
 def primary_kpi_cards(dashboard: Mapping[str, Any], proof_status: Mapping[str, Any] | None) -> list[dict[str, str]]:
     proof = dict(proof_status or {})
     return [
-        {"key": "events_scanned", "label": "Events Scanned", "value": metric_value("events_scanned", dashboard.get("events_scanned"))},
-        {"key": "positive_ev_picks", "label": "Positive EV Picks", "value": metric_value("positive_ev_picks", dashboard.get("positive_ev_picks"))},
-        {"key": "watchlist_picks", "label": "Watchlist Picks", "value": metric_value("watchlist_picks", dashboard.get("watchlist_picks"))},
-        {"key": "avoid_picks", "label": "Avoid Picks", "value": metric_value("avoid_picks", dashboard.get("avoid_picks"))},
-        {"key": "best_edge_today", "label": "Best Edge Today", "value": metric_value("best_edge_today", dashboard.get("best_edge_today")), "help": metric_help("best_edge_today", dashboard.get("best_edge_today"))},
-        {"key": "win_rate_ex_push_cancel", "label": "Win Rate Ex Push/Cancel", "value": metric_value("win_rate_ex_push_cancel", proof.get("win_rate_ex_push_cancel"))},
-        {"key": "roi", "label": "ROI", "value": metric_value("roi", proof.get("roi"))},
-        {"key": "profit_units", "label": "Profit Units", "value": metric_value("profit_units", proof.get("profit_units"))},
+        {"key": "events_scanned", "label": "Current Slate Rows", "value": metric_value("events_scanned", dashboard.get("events_scanned"))},
+        {"key": "positive_ev_picks", "label": "Current +EV Picks", "value": metric_value("positive_ev_picks", dashboard.get("positive_ev_picks"))},
+        {"key": "watchlist_picks", "label": "Current Watchlist Picks", "value": metric_value("watchlist_picks", dashboard.get("watchlist_picks"))},
+        {"key": "avoid_picks", "label": "Gate Avoid Rows", "value": metric_value("avoid_picks", dashboard.get("avoid_picks"))},
+        {"key": "best_edge_today", "label": "Best Current Edge", "value": metric_value("best_edge_today", dashboard.get("best_edge_today")), "help": metric_help("best_edge_today", dashboard.get("best_edge_today"))},
+        {"key": "win_rate_ex_push_cancel", "label": "Proof Win Rate Ex Push/Cancel", "value": metric_value("win_rate_ex_push_cancel", proof.get("win_rate_ex_push_cancel"))},
+        {"key": "roi", "label": "Proof ROI", "value": metric_value("roi", proof.get("roi"))},
+        {"key": "profit_units", "label": "Proof Profit Units", "value": metric_value("profit_units", proof.get("profit_units"))},
         {"key": "average_clv", "label": "Average CLV", "value": metric_value("average_clv", proof.get("average_clv"))},
     ]
 
