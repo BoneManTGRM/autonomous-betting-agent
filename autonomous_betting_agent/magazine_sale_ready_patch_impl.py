@@ -118,6 +118,15 @@ def _num(row: Any, *keys: str) -> float | None:
     return None
 
 
+def _fallback_odds(row: Any) -> bool:
+    source = _get(row, "odds_source", "data_source", default="").lower()
+    status = _get(row, "odds_status", "odds_api_status", default="").lower()
+    live_tokens = {"live", "live_api", "live_match", "odds_api_live_match", "live_source"}
+    if source in {"live_api", "odds api", "the odds api", "live_source"} or status in live_tokens:
+        return False
+    return any(token in source or token in status for token in ("uploaded", "fallback", "cached", "missing"))
+
+
 def _edge_state(row: Any) -> tuple[float | None, float | None, bool, bool]:
     edge = _num(row, "model_market_edge", "edge")
     ev = _num(row, "expected_value_per_unit", "profit_expected_value", "expected_value", "ev")
@@ -125,6 +134,8 @@ def _edge_state(row: Any) -> tuple[float | None, float | None, bool, bool]:
 
 
 def sale_ready_recommendation(row: Any) -> tuple[str, str, bool]:
+    if _fallback_odds(row):
+        return "WATCHLIST", "Fallback/watchlist only.", False
     _edge, _ev, negative, missing = _edge_state(row)
     if negative:
         return "WATCHLIST", "", False
@@ -164,6 +175,8 @@ def sale_ready_matchup_items(row: Any) -> list[str]:
 
 
 def sale_ready_risk_items(row: Any) -> list[str]:
+    if _fallback_odds(row):
+        return ["Fallback/watchlist only.", "Confirm current price before entry.", "Watchlist only: current price and live context need verification."]
     _edge, _ev, negative, missing = _edge_state(row)
     if negative:
         return ["Negative edge at current price.", "Use watchlist until price improves.", "Recheck odds and key news."]
@@ -180,6 +193,8 @@ def sale_ready_chain_items(row: Any) -> list[str]:
         explicit.extend(_split(data.get(key)))
     if explicit:
         return [_es(item, lang) for item in _dedupe(explicit)[:3]]
+    if _fallback_odds(row):
+        return [_es(item, lang) for item in ["Straight watchlist only.", "Do not parlay fallback rows.", "Wait for verified odds and compatible legs."]]
     return [_es(item, lang) for item in multi_leg_items([data], lang, 3)[:3]]
 
 
