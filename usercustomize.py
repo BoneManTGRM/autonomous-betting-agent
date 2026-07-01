@@ -2,9 +2,22 @@ from __future__ import annotations
 
 import os
 
-if os.getenv("CI", "").lower() in {"1", "true", "yes"}:
-    pass
-else:
+
+def _skip_runtime_patches() -> bool:
+    return os.getenv("GITHUB_ACTIONS", "").lower() in {"1", "true", "yes"}
+
+
+if not _skip_runtime_patches():
+    try:
+        import sitecustomize as _aba_sitecustomize
+        # Streamlit Cloud can expose CI=true. That must not disable runtime magazine rendering repairs.
+        if hasattr(_aba_sitecustomize, "_ci_enabled"):
+            _aba_sitecustomize._ci_enabled = lambda: False  # type: ignore[attr-defined]
+        if hasattr(_aba_sitecustomize, "_apply_magazine_display_bridge"):
+            _aba_sitecustomize._apply_magazine_display_bridge()  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
     try:
         from autonomous_betting_agent.proof_persistence_patch import install_proof_persistence_patch
         install_proof_persistence_patch()
@@ -26,6 +39,13 @@ else:
     try:
         from autonomous_betting_agent.magazine_report_polish_patch import install as install_magazine_report_polish
         install_magazine_report_polish()
+    except Exception:
+        pass
+
+    try:
+        import sitecustomize as _aba_sitecustomize
+        if hasattr(_aba_sitecustomize, "_apply_magazine_display_bridge"):
+            _aba_sitecustomize._apply_magazine_display_bridge()  # type: ignore[attr-defined]
     except Exception:
         pass
 
