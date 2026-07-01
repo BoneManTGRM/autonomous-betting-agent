@@ -34,20 +34,23 @@ def test_selected_page_uses_enriched_rows_and_cache_version() -> None:
     assert "serializable_row(selected_row)" in text
     assert "cached_render_full_pick_magazine_page_png" in text
     assert "NO_MARKET_EXPORT_VERSION, ENRICHMENT_VERSION" in text
+    assert "TRUTH_CONTRACT_VERSION" in text
     assert "rowd = enrich_rows_with_live_api_data([rowd])[0]" in text
 
 
-def test_full_book_cache_key_includes_enrichment_version() -> None:
+def test_full_book_cache_key_includes_enrichment_and_truth_versions() -> None:
     text = _source()
     assert "report_studio_full_book_export_cache_" in text
     assert "_{ENRICHMENT_VERSION}" in text
-    assert "ACTIVE_EXPORT_VERSION = f\"{magazine_book_export.MAGAZINE_STYLE_VERSION}:{NO_MARKET_EXPORT_VERSION}:{ENRICHMENT_VERSION}\"" in text
+    assert "_{TRUTH_CONTRACT_VERSION}" in text
+    assert "ACTIVE_EXPORT_VERSION = f\"{magazine_book_export.MAGAZINE_STYLE_VERSION}:{NO_MARKET_EXPORT_VERSION}:{ENRICHMENT_VERSION}:{TRUTH_CONTRACT_VERSION}\"" in text
 
 
 def test_diagnostics_expose_api_enrichment_status() -> None:
     text = _source()
     required = [
         "api_enrichment_version",
+        "truth_contract_version",
         "first_row_api_enrichment_fields",
         "first_row_has_weather_summary",
         "first_row_has_newsapi_summary",
