@@ -49,337 +49,36 @@ class AutonomousBettingAgent:
         if abs(diff) < 1e-12:
             home_probability = 0.5
         else:
-            home_probability = 1.0 / (1.0 + math.exp(-diff))
-        home_probability = min(0.99, max(0.01, home_probability))
-        away_probability = 1.0 - home_probability
-        favored_side = event.home.name if home_probability >= away_probability else event.away.name
-        return AgentAnalysisResult(round(home_probability, 6), round(away_probability, 6), favored_side)
+            home_probability = 1.0 / (1.0 + math.exp(-diff / 0.25))
+        return AgentAnalysisResult(home_probability=home_probability, away_probability=1.0 - home_probability, favored_side=event.home.name if home_probability >= 0.5 else event.away.name)
 
-    @staticmethod
-    def _team_score(team: TeamSnapshot) -> float:
-        return (
-            (float(team.rating) - 1500.0) / 400.0
-            + float(team.recent_form)
-            - float(team.injury_impact)
-            + float(team.rest_advantage)
-            + float(team.matchup_edge)
-            + min(max(float(team.data_completeness), 0.0), 1.0) * 0.02
-            + min(max(int(team.source_count), 0), 10) * 0.003
-        )
+    def _team_score(self, team: TeamSnapshot) -> float:
+        completeness = max(0.1, min(1.0, team.data_completeness))
+        base = (team.rating - 1500.0) / 400.0
+        return base + 0.30 * team.recent_form - 0.25 * team.injury_impact + 0.15 * team.rest_advantage + 0.20 * team.matchup_edge + 0.02 * min(team.source_count, 5) * completeness
 
 
-def _install_price_normalizer() -> None:
+def _install_report_renderer_bridge() -> None:
     try:
-        from dataclasses import replace
-        from . import live_odds
+        import importlib
     except Exception:
         return
-    if getattr(live_odds, '_aba_price_normalizer_v1', False):
+    if getattr(importlib.import_module, '_ABA_REPORT_RENDERER_BRIDGE', False):
         return
-    original = live_odds.summarize_event
+    original = importlib.import_module
 
-    def normalized_summary(event):
-        summary = original(event)
-        if summary is None:
-            return None
-        rows = []
-        for outcome in summary.outcomes:
+    def import_module_with_report_bridge(name: str, package: str | None = None):
+        module = original(name, package)
+        if name == 'autonomous_betting_agent.magazine_book_export':
             try:
-                avg = float(outcome.average_price)
-            except (TypeError, ValueError):
-                avg = None
-            rows.append(replace(outcome, best_price=avg, best_bookmaker='consensus_average') if avg is not None and avg > 1.0 else outcome)
-        return replace(summary, outcomes=rows)
+                patcher = original('autonomous_betting_agent.active_magazine_export_guard')
+                patcher.install(module)
+            except Exception:
+                pass
+        return module
 
-    live_odds.summarize_event = normalized_summary
-    live_odds._aba_price_normalizer_v1 = True
-
-
-def _install_adaptive_learning_area_key_normalizer() -> None:
-    try:
-        from . import adaptive_learning
-    except Exception:
-        return
-    if getattr(adaptive_learning, '_aba_area_key_normalizer_v1', False):
-        return
-
-    def normalized_feature_key(area_type: str, value: str) -> str:
-        area = str(area_type or '').strip().lower().replace('-', '_').replace(' ', '_')
-        return f'{area}:{value}'.lower()
-
-    adaptive_learning._feature_key = normalized_feature_key
-    adaptive_learning._aba_area_key_normalizer_v1 = True
+    import_module_with_report_bridge._ABA_REPORT_RENDERER_BRIDGE = True  # type: ignore[attr-defined]
+    importlib.import_module = import_module_with_report_bridge
 
 
-def _install_magazine_renderer_patches() -> None:
-    try:
-        from .magazine_book_export_patches import install
-    except Exception:
-        return
-    install()
-
-
-def _install_mexico_spanish_terms() -> None:
-    try:
-        from . import report_product_layer as rpl
-    except Exception:
-        return
-    if getattr(rpl, '_aba_mexico_spanish_terms_v2', False):
-        return
-    try:
-        rpl.COUNTRY_ES.update({
-            'qatar': 'Qatar', 'bosnia & herzegovina': 'Bosnia y Herzegovina',
-            'bosnia and herzegovina': 'Bosnia y Herzegovina', 'bosnia-herzegovina': 'Bosnia y Herzegovina',
-            'netherlands': 'Países Bajos', 'ivory coast': 'Costa de Marfil', 'iraq': 'Irak',
-            'france': 'Francia', 'germany': 'Alemania', 'tunisia': 'Túnez',
-        })
-        rpl.SPORT_ES.update({'boxing': 'Boxeo', 'mma': 'MMA', 'soccer': 'Fútbol', 'fifa world cup': 'Copa Mundial FIFA', 'baseball': 'Béisbol', 'basketball': 'Baloncesto', 'football': 'Fútbol americano', 'tennis': 'Tenis'})
-        rpl.VALUE_ES.update({
-            'Odds': 'Momio', 'ODDS': 'MOMIO', 'Price Watch': 'Seguimiento de momio',
-            'Price Watch / Research': 'Seguimiento de momio / investigación',
-            'Negative at listed odds': 'Negativo con el momio actual',
-            'Missing or unverified odds': 'Momios faltantes o no verificados',
-            'Thin edge favorite': 'Ventaja delgada', 'THIN EDGE FAVORITE': 'VENTAJA DELGADA',
-            'Research Only': 'Investigación', 'RESEARCH ONLY': 'INVESTIGACIÓN',
-            'Watchlist Only': 'Seguimiento', 'WATCHLIST ONLY': 'SEGUIMIENTO',
-            'Low': 'Bajo', 'Medium': 'Medio', 'High': 'Alto',
-            'LOW': 'BAJO', 'MEDIUM': 'MEDIO', 'HIGH': 'ALTO', 'Review': 'Revisar', 'REVIEW': 'REVISAR',
-        })
-        original_value_text = rpl.value_text
-
-        def mexico_value_text(value, language='en'):
-            text = original_value_text(value, language)
-            if rpl.lang_code(language) != 'es' or not text:
-                return text
-            return text.replace('Seguimiento de precio', 'Seguimiento de momio').replace('cuota actual', 'momio actual').replace('Cuotas', 'Momios').replace('cuotas', 'momios').replace('Cuota', 'Momio').replace('cuota', 'momio')
-
-        rpl.value_text = mexico_value_text
-        original_market_read = rpl.market_read
-
-        def mexico_market_read(odds_ok, model_prob, market_prob, edge, language='en'):
-            text = original_market_read(odds_ok, model_prob, market_prob, edge, language)
-            return text if rpl.lang_code(language) != 'es' else text.replace('Cuotas', 'Momios').replace('cuotas', 'momios').replace('cuota', 'momio')
-
-        rpl.market_read = mexico_market_read
-        rpl._aba_mexico_spanish_terms_v2 = True
-    except Exception:
-        return
-
-
-def _install_chain_notes() -> None:
-    try:
-        from . import chain_notes
-        chain_notes.install()
-    except Exception:
-        return
-
-
-def _install_magazine_dynamic_sources_and_autosizer() -> None:
-    try:
-        from . import magazine_book_export as m
-        from .magazine_api_sources import apply_magazine_api_patch
-        from .magazine_auto_sizer import apply_magazine_auto_sizer
-        from .magazine_headline_safety import install as install_headline_safety
-        from .magazine_live_api_enrichment import install as install_live_api_enrichment
-    except Exception:
-        return
-    try:
-        m = apply_magazine_api_patch(m)
-        m = install_live_api_enrichment(m)
-        m = apply_magazine_auto_sizer(m)
-        install_headline_safety(m)
-    except Exception:
-        return
-
-
-def _install_weather_compaction_patch() -> None:
-    try:
-        from . import magazine_api_sources as mas
-    except Exception:
-        return
-    if getattr(mas, '_aba_weather_compaction_patch_v1', False):
-        return
-
-    def compact_weather_message(text: str) -> list[str]:
-        value = re.sub(r'\s+', ' ', str(text or '')).strip()
-        lower = value.lower()
-        if lower.startswith('weather:'):
-            value = 'WeatherAPI:' + value.split(':', 1)[1]
-            lower = value.lower()
-        if lower.startswith('weatherapi:'):
-            body = value.split(':', 1)[1].strip()
-            location = ''
-            location_match = re.search(r'\bLocation:\s*(.+)$', body, flags=re.IGNORECASE)
-            if location_match:
-                location = location_match.group(1).strip(' .')
-                body = body[: location_match.start()].strip(' .')
-            bits = [part.strip(' .') for part in body.split(';') if part.strip(' .')]
-            if len(bits) <= 1:
-                bits = [part.strip(' .') for part in re.sub(r'\.\s*', ', ', body).split(',') if part.strip(' .')]
-            deduped, seen = [], set()
-            for bit in bits:
-                clean = re.sub(r'\s+', ' ', bit).strip(' .')
-                key = clean.lower()
-                if clean and key not in seen:
-                    deduped.append(clean)
-                    seen.add(key)
-            temperature = next((bit for bit in deduped if re.search(r'-?\d+(?:\.\d+)?\s*°\s*[CF]\b', bit, re.IGNORECASE)), '')
-            wind = next((bit for bit in deduped if re.search(r'\bwind\s*-?\d+(?:\.\d+)?\s*kph\b', bit, re.IGNORECASE)), '')
-            condition = next((bit for bit in deduped if bit not in {temperature, wind} and 'location:' not in bit.lower()), '')
-            ordered = []
-            if temperature:
-                ordered.append(temperature.replace(' ', ''))
-            if condition:
-                ordered.append(condition[:1].lower() + condition[1:])
-            if wind:
-                ordered.append(wind.lower())
-            if not ordered:
-                ordered = deduped[:3]
-            out = ['Weather: ' + ', '.join(ordered[:3]) + '.']
-            if location:
-                out.append('Location: ' + mas._shorten_location(location) + '.')
-            return out
-        if lower.startswith('weatherapi checked'):
-            location = value.replace('WeatherAPI checked', '', 1).split(';', 1)[0].strip()
-            return [f'Weather checked: {mas._shorten_location(location)}; no live payload.'] if location else ['Weather checked; no live payload.']
-        if lower.startswith('weatherapi configured'):
-            return ['Weather checked; no venue/location in row.']
-        return [value]
-
-    mas._compact_weather_message = compact_weather_message
-    mas._aba_weather_compaction_patch_v1 = True
-
-
-def _install_result_grade_aliases() -> None:
-    try:
-        from . import row_normalizer as rn
-    except Exception:
-        return
-    aliases = list(rn.ALIASES.get('result_status', ()))
-    extra_aliases = ['verified_outcome', 'verified_result_status', 'grade', 'final_grade', 'proof_grade', 'pick_grade', 'row_grade', 'result_grade', 'manual_grade']
-    rn.ALIASES['result_status'] = tuple(dict.fromkeys(extra_aliases + aliases))
-    rn.RESULT_MAP.update({'ungraded': 'pending', 'not_graded': 'pending', 'not graded': 'pending'})
-    if getattr(rn, '_aba_pending_raw_proof_guard_v1', False):
-        return
-
-    def protected_needs_synthetic_proof(row):
-        if rn.safe_text(row.get('proof_id')) and rn.safe_text(row.get('locked_at_utc')):
-            return False
-        status = rn.result_status(row)
-        ready = rn.safe_text(row.get('lock_ready')).lower() in {'true', '1', 'yes', 'y', 'pass', 'ok'}
-        return ready or status in {'win', 'loss', 'void'}
-
-    rn._needs_synthetic_proof = protected_needs_synthetic_proof
-    rn._aba_pending_raw_proof_guard_v1 = True
-
-
-def _install_final_enriched_report_rows() -> None:
-    try:
-        from . import magazine_live_api_enrichment as live
-    except Exception:
-        return
-    if getattr(live, '_aba_final_enriched_report_rows_v1', False):
-        return
-    original = live.enrich_rows_with_live_api_data
-
-    def final_enriched_rows(rows):
-        enriched = original(rows)
-        try:
-            from .magazine_pipeline_runtime import build_final_enriched_picks_df
-            return build_final_enriched_picks_df(enriched, force_refresh=True).to_dict('records')
-        except Exception:
-            return enriched
-
-    live.enrich_rows_with_live_api_data = final_enriched_rows
-    live._aba_final_enriched_report_rows_v1 = True
-
-
-def _install_proof_ledger_source_priority_guard() -> None:
-    try:
-        import pandas as pd
-        from . import commercial_platform_tools as cpt
-        from .row_normalizer import result_status
-    except Exception:
-        return
-    if getattr(cpt, '_aba_proof_ledger_truth_source_v4', False):
-        return
-
-    def _as_frame(value):
-        if isinstance(value, pd.DataFrame):
-            return value.copy()
-        if value is None:
-            return pd.DataFrame()
-        try:
-            return pd.DataFrame(value)
-        except Exception:
-            return pd.DataFrame()
-
-    def _resolved_count(value) -> int:
-        frame = _as_frame(value)
-        if frame.empty:
-            return 0
-        count = 0
-        for row in frame.to_dict('records'):
-            if result_status(row) in {'win', 'loss', 'void'}:
-                count += 1
-        return count
-
-    def _read_disk(path=None, workspace_id=''):
-        disk = pd.DataFrame()
-        try:
-            p = cpt.persistent_ledger_path(workspace_id, path)
-            if p.exists():
-                disk = pd.read_csv(p)
-        except Exception:
-            pass
-        return disk
-
-    def protected_load_persistent_ledger(path=None, workspace_id='', active_only=True):
-        disk = _read_disk(path=path, workspace_id=workspace_id)
-        held_locked = cpt.load_held_rows(cpt.LOCKED_STORE_KEY, workspace_id)
-        held_refresh = cpt.load_held_rows(cpt.REFRESH_STORE_KEY, workspace_id)
-        session_locked = []
-        session_refresh = []
-        try:
-            import streamlit as st
-            session_locked = st.session_state.get(cpt.LOCKED_STORE_KEY, []) or []
-            session_refresh = st.session_state.get(cpt.REFRESH_STORE_KEY, []) or []
-        except Exception:
-            pass
-        return cpt.merge_ledgers(disk, held_locked, held_refresh, session_locked, session_refresh, active_only=active_only)
-
-    def protected_save_persistent_ledger(frame, path=None, workspace_id=''):
-        incoming = cpt.filter_locked_proof_rows(frame)
-        if incoming.empty:
-            return pd.DataFrame()
-        existing = protected_load_persistent_ledger(path=path, workspace_id=workspace_id, active_only=False)
-        if not existing.empty and _resolved_count(existing) > 0 and _resolved_count(incoming) == 0:
-            out = existing
-        else:
-            out = cpt.merge_ledgers(existing, incoming, active_only=False) if not existing.empty else incoming
-        rows = out.to_dict('records')
-        cpt.save_held_rows(cpt.LOCKED_STORE_KEY, rows, workspace_id)
-        cpt.save_held_rows(cpt.REFRESH_STORE_KEY, rows, workspace_id)
-        try:
-            p = cpt.persistent_ledger_path(workspace_id, path)
-            cpt.ensure_data_dir(p)
-            out.to_csv(p, index=False)
-        except Exception:
-            pass
-        return out
-
-    cpt.load_persistent_ledger = protected_load_persistent_ledger
-    cpt.save_persistent_ledger = protected_save_persistent_ledger
-    cpt._aba_proof_ledger_truth_source_v4 = True
-
-
-_install_price_normalizer()
-_install_adaptive_learning_area_key_normalizer()
-_install_magazine_renderer_patches()
-_install_mexico_spanish_terms()
-_install_chain_notes()
-_install_magazine_dynamic_sources_and_autosizer()
-_install_weather_compaction_patch()
-_install_result_grade_aliases()
-_install_final_enriched_report_rows()
-_install_proof_ledger_source_priority_guard()
+_install_report_renderer_bridge()
