@@ -19,6 +19,7 @@ from autonomous_betting_agent.report_product_layer import (
     value_text,
 )
 from autonomous_betting_agent.report_summary import build_report_summary_bundle
+from autonomous_betting_agent.two_page_decision_export import build_two_page_decision_export
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,12 @@ class ReportExportBundle:
     summary_markdown: str = ""
     summary_csv_text: str = ""
     summary_table: dict[str, Any] | None = None
+    decision_markdown: str = ""
+    decision_csv_text: str = ""
+    provider_capability_csv_text: str = ""
+    page1_decision: dict[str, Any] | None = None
+    page2_decision: dict[str, Any] | None = None
+    provider_capabilities: list[dict[str, Any]] | None = None
 
 
 def clean_legacy_report_labels(text: str) -> str:
@@ -56,7 +63,9 @@ def _brand_from(brand: MagazineBrand | Mapping[str, Any]) -> MagazineBrand:
 def _render_summary_html(markdown: str) -> str:
     lines = ["<section class=\"report-summary-explanations\">", "<hr>"]
     for line in str(markdown or "").splitlines():
-        if line.startswith("## "):
+        if line.startswith("### "):
+            lines.append(f"<h3>{html_lib.escape(line[4:])}</h3>")
+        elif line.startswith("## "):
             lines.append(f"<h2>{html_lib.escape(line[3:])}</h2>")
         elif line:
             lines.append(f"<p>{html_lib.escape(line)}</p>")
@@ -105,15 +114,17 @@ def render_whatsapp_report(cards: pd.DataFrame, brand: MagazineBrand | Mapping[s
 
 def build_report_export_bundle(cards: pd.DataFrame, brand: MagazineBrand | Mapping[str, Any], *, mode: str = "consumer", public: bool = False) -> ReportExportBundle:
     cards = apply_learning_layer_compat(cards)
-    summary = build_report_summary_bundle(cards)
+    decision = build_two_page_decision_export(cards)
+    cards_with_decisions = decision.cards
+    summary = build_report_summary_bundle(cards_with_decisions)
     cards_with_summary = summary.rows
     base_html = render_consumer_magazine_html(cards, brand, mode=mode)
-    html = clean_legacy_report_labels(base_html + "\n" + _render_summary_html(summary.markdown))
-    markdown = clean_legacy_report_labels(render_markdown_summary(cards, brand, mode=mode) + "\n\n" + summary.markdown)
+    html = clean_legacy_report_labels(base_html + "\n" + _render_summary_html(summary.markdown) + "\n" + _render_summary_html(decision.markdown))
+    markdown = clean_legacy_report_labels(render_markdown_summary(cards, brand, mode=mode) + "\n\n" + summary.markdown + "\n\n" + decision.markdown)
     whatsapp = render_whatsapp_report(cards, brand)
     json_text = cards_to_json(cards_with_summary)
     csv_text = summary.csv_text
-    pdf_bytes = render_report_pdf(cards, brand, mode=mode, summary_markdown=summary.markdown)
+    pdf_bytes = render_report_pdf(cards, brand, mode=mode, summary_markdown=summary.markdown + "\n\n" + decision.markdown)
     feed = build_report_feed(cards, brand, mode=mode, public=public)
     return ReportExportBundle(
         html=html,
@@ -126,4 +137,10 @@ def build_report_export_bundle(cards: pd.DataFrame, brand: MagazineBrand | Mappi
         summary_markdown=summary.markdown,
         summary_csv_text=summary.csv_text,
         summary_table=summary.table,
+        decision_markdown=decision.markdown,
+        decision_csv_text=decision.diagnostics_csv_text,
+        provider_capability_csv_text=decision.provider_capability_csv_text,
+        page1_decision=decision.page1,
+        page2_decision=decision.page2,
+        provider_capabilities=decision.provider_capabilities,
     )
