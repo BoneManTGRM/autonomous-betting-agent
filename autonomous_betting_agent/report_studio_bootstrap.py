@@ -19,3 +19,10 @@ def install() -> None:
         renderer._ABA_VERIFICATION_GATE = gate.VERSION
     except Exception:
         pass
+    try:
+        from . import magazine_sale_ready_patch as sale_module
+        from . import active_magazine_export_guard as guard
+        setattr(sale_module, "_force_truthful_gate", guard.normalize_row)
+        setattr(sale_module, "_truth_pairs", guard.public_truth_pairs)
+    except Exception:
+        pass
