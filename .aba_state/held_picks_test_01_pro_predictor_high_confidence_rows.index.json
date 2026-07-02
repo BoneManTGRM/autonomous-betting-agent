@@ -3,7 +3,7 @@
   "format": "chunked",
   "workspace_id": "test_01",
   "key": "pro_predictor_high_confidence_rows",
-  "parts": 3,
-  "rows_count": 146,
+  "parts": 5,
+  "rows_count": 229,
   "chunk_size": 50
 }
