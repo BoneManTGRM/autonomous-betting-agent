@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import html
 import json
+import os
 from typing import Any
 
 import pandas as pd
@@ -15,6 +16,7 @@ from autonomous_betting_agent.fresh_odds_slate_builder import (
     slate_builder_report_section,
     slate_builder_summary,
 )
+from autonomous_betting_agent.pick_hold_store import save_held_rows
 from autonomous_betting_agent.sidebar_nav import render_app_sidebar
 from autonomous_betting_agent.ui_i18n import localize_dataframe
 
@@ -29,28 +31,26 @@ SPORT_PRESETS = {
     "NHL": {"sport_key": "icehockey_nhl", "regions": "us", "markets": "h2h,spreads,totals"},
     "EPL Soccer": {"sport_key": "soccer_epl", "regions": "us,uk,eu", "markets": "h2h,spreads,totals"},
 }
-MARKET_LABELS = {
-    "Moneyline / winner": "h2h",
-    "Spread / handicap": "spreads",
-    "Game total": "totals",
-}
+MARKET_LABELS = {"Moneyline / winner": "h2h", "Spread / handicap": "spreads", "Game total": "totals"}
 
 TEXT = {
     "en": {
         "title": "Fresh Odds Slate Builder",
-        "caption": "Pull a fresh sportsbook slate and send it to Odds Lock Pro. Most of the time, use Pro Predictor first; use this page only when you need a manual fresh-odds pull.",
-        "quick_start": "What to do",
-        "quick_start_text": "Choose the sport, choose the bet types, press Fetch odds, then send the ready rows to Odds Lock Pro. You normally do not need the raw JSON tools.",
-        "fetch": "Simple fresh-odds fetch",
+        "caption": "Build a fresh sportsbook slate and send ready rows forward.",
+        "quick_start": "Choose sport and markets, fetch odds, or upload the Pro Predictor CSV. Then send ready rows forward.",
+        "fetch": "Fresh odds fetch",
         "sport_preset": "Sport",
         "bet_types": "Bet types to include",
         "fetch_button": "Fetch odds for selected sport",
-        "missing_key": "ODDS_API_KEY is not configured in Streamlit secrets. Add it before fetching.",
+        "missing_key": "ODDS_API_KEY or THE_ODDS_API_KEY is not configured in Streamlit secrets.",
         "advanced_fetch": "Advanced API settings — usually leave closed",
         "sport_key": "Custom The Odds API sport key",
         "regions": "Regions",
         "markets": "Raw markets string",
         "bookmakers": "Bookmaker filter — optional",
+        "csv_import": "Import Pro Predictor CSV",
+        "csv_upload": "Upload Pro Predictor CSV",
+        "csv_loaded": "CSV rows loaded and sent forward.",
         "manual": "Advanced: import raw API JSON — usually skip",
         "upload": "Upload JSON from an API response",
         "api_name": "API payload type",
@@ -59,28 +59,28 @@ TEXT = {
         "ready": "Ready rows to send forward",
         "missing": "Rows needing review",
         "report": "Technical report — optional",
-        "send": "Send ready rows to Odds Lock Pro",
-        "sent": "Ready rows were copied to the next-step session for Odds Lock Pro / advisory review.",
+        "send": "Send ready rows forward",
+        "sent": "Ready rows were copied to the next-step session.",
         "download": "Download slate CSV",
-        "safety_details": "Advanced safety details",
-        "safety_warning": "Session-only page. It uses user-triggered API calls only. It does not place bets, mutate proof, run background jobs, expose API keys, or change bankroll/staking.",
-        "empty_rows": "No rows yet. Fetch odds or import JSON first.",
+        "empty_rows": "No rows yet. Fetch odds, upload CSV, or import JSON first.",
     },
     "es": {
         "title": "Constructor de Slate de Odds Frescas",
-        "caption": "Consulta una lista fresca de momios y enviala a Odds Lock Pro. Normalmente usa Predictor Pro primero; usa esta pagina solo cuando necesitas consultar momios frescos manualmente.",
-        "quick_start": "Qué hacer",
-        "quick_start_text": "Elige deporte, elige tipos de apuesta, presiona Consultar momios y envia las filas listas a Odds Lock Pro. Normalmente no necesitas las herramientas JSON.",
-        "fetch": "Consulta simple de momios frescos",
+        "caption": "Construye un slate fresco y envia filas listas.",
+        "quick_start": "Elige deporte y mercados, consulta momios, o sube el CSV de Predictor Pro. Luego envia filas listas.",
+        "fetch": "Consulta de momios frescos",
         "sport_preset": "Deporte",
         "bet_types": "Tipos de apuesta a incluir",
         "fetch_button": "Consultar momios del deporte seleccionado",
-        "missing_key": "ODDS_API_KEY no esta configurada en Streamlit secrets. Agregala antes de consultar.",
+        "missing_key": "ODDS_API_KEY o THE_ODDS_API_KEY no esta configurada en Streamlit secrets.",
         "advanced_fetch": "Configuracion API avanzada — normalmente dejar cerrado",
         "sport_key": "Clave personalizada The Odds API",
         "regions": "Regiones",
         "markets": "Texto raw de mercados",
         "bookmakers": "Filtro bookmaker — opcional",
+        "csv_import": "Importar CSV de Predictor Pro",
+        "csv_upload": "Subir CSV de Predictor Pro",
+        "csv_loaded": "Filas CSV cargadas y enviadas.",
         "manual": "Avanzado: importar JSON raw — normalmente omitir",
         "upload": "Subir JSON de una respuesta API",
         "api_name": "Tipo de payload API",
@@ -89,12 +89,10 @@ TEXT = {
         "ready": "Filas listas para enviar",
         "missing": "Filas para revisar",
         "report": "Reporte tecnico — opcional",
-        "send": "Enviar filas listas a Odds Lock Pro",
-        "sent": "Las filas listas fueron copiadas para Odds Lock Pro / revision asesoría.",
+        "send": "Enviar filas listas",
+        "sent": "Las filas listas fueron copiadas a la siguiente sesion.",
         "download": "Descargar CSV de slate",
-        "safety_details": "Detalles de seguridad avanzados",
-        "safety_warning": "Pagina solo de sesion. Usa llamadas API activadas por el usuario. No apuesta, no muta pruebas, no corre trabajos de fondo, no expone API keys ni cambia bankroll/staking.",
-        "empty_rows": "Aun no hay filas. Consulta momios o importa JSON primero.",
+        "empty_rows": "Aun no hay filas. Consulta momios, sube CSV o importa JSON primero.",
     },
 }
 
@@ -109,28 +107,30 @@ def display_frame(frame: pd.DataFrame) -> pd.DataFrame:
 
 def csv_link(label: str, frame: pd.DataFrame, filename: str) -> None:
     data = base64.b64encode(frame.to_csv(index=False).encode("utf-8")).decode("ascii")
-    st.markdown(
-        f'<a href="data:text/csv;base64,{data}" download="{html.escape(filename)}" '
-        f'style="display:block;text-align:center;background:#ef5350;color:white;'
-        f'padding:.75rem 1rem;border-radius:.45rem;text-decoration:none;font-weight:700;">'
-        f'{html.escape(label)}</a>',
-        unsafe_allow_html=True,
-    )
+    st.markdown(f'<a href="data:text/csv;base64,{data}" download="{html.escape(filename)}" style="display:block;text-align:center;background:#ef5350;color:white;padding:.75rem 1rem;border-radius:.45rem;text-decoration:none;font-weight:700;">{html.escape(label)}</a>', unsafe_allow_html=True)
 
 
 def show_table(title: str, frame: pd.DataFrame) -> None:
     st.subheader(title)
-    if frame.empty:
-        st.info(t("empty_rows"))
-    else:
-        st.dataframe(display_frame(frame), use_container_width=True, hide_index=True)
+    st.info(t("empty_rows")) if frame.empty else st.dataframe(display_frame(frame), use_container_width=True, hide_index=True)
+
+
+def get_secret(*names: str) -> str:
+    for name in names:
+        try:
+            value = str(st.secrets.get(name, "") or "").strip()
+            if value:
+                return value
+        except Exception:
+            pass
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return ""
 
 
 def _load_json_upload(upload: Any) -> Any:
-    if upload is None:
-        return None
-    content = upload.read().decode("utf-8")
-    return json.loads(content)
+    return None if upload is None else json.loads(upload.read().decode("utf-8"))
 
 
 def _selected_markets(labels: list[str]) -> str:
@@ -141,39 +141,59 @@ def _selected_markets(labels: list[str]) -> str:
 def _current_fetch_settings() -> tuple[str, str, str, str]:
     preset = st.session_state.get("fosb_sport_preset") or "NBA"
     defaults = SPORT_PRESETS.get(str(preset), SPORT_PRESETS["NBA"])
-    sport_key = str(st.session_state.get("fosb_custom_sport_key") or defaults["sport_key"]).strip()
-    regions = str(st.session_state.get("fosb_regions") or defaults["regions"]).strip()
-    markets = str(st.session_state.get("fosb_markets") or defaults["markets"]).strip()
-    bookmakers = str(st.session_state.get("fosb_bookmakers") or "").strip()
-    return sport_key, regions, markets, bookmakers
+    return (
+        str(st.session_state.get("fosb_custom_sport_key") or defaults["sport_key"]).strip(),
+        str(st.session_state.get("fosb_regions") or defaults["regions"]).strip(),
+        str(st.session_state.get("fosb_markets") or defaults["markets"]).strip(),
+        str(st.session_state.get("fosb_bookmakers") or "").strip(),
+    )
+
+
+def _ready_csv_rows(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    out = frame.copy().fillna("")
+    if "decimal_odds" not in out.columns and "decimal_price" in out.columns:
+        out["decimal_odds"] = out["decimal_price"]
+    if "decimal_price" not in out.columns and "decimal_odds" in out.columns:
+        out["decimal_price"] = out["decimal_odds"]
+    if "market" not in out.columns and "market_type" in out.columns:
+        out["market"] = out["market_type"]
+    if "market_type" not in out.columns and "market" in out.columns:
+        out["market_type"] = out["market"]
+    if "selection" not in out.columns and "prediction" in out.columns:
+        out["selection"] = out["prediction"]
+    if "prediction" not in out.columns and "selection" in out.columns:
+        out["prediction"] = out["selection"]
+    if "bookmaker" not in out.columns:
+        out["bookmaker"] = out.get("sportsbook", "imported_csv")
+    out["slate_builder_source"] = "pro_predictor_csv_import"
+    out["slate_builder_generated_at"] = pd.Timestamp.utcnow().isoformat()
+    out["slate_builder_api_name"] = out.get("odds_source", "Pro Predictor CSV")
+    out["slate_builder_ready_for_advisory_pipeline"] = True
+    out["slate_builder_missing_fields"] = ""
+    out["slate_builder_price_available"] = True
+    return out.to_dict("records")
+
+
+def send_forward(rows: list[dict[str, Any]]) -> None:
+    for key in ["fresh_odds_slate_builder_rows", "pro_predictor_latest_rows", "pro_predictor_high_confidence_rows", "odds_lock_pro_candidate_rows", "ara_latest_predictions", "public_proof_dashboard_refresh_rows"]:
+        st.session_state[key] = rows
+    try:
+        workspace = str(st.session_state.get("aba_test_window_id") or "test_01")
+        for key in ["fresh_odds_slate_builder_rows", "pro_predictor_latest_rows", "pro_predictor_high_confidence_rows", "odds_lock_pro_candidate_rows", "ara_latest_predictions"]:
+            save_held_rows(key, rows, workspace)
+            save_held_rows(key, rows, "test_01")
+    except Exception:
+        pass
 
 
 st.title(t("title"))
 st.caption(t("caption"))
-st.info(f"**{t('quick_start')}** — {t('quick_start_text')}")
-
-with st.expander(t("safety_details"), expanded=False):
-    st.warning(t("safety_warning"))
-    st.json({
-        "streamlit_session_only": True,
-        "user_triggered_only": True,
-        "api_key_exposed": False,
-        "database_added": False,
-        "scheduled_polling": False,
-        "live_betting": False,
-        "proof_mutation": False,
-    })
-
+st.info(t("quick_start"))
 rows: list[dict[str, Any]] = []
 
 st.subheader(t("fetch"))
 selected_sport = st.selectbox(t("sport_preset"), list(SPORT_PRESETS.keys()), index=0, key="fosb_sport_preset")
-selected_markets = st.multiselect(
-    t("bet_types"),
-    list(MARKET_LABELS.keys()),
-    default=["Moneyline / winner", "Spread / handicap", "Game total"],
-    key="fosb_market_labels",
-)
+selected_markets = st.multiselect(t("bet_types"), list(MARKET_LABELS.keys()), default=list(MARKET_LABELS.keys()), key="fosb_market_labels")
 defaults = SPORT_PRESETS.get(selected_sport, SPORT_PRESETS["NBA"])
 st.session_state.setdefault("fosb_custom_sport_key", defaults["sport_key"])
 st.session_state.setdefault("fosb_regions", defaults["regions"])
@@ -187,22 +207,29 @@ with st.expander(t("advanced_fetch"), expanded=False):
 
 if st.button(t("fetch_button"), type="primary"):
     sport_key, regions, markets, bookmakers = _current_fetch_settings()
-    api_key = str(st.secrets.get("ODDS_API_KEY", "") or "")
+    api_key = get_secret("ODDS_API_KEY", "THE_ODDS_API_KEY")
     if not api_key:
         st.warning(t("missing_key"))
     else:
         try:
-            payload = fetch_the_odds_api_payload(
-                api_key,
-                sport_key=sport_key,
-                regions=regions,
-                markets=markets,
-                bookmakers=bookmakers,
-            )
-            rows = normalize_the_odds_api_events(payload, sport=sport_key, market=markets.split(",")[0].strip(), bookmaker_filter=bookmakers)
+            payload = fetch_the_odds_api_payload(api_key, sport_key=sport_key, regions=regions, markets=markets, bookmakers=bookmakers)
+            rows = []
+            for market in [item.strip() for item in markets.split(",") if item.strip()]:
+                rows.extend(normalize_the_odds_api_events(payload, sport=sport_key, market=market, bookmaker_filter=bookmakers))
             st.session_state["fresh_odds_slate_builder_rows"] = rows
+            st.success(f"Fetched rows: {len(rows)}") if rows else st.warning("API returned no usable rows for the selected settings.")
         except Exception as exc:
-            st.error(f"Fresh odds fetch failed: {type(exc).__name__}")
+            st.error(f"Fresh odds fetch failed: {type(exc).__name__}: {str(exc)[:220]}")
+
+with st.expander(t("csv_import"), expanded=True):
+    csv_upload = st.file_uploader(t("csv_upload"), type=["csv"], key="fosb_predictor_csv_upload")
+    if csv_upload is not None:
+        try:
+            rows = _ready_csv_rows(pd.read_csv(csv_upload))
+            send_forward(rows)
+            st.success(f"{t('csv_loaded')} Rows: {len(rows)}")
+        except Exception as exc:
+            st.error(f"CSV import failed: {type(exc).__name__}: {str(exc)[:220]}")
 
 with st.expander(t("manual"), expanded=False):
     st.caption("Use this only when another tool already gave you a raw API response file.")
@@ -210,19 +237,16 @@ with st.expander(t("manual"), expanded=False):
     upload = st.file_uploader(t("upload"), type=["json"])
     if upload is not None:
         try:
-            payload = _load_json_upload(upload)
-            rows = build_slate_rows_from_payload(api_name, payload, sport="", market="")
+            rows = build_slate_rows_from_payload(api_name, _load_json_upload(upload), sport="", market="")
             st.session_state["fresh_odds_slate_builder_rows"] = rows
         except Exception as exc:
-            st.error(f"JSON upload failed: {type(exc).__name__}")
+            st.error(f"JSON upload failed: {type(exc).__name__}: {str(exc)[:220]}")
 
 rows = rows or st.session_state.get("fresh_odds_slate_builder_rows", []) or []
 frame = pd.DataFrame(rows)
 summary = slate_builder_summary(rows)
-
 show_table(t("summary"), summary)
 show_table(t("rows"), frame)
-
 ready_frame = frame[frame.get("slate_builder_ready_for_advisory_pipeline", pd.Series(dtype=bool)).fillna(False).astype(bool)].copy() if not frame.empty else pd.DataFrame()
 missing_frame = frame[frame.get("slate_builder_missing_fields", pd.Series(dtype=str)).fillna("").astype(str) != ""].copy() if not frame.empty else pd.DataFrame()
 show_table(t("ready"), ready_frame)
@@ -230,10 +254,7 @@ show_table(t("missing"), missing_frame)
 
 if not ready_frame.empty:
     if st.button(t("send"), type="primary"):
-        ready_rows = ready_frame.to_dict("records")
-        st.session_state["fresh_odds_slate_builder_rows"] = ready_rows
-        st.session_state["pro_predictor_latest_rows"] = ready_rows
-        st.session_state["odds_lock_pro_candidate_rows"] = ready_rows
+        send_forward(ready_frame.to_dict("records"))
         st.success(t("sent"))
     csv_link(t("download"), frame, "fresh_odds_slate_builder.csv")
 
