@@ -5,8 +5,8 @@ from typing import Any, Iterable, Mapping
 
 MISSING_EXACT_MARKET_LINE = "Missing exact market line"
 SAVED_SOURCE_PUBLIC_WARNING = "Saved-source report. Verify current provider price before publishing."
-LIVE_TRIGGER_UNAVAILABLE = "Live trigger unavailable — no matched live feed."
-NO_VERIFIED_PARLAY = "No verified parlay candidate yet — need at least 2 independent positive-EV legs from current provider data."
+LIVE_TRIGGER_UNAVAILABLE = "Live trigger unavailable - no matched live feed."
+NO_VERIFIED_PARLAY = "No verified parlay candidate yet - need at least 2 independent positive-EV legs from current provider data."
 DANGLING_ENDINGS = ("where", "where the", "with", "with the", "who are", "because", "and", "but", "the", "of", "in", "against", "expected")
 SAVED_SOURCE_TOKENS = ("saved", "uploaded", "cached", "handoff", "fallback", "manual")
 PROVIDER_TOKENS = ("odds api", "the odds api", "sportsdataio", "sportradar", "api-football", "bookmaker", "draftkings", "fanduel", "betmgm", "caesars", "pinnacle", "consensus")
@@ -117,19 +117,19 @@ def build_full_market_label(row: Mapping[str, Any]) -> str:
     kind = market_type(row); side = normalize_side(_selection_text(row)); team = _team_text(row)
     if kind == "total":
         line = _line_value(row, "total")
-        return f"Game Total: {side} {format_total_line(line)}" if side in {"Over", "Under"} and line else f"Game Total: {side} — {MISSING_EXACT_MARKET_LINE}" if side in {"Over", "Under"} else f"Game Total: {MISSING_EXACT_MARKET_LINE}"
+        return f"Game Total: {side} {format_total_line(line)}" if side in {"Over", "Under"} and line else f"Game Total: {side} - {MISSING_EXACT_MARKET_LINE}" if side in {"Over", "Under"} else f"Game Total: {MISSING_EXACT_MARKET_LINE}"
     if kind == "team_total":
         line = _line_value(row, "team_total"); prefix = f"Team Total: {team}".strip()
-        return f"{prefix} {side} {format_total_line(line)}".strip() if side in {"Over", "Under"} and line else f"{prefix} {side} — {MISSING_EXACT_MARKET_LINE}".strip() if side in {"Over", "Under"} else f"{prefix}: {MISSING_EXACT_MARKET_LINE}".strip()
+        return f"{prefix} {side} {format_total_line(line)}".strip() if side in {"Over", "Under"} and line else f"{prefix} {side} - {MISSING_EXACT_MARKET_LINE}".strip() if side in {"Over", "Under"} else f"{prefix}: {MISSING_EXACT_MARKET_LINE}".strip()
     if kind == "run_line":
         line = _line_value(row, "run_line")
-        return f"Run Line: {team} {format_line(line)}" if team and line else f"Run Line: {team} — {MISSING_EXACT_MARKET_LINE}" if team else f"Run Line: {MISSING_EXACT_MARKET_LINE}"
+        return f"Run Line: {team} {format_line(line)}" if team and line else f"Run Line: {team} - {MISSING_EXACT_MARKET_LINE}" if team else f"Run Line: {MISSING_EXACT_MARKET_LINE}"
     if kind == "spread":
         line = _line_value(row, "spread")
-        return f"Spread: {team} {format_line(line)}" if team and line else f"Spread: {team} — {MISSING_EXACT_MARKET_LINE}" if team else f"Spread: {MISSING_EXACT_MARKET_LINE}"
+        return f"Spread: {team} {format_line(line)}" if team and line else f"Spread: {team} - {MISSING_EXACT_MARKET_LINE}" if team else f"Spread: {MISSING_EXACT_MARKET_LINE}"
     if kind == "player_prop":
         player = first_value(row, "player", "player_name", "participant") or team; prop = first_value(row, "prop_name", "stat_type", "market", "market_type"); line = _line_value(row, "prop")
-        return f"Player Prop: {player} {side} {format_total_line(line)} {prop}" if player and prop and side in {"Over", "Under"} and line else f"Player Prop: {player} {prop} — {MISSING_EXACT_MARKET_LINE}" if player and prop else f"Player Prop: {MISSING_EXACT_MARKET_LINE}"
+        return f"Player Prop: {player} {side} {format_total_line(line)} {prop}" if player and prop and side in {"Over", "Under"} and line else f"Player Prop: {player} {prop} - {MISSING_EXACT_MARKET_LINE}" if player and prop else f"Player Prop: {MISSING_EXACT_MARKET_LINE}"
     if kind == "moneyline":
         return f"Moneyline: {team or side or _selection_text(row) or 'Missing selection'}"
     return _selection_text(row) or "Missing market selection"
@@ -167,11 +167,11 @@ def public_recommendation_status(row: Mapping[str, Any]) -> str:
     if any(token in event_status for token in ("started", "in progress", "live", "final", "stale", "expired")):
         return "Blocked / Do not publish as pick"
     if price is None or prob is None:
-        return "Research only — missing independent model probability or current provider price"
+        return "Research only - missing independent model probability or current provider price"
     if not has_exact_market_line(row):
-        return "Research only — missing exact market line"
+        return "Research only - missing exact market line"
     if ev is None or edge is None:
-        return "Research only — missing edge or EV"
+        return "Research only - missing edge or EV"
     if ev <= 0 or edge <= 0:
         return "No bet / Research only / Price rejected"
     if is_saved_source(row) or provider_state(row) != "Provider matched":
