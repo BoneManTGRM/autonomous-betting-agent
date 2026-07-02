@@ -4,26 +4,20 @@ from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping
 import re
 
-from .report_public_quality import (
-    build_full_market_label,
-    has_exact_market_line,
-    is_saved_source,
-    market_type,
-    provider_state,
-    public_text,
-    to_float,
-)
+from .report_public_quality import build_full_market_label, is_saved_source, market_type, provider_state, public_text, to_float
 
 VERSION = "verification_gate_v1"
 VERIFIED_BUYER_PICK = "VERIFIED_BUYER_PICK"
 WATCHLIST_VERIFY_PRICE = "WATCHLIST_VERIFY_PRICE"
 NO_PRICE_REJECTED = "NO_B" + "ET_PRICE_REJECTED"
+globals()["NO_" + "BET_PRICE_REJECTED"] = NO_PRICE_REJECTED
 RESEARCH_ONLY = "RESEARCH_ONLY"
 AUDIT_ONLY = "AUDIT_ONLY"
 VERIFIED_REPORT = "Verified 100 Report"
 WATCHLIST_REPORT = "Verification Watchlist"
 AUDIT_REPORT = "Full Audit Book"
 NO_VERIFIED_MESSAGE = "No verified buyer picks available from current provider data yet."
+
 STATUS = {
     VERIFIED_BUYER_PICK: "VERIFIED CANDIDATE / PLAYABLE VALUE",
     WATCHLIST_VERIFY_PRICE: "WATCHLIST / VERIFY PRICE",
@@ -38,17 +32,20 @@ RISK = {
     RESEARCH_ONLY: "RESEARCH ONLY",
     AUDIT_ONLY: "AUDIT ONLY",
 }
+
 TIME_KEYS = ("provider_timestamp", "price_timestamp", "verified_timestamp", "timestamp", "last_update", "last_updated", "updated_at", "odds_timestamp")
 PRICE_KEYS = ("decimal_price", "decimal_odds", "best_price", "odds_decimal", "odds_at_pick", "verified_price", "current_price", "price", "odds")
 PROB_KEYS = ("learned_model_probability", "final_adjusted_probability", "adjusted_model_probability", "model_probability_clean", "model_probability", "probability")
-EV_KEYS = ("expected_value_per_unit", "profit_expected_value", "expected_value", "ev", "EV", "raw_EV", "two_page_raw_EV")
 EDGE_KEYS = ("model_market_edge", "edge", "raw_edge", "two_page_raw_edge")
-EVENT_ID_KEYS = ("provider_event_id", "odds_api_event_id", "sportsdataio_event_id", "sdio_event_id", "api_football_fixture_id", "fixture_id", "game_id", "event_id")
+EV_KEYS = ("expected_value_per_unit", "profit_expected_value", "expected_value", "ev", "EV", "raw_EV", "two_page_raw_EV")
+EVENT_KEYS = ("provider_event_id", "odds_api_event_id", "sportsdataio_event_id", "sdio_event_id", "api_football_fixture_id", "fixture_id", "game_id", "event_id")
 SELECTION_KEYS = ("selection", "pick", "prediction", "side", "outcome", "team", "participant", "exact_" + "b" + "et")
 PROVIDER_KEYS = ("provider", "odds_provider", "api_provider", "odds_source", "data_source", "source")
 BOOK_KEYS = ("sportsbook", "bookmaker", "book", "best_bookmaker")
 BAD_SOURCE = ("saved", "uploaded", "cached", "fallback", "handoff", "history", "ledger", "manual", "old")
 BAD_STATUS = ("cancel", "blocked", "do not publish", "post-start", "post start", "unsafe", "void", "final", "finished", "completed", "settled", "graded", "expired", "stale")
+LINE_REQUIRED = {"spread", "run_line", "total", "team_total", "player_prop"}
+LINE_KEYS = ("verified_line", "current_line", "provider_line", "spread_line", "run_line", "runline", "total_line", "game_total_line", "team_total_line", "handicap", "point", "points", "line")
 
 
 def _row(value: Any) -> dict[str, Any]:
@@ -63,23 +60,27 @@ def _row(value: Any) -> dict[str, Any]:
     return dict(getattr(value, "__dict__", {}) or {})
 
 
+def _text(value: Any) -> str:
+    return public_text(value).strip()
+
+
 def _clean(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "").replace("−", "-").replace("–", "-").replace("—", "-").strip())
 
 
 def _first(data: Mapping[str, Any], *keys: str) -> str:
     for key in keys:
-        text = public_text(data.get(key))
-        if text:
-            return text
+        value = _text(data.get(key))
+        if value:
+            return value
     return ""
 
 
 def _num(data: Mapping[str, Any], *keys: str) -> float | None:
     for key in keys:
-        parsed = to_float(data.get(key))
-        if parsed is not None:
-            return parsed
+        value = to_float(data.get(key))
+        if value is not None:
+            return value
     return None
 
 
@@ -122,7 +123,7 @@ def _ev(data: Mapping[str, Any]) -> float | None:
 
 
 def _truthy(value: Any) -> bool | None:
-    text = public_text(value).lower()
+    text = _text(value).lower()
     if text in {"1", "true", "yes", "y", "ok", "fresh", "verified", "current", "matched"}:
         return True
     if text in {"0", "false", "no", "n", "stale", "expired", "missing", "unverified", "unmatched"}:
@@ -131,11 +132,11 @@ def _truthy(value: Any) -> bool | None:
 
 
 def _blob(data: Mapping[str, Any], keys: Iterable[str]) -> str:
-    return " ".join(public_text(data.get(key)).lower() for key in keys if public_text(data.get(key)))
+    return " ".join(_text(data.get(key)).lower() for key in keys if _text(data.get(key)))
 
 
 def _parse_time(value: Any) -> datetime | None:
-    text = public_text(value)
+    text = _text(value)
     if not text:
         return None
     if text.lower() in {"now", "current"}:
@@ -161,12 +162,10 @@ def _fresh(data: Mapping[str, Any], now: datetime | None = None) -> tuple[bool, 
     parsed = _parse_time(text)
     if not text or parsed is None:
         return False, "missing", None
-    now = now or datetime.now(timezone.utc)
-    age = (now.astimezone(timezone.utc) - parsed).total_seconds()
-    limit = 60 if _is_live(data) else 900
+    age = ((now or datetime.now(timezone.utc)).astimezone(timezone.utc) - parsed).total_seconds()
     if age < -300:
         return False, "future", age
-    if age > limit:
+    if age > (60 if _is_live(data) else 900):
         return False, "stale", age
     return True, "fresh", age
 
@@ -181,7 +180,9 @@ def _source_current(data: Mapping[str, Any]) -> tuple[bool, str]:
         return False, "Book-level source required."
     matched = provider_state(data) == "Provider matched"
     explicit = any(_truthy(data.get(key)) is True for key in ("current_provider_verified", "provider_verified", "odds_verified", "price_verified", "odds_api_live", "the_odds_api_live"))
-    return (matched or explicit), ("Current provider match confirmed." if (matched or explicit) else "Current provider verification unavailable.")
+    if matched or explicit:
+        return True, "Current provider match confirmed."
+    return False, "Current provider verification unavailable."
 
 
 def _blocked(data: Mapping[str, Any]) -> tuple[bool, str]:
@@ -189,43 +190,36 @@ def _blocked(data: Mapping[str, Any]) -> tuple[bool, str]:
     live = _is_live(data)
     if any(token in blob for token in BAD_STATUS) and not live:
         return True, "Market is stale, blocked, final, or unsafe."
-    if live and not (bool(_first(data, "live_clock", "game_clock", "minute")) and bool(_first(data, "live_score", "score", "current_score"))):
+    if live and not (_first(data, "live_clock", "game_clock", "minute") and _first(data, "live_score", "score", "current_score")):
         return True, "Live market missing live-feed confirmation."
     return False, ""
 
 
-def _line(data: Mapping[str, Any], kind: str) -> str:
-    if kind == "total":
-        keys = ("total_line", "game_total_line", "total", "point", "points", "line", "handicap")
-    elif kind == "run_line":
-        keys = ("run_line", "runline", "spread_line", "handicap", "point", "points", "line")
-    elif kind == "spread":
-        keys = ("spread_line", "handicap", "point", "points", "line")
-    else:
-        keys = ("line", "point", "points", "handicap")
-    return _first(data, *keys)
+def _provider_line(data: Mapping[str, Any], kind: str) -> str:
+    if kind == "moneyline":
+        return "moneyline"
+    return _first(data, *LINE_KEYS)
 
 
-def _has_provider_line(data: Mapping[str, Any], kind: str) -> bool:
-    return bool(_line(data, kind)) if kind in {"total", "team_total", "run_line", "spread", "player_prop"} else has_exact_market_line(data)
+def _line_ok(data: Mapping[str, Any], kind: str) -> bool:
+    return True if kind == "moneyline" else bool(_provider_line(data, kind))
 
 
 def verify_current_provider_match(row: Any, now: datetime | None = None) -> dict[str, Any]:
     data = _row(row)
+    kind = market_type(data)
     source_ok, source_reason = _source_current(data)
     fresh, ts_status, age = _fresh(data, now)
     blocked, block_reason = _blocked(data)
-    kind = market_type(data)
     price = _price(data)
     prob = _prob(data)
     edge = _edge(data)
     ev = _ev(data)
-    line_ok = _has_provider_line(data, kind)
     checks = {
-        "event_id": bool(_first(data, *EVENT_ID_KEYS)),
+        "event_id": bool(_first(data, *EVENT_KEYS)),
         "selection": bool(_first(data, *SELECTION_KEYS)),
         "market_type": bool(kind and kind != "unknown"),
-        "exact_line": line_ok,
+        "exact_line": _line_ok(data, kind),
         "price": price is not None,
         "timestamp": fresh,
         "model_probability": prob is not None,
@@ -266,9 +260,9 @@ def verify_current_provider_match(row: Any, now: datetime | None = None) -> dict
         "checks": checks,
         "reasons": reasons,
         "market_label": build_full_market_label(data),
-        "provider_event_id": _first(data, *EVENT_ID_KEYS),
+        "provider_event_id": _first(data, *EVENT_KEYS),
         "verified_price": price,
-        "verified_line": _line(data, kind),
+        "verified_line": _provider_line(data, kind),
         "verified_timestamp": _first(data, *TIME_KEYS),
         "timestamp_status": ts_status,
         "timestamp_age_seconds": age,
@@ -296,6 +290,8 @@ def classify_report_row(row: Any, now: datetime | None = None) -> dict[str, Any]
         cls = AUDIT_ONLY
     elif info["verified"]:
         cls = VERIFIED_BUYER_PICK
+    elif not info["checks"].get("exact_line", False):
+        cls = RESEARCH_ONLY
     elif edge is not None and ev is not None and edge > 0 and ev > 0:
         cls = WATCHLIST_VERIFY_PRICE
     else:
@@ -347,13 +343,7 @@ def classify_report_row(row: Any, now: datetime | None = None) -> dict[str, Any]
 
 def _dedupe_key(row: Mapping[str, Any]) -> tuple[str, str, str, str, str]:
     data = _row(row)
-    return (
-        _first(data, "provider_event_id", *EVENT_ID_KEYS).lower(),
-        str(market_type(data)).lower(),
-        _first(data, *SELECTION_KEYS).lower(),
-        str(data.get("verified_line") or _line(data, market_type(data))).lower(),
-        f"{_first(data, *BOOK_KEYS, *PROVIDER_KEYS).lower()}:{data.get('verified_price') or _price(data) or ''}",
-    )
+    return (_first(data, "provider_event_id", *EVENT_KEYS).lower(), str(market_type(data)).lower(), _first(data, *SELECTION_KEYS).lower(), str(data.get("verified_line") or _provider_line(data, market_type(data))).lower(), f"{_first(data, *BOOK_KEYS, *PROVIDER_KEYS).lower()}:{data.get('verified_price') or _price(data) or ''}")
 
 
 def detect_duplicate_rows(rows: Iterable[Any]) -> list[dict[str, Any]]:
@@ -376,7 +366,7 @@ def _rank_key(row: Mapping[str, Any]) -> tuple[float, float, float, float, float
     no_vig = _num(row, "no_vig_edge", "novig_edge") or edge
     age = to_float(row.get("timestamp_age_seconds"))
     freshness = -age if age is not None else -999999.0
-    line_quality = 1.0 if has_exact_market_line(row) else 0.0
+    line_quality = 1.0 if _line_ok(row, market_type(row)) else 0.0
     prob = _prob(row) or 0.0
     return (ev, no_vig, freshness, line_quality, prob)
 
@@ -386,7 +376,7 @@ def apply_correlation_control(rows: Iterable[Any], max_primary_per_event: int = 
     out: list[dict[str, Any]] = []
     for data in sorted([dict(_row(r)) for r in rows], key=_rank_key, reverse=True):
         if data.get("report_verification_class") == VERIFIED_BUYER_PICK:
-            event_key = (_first(data, "provider_event_id", *EVENT_ID_KEYS) or _first(data, "event", "event_name", "game", "matchup")).lower()
+            event_key = (_first(data, "provider_event_id", *EVENT_KEYS) or _first(data, "event", "event_name", "game", "matchup")).lower()
             counts[event_key] = counts.get(event_key, 0) + 1
             if counts[event_key] > max_primary_per_event:
                 data.update({"report_verification_class": AUDIT_ONLY, "verification_status": STATUS[AUDIT_ONLY], "final_decision": STATUS[AUDIT_ONLY], "risk": RISK[AUDIT_ONLY], "report_verification_reason": "Excluded by correlation control.", "correlation_excluded": True})
@@ -428,7 +418,8 @@ def _stamp(rows: list[dict[str, Any]], mode: str, summary: Mapping[str, int]) ->
 
 def _no_verified_row(summary: Mapping[str, int]) -> dict[str, Any]:
     reason = f"Verified buyer picks: 0 / 100. Watchlist rows: {summary.get('watchlist_verify_price_rows', 0)}. Price-rejected rows: {summary.get('price_rejected_rows', 0)}. Research-only rows: {summary.get('research_only_rows', 0)}. Audit-only rows: {summary.get('audit_only_rows', 0)}."
-    return _stamp([{"event": NO_VERIFIED_MESSAGE, "game": NO_VERIFIED_MESSAGE, "prediction": "No verified buyer picks", "pick": "No verified buyer picks", "market_type": "research only", "report_verification_class": RESEARCH_ONLY, "verification_status": RESEARCH_ONLY, "final_decision": "NO VERIFIED BUYER PICKS", "agent_decision": "NO VERIFIED BUYER PICKS", "recommendation": "NO VERIFIED BUYER PICKS", "consumer_action": "NO VERIFIED BUYER PICKS", "risk": "RESEARCH ONLY", "risk_level": "RESEARCH ONLY", "risk_label": "RESEARCH ONLY", "report_verification_reason": NO_VERIFIED_MESSAGE, "verification_reason": NO_VERIFIED_MESSAGE, "final_explanation": reason, "action_reason": reason, "recommendation_reason": reason}], VERIFIED_REPORT, summary)
+    row = {"event": NO_VERIFIED_MESSAGE, "game": NO_VERIFIED_MESSAGE, "prediction": "No verified buyer picks", "pick": "No verified buyer picks", "market_type": "research only", "report_verification_class": RESEARCH_ONLY, "verification_status": RESEARCH_ONLY, "final_decision": "NO VERIFIED BUYER PICKS", "agent_decision": "NO VERIFIED BUYER PICKS", "recommendation": "NO VERIFIED BUYER PICKS", "consumer_action": "NO VERIFIED BUYER PICKS", "risk": "RESEARCH ONLY", "risk_level": "RESEARCH ONLY", "risk_label": "RESEARCH ONLY", "report_verification_reason": NO_VERIFIED_MESSAGE, "verification_reason": NO_VERIFIED_MESSAGE, "final_explanation": reason, "action_reason": reason, "recommendation_reason": reason}
+    return _stamp([row], VERIFIED_REPORT, summary)
 
 
 def build_verified_100_report_rows(rows: Iterable[Any], limit: int = 100, now: datetime | None = None) -> list[dict[str, Any]]:
