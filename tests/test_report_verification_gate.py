@@ -39,6 +39,8 @@ def test_report_gate_requires_provider_match_for_default_report():
     }
     status = gate.classify_report_row(row)["report_verification_class"]
     assert status == gate.WATCHLIST_VERIFY_PRICE
+    rows = gate.build_report_rows([row])
+    assert rows[0]["event"] == gate.NO_VERIFIED_MESSAGE
 
 
 def test_report_gate_rejects_negative_value():
