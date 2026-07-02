@@ -21,3 +21,21 @@ def test_report_gate_imports_and_classifies_row():
     out = gate.classify_report_row(row)
     assert out["report_verification_class"] == gate.VERIFIED_BUYER_PICK
     assert len(gate.build_report_rows([row])) == 1
+
+
+def test_report_gate_requires_provider_match_for_default_report():
+    gate = importlib.import_module("autonomous_betting_agent.report_verification_gate")
+    row = {
+        "event": "A vs C",
+        "provider_event_id": "evt1",
+        "market_type": "moneyline",
+        "selection": "A",
+        "decimal_price": 2.0,
+        "model_probability": 0.56,
+        "model_market_edge": 0.06,
+        "expected_value_per_unit": 0.12,
+        "timestamp": "now",
+        "book": "Book A",
+    }
+    status = gate.classify_report_row(row)["report_verification_class"]
+    assert status == gate.WATCHLIST_VERIFY_PRICE
