@@ -57,57 +57,17 @@ class ReportStudioState:
 
 _SOURCE_COPY = {
     "en": {
-        "current-run": (
-            "Current run / session rows",
-            "Current slate",
-            "Current session rows are being used. Verify live odds and news before publishing.",
-            "INFO",
-        ),
-        "uploaded": (
-            "Uploaded fallback rows",
-            "Uploaded report input",
-            "Uploaded rows are being used. Treat as verification-only unless API fields show LIVE.",
-            "VERIFY",
-        ),
-        "saved-handoff": (
-            "Saved handoff rows",
-            "Saved current handoff",
-            "Saved handoff rows are being used. Confirm this is the newest run before publishing.",
-            "VERIFY",
-        ),
-        "ledger-history": (
-            "Proof ledger history",
-            "Historical proof ledger",
-            "This is proof-ledger history, not a live current-slate magazine. Run Pro Predictor/Odds Lock Pro or upload the newest CSV before publishing.",
-            "HISTORY_ONLY",
-        ),
+        "current-run": ("Current run / session rows", "Current slate", "Current session rows are being used. Verify live odds and news before publishing.", "INFO"),
+        "uploaded": ("Uploaded fallback rows", "Uploaded report input", "Uploaded rows are being used. Treat as verification-only unless API fields show LIVE.", "VERIFY"),
+        "saved-handoff": ("Saved handoff rows", "Saved current handoff", "Saved handoff rows are being used. Confirm this is the newest run before publishing.", "VERIFY"),
+        "ledger-history": ("Proof ledger history", "Historical proof ledger", "This is proof-ledger history, not a live current-slate magazine. Run Pro Predictor/Odds Lock Pro or upload the newest CSV before publishing.", "HISTORY_ONLY"),
         "none": ("No report source", "No rows loaded", "No report source is loaded.", "BLOCKED"),
     },
     "es": {
-        "current-run": (
-            "Filas actuales de sesión",
-            "Cartelera actual",
-            "Se usan filas actuales de sesión. Verificar cuotas y noticias antes de publicar.",
-            "INFO",
-        ),
-        "uploaded": (
-            "Filas subidas / fallback",
-            "Entrada subida para reporte",
-            "Se usan filas subidas. Tratar como solo verificación salvo que los campos API muestren LIVE.",
-            "VERIFICAR",
-        ),
-        "saved-handoff": (
-            "Filas guardadas de traspaso",
-            "Traspaso actual guardado",
-            "Se usan filas guardadas de traspaso. Confirmar que es la corrida más reciente antes de publicar.",
-            "VERIFICAR",
-        ),
-        "ledger-history": (
-            "Historial del ledger de prueba",
-            "Ledger histórico de prueba",
-            "Esto es historial del ledger de prueba, no una revista en vivo de la cartelera actual. Ejecuta Pro Predictor/Odds Lock Pro o sube el CSV más reciente antes de publicar.",
-            "SOLO_HISTORIAL",
-        ),
+        "current-run": ("Filas actuales de sesión", "Cartelera actual", "Se usan filas actuales de sesión. Verificar cuotas y noticias antes de publicar.", "INFO"),
+        "uploaded": ("Filas subidas / fallback", "Entrada subida para reporte", "Se usan filas subidas. Tratar como solo verificación salvo que los campos API muestren LIVE.", "VERIFICAR"),
+        "saved-handoff": ("Filas guardadas de traspaso", "Traspaso actual guardado", "Se usan filas guardadas de traspaso. Confirmar que es la corrida más reciente antes de publicar.", "VERIFICAR"),
+        "ledger-history": ("Historial del ledger de prueba", "Ledger histórico de prueba", "Esto es historial del ledger de prueba, no una revista en vivo de la cartelera actual. Ejecuta Pro Predictor/Odds Lock Pro o sube el CSV más reciente antes de publicar.", "SOLO_HISTORIAL"),
         "none": ("Sin fuente de reporte", "Sin filas cargadas", "No hay fuente de reporte cargada.", "BLOQUEADO"),
     },
 }
@@ -145,14 +105,7 @@ def _source_contract(source_note: str, language: str) -> dict[str, str]:
     lang = lang_code(language)
     mode = _source_mode(source_note)
     label, scope, warning, severity = _SOURCE_COPY.get(lang, _SOURCE_COPY["en"]).get(mode, _SOURCE_COPY.get(lang, _SOURCE_COPY["en"])["none"])
-    return {
-        "report_source_mode": mode,
-        "report_source_label": label,
-        "report_data_scope": scope,
-        "report_truth_warning": warning,
-        "report_truth_severity": severity,
-        "report_source_note": safe_text(source_note) or "none",
-    }
+    return {"report_source_mode": mode, "report_source_label": label, "report_data_scope": scope, "report_truth_warning": warning, "report_truth_severity": severity, "report_source_note": safe_text(source_note) or "none"}
 
 
 def _has_live_odds(row: Mapping[str, Any]) -> bool:
@@ -232,19 +185,7 @@ def _is_research_or_watch_row(row: Mapping[str, Any]) -> bool:
     publish_ready = str(row.get("official_publish_ready") or row.get("publish_ready") or "").strip().lower() in {"true", "1", "yes"}
     if publish_ready or lane in {"best play", "official ev", "official ev play"}:
         return False
-    markers = (
-        "no play",
-        "research",
-        "learning",
-        "watchlist",
-        "price watch",
-        "seguimiento",
-        "investigacion",
-        "investigación",
-        "lista de seguimiento",
-        "no jugar",
-        "momio",
-    )
+    markers = ("no play", "research", "learning", "watchlist", "price watch", "seguimiento", "investigacion", "investigación", "lista de seguimiento", "no jugar", "momio")
     return any(marker in action for marker in markers) or lane in {"no play", "research", "watchlist", "lista de seguimiento", "investigacion", "investigación"}
 
 
@@ -253,13 +194,7 @@ def _card_dedupe_key(row: Mapping[str, Any]) -> str:
     action = _row_action_text(row)
     if event and _is_research_or_watch_row(row):
         return f"research-event|{event}"
-    fields = (
-        event,
-        _canonical_part(row.get("public_pick") or row.get("prediction") or row.get("pick") or row.get("selection")),
-        _canonical_part(row.get("market_type") or row.get("market")),
-        _canonical_part(row.get("line_point") or row.get("line") or row.get("handicap") or row.get("total")),
-        action,
-    )
+    fields = (event, _canonical_part(row.get("public_pick") or row.get("prediction") or row.get("pick") or row.get("selection")), _canonical_part(row.get("market_type") or row.get("market")), _canonical_part(row.get("line_point") or row.get("line") or row.get("handicap") or row.get("total")), action)
     key = "|".join(part for part in fields if part)
     return key or safe_text(row.get("proof_id") or row.get("locked_at_utc") or row.get("source_file"))
 
@@ -278,11 +213,11 @@ def _dedupe_cards(cards: pd.DataFrame) -> pd.DataFrame:
     return cards.loc[keep].reset_index(drop=True)
 
 
-def _order_cards(cards: pd.DataFrame) -> pd.DataFrame:
+def _order_cards(cards: pd.DataFrame, max_rows: int) -> pd.DataFrame:
     if cards.empty:
         return cards
-    ordered = order_magazine_rows(cards.to_dict("records"))
-    return pd.DataFrame(ordered).reset_index(drop=True)
+    ordered = pd.DataFrame(order_magazine_rows(cards.to_dict("records"))).reset_index(drop=True)
+    return ordered.head(max(int(max_rows or 1), 1)).copy().reset_index(drop=True)
 
 
 def _bool_count(frame: pd.DataFrame, column: str) -> int:
@@ -305,13 +240,13 @@ def build_report_studio_cards(raw_rows: pd.DataFrame | Sequence[Mapping[str, Any
         return raw, empty, empty, empty
     raw = _annotate_source_contract(raw, source_note=source_note, language=filters.language)
     normalized = normalize_frame(raw)
-    filtered = _filter_sports(normalized, filters.selected_sports).head(max(int(filters.max_rows or 1), 1)).copy()
+    filtered = _filter_sports(normalized, filters.selected_sports).copy()
     contextual = _apply_context(filtered, language=filters.language, enabled=filters.include_sports_context)
     enriched = enrich_rows(contextual, language=filters.language)
     cards = apply_learning_layer_compat(enriched)
     cards = _apply_context_preview(cards, language=filters.language)
     cards = _dedupe_cards(cards)
-    cards = _order_cards(cards)
+    cards = _order_cards(cards, int(filters.max_rows or 1))
     return raw, normalized, filtered, cards
 
 
@@ -323,48 +258,11 @@ def build_report_studio_state(raw_rows: pd.DataFrame | Sequence[Mapping[str, Any
     audit = calibration_audit(cards, min_sample=10) if not cards.empty else {}
     exports = build_report_export_bundle(cards, brand_obj, mode=filters.mode, public=filters.public_feed)
     feed = build_report_feed(cards, brand_obj, mode=filters.mode, public=filters.public_feed)
-    diagnostics = ReportStudioDiagnostics(
-        raw_rows=int(len(raw)),
-        normalized_rows=int(len(normalized)),
-        filtered_rows=int(len(filtered)),
-        cards=int(len(cards)),
-        official_publish_ready=_bool_count(cards, "official_publish_ready"),
-        client_report_ready=_bool_count(cards, "client_report_ready"),
-        learning_ready=_bool_count(cards, "learning_ready"),
-        data_issues=_data_issues(cards),
-        source_note=source_note,
-    )
+    diagnostics = ReportStudioDiagnostics(raw_rows=int(len(raw)), normalized_rows=int(len(normalized)), filtered_rows=int(len(filtered)), cards=int(len(cards)), official_publish_ready=_bool_count(cards, "official_publish_ready"), client_report_ready=_bool_count(cards, "client_report_ready"), learning_ready=_bool_count(cards, "learning_ready"), data_issues=_data_issues(cards), source_note=source_note)
     source_contract = _source_contract(source_note, filters.language)
-    context_note = (
-        f"Fuente del reporte: {source_contract['report_source_label']} · Alcance: {source_contract['report_data_scope']} · {source_contract['report_truth_warning']}"
-        if lang_code(filters.language) == "es"
-        else f"Report source: {source_contract['report_source_label']} · Scope: {source_contract['report_data_scope']} · {source_contract['report_truth_warning']}"
-    )
-    return ReportStudioState(
-        raw=raw,
-        normalized=normalized,
-        filtered=filtered,
-        cards=cards,
-        groups=groups,
-        audit=audit,
-        exports=exports,
-        feed=feed,
-        diagnostics=diagnostics,
-        filters=filters,
-        brand=brand_obj,
-        context_note=context_note,
-    )
+    context_note = f"Fuente del reporte: {source_contract['report_source_label']} · Alcance: {source_contract['report_data_scope']} · {source_contract['report_truth_warning']}" if lang_code(filters.language) == "es" else f"Report source: {source_contract['report_source_label']} · Scope: {source_contract['report_data_scope']} · {source_contract['report_truth_warning']}"
+    return ReportStudioState(raw=raw, normalized=normalized, filtered=filtered, cards=cards, groups=groups, audit=audit, exports=exports, feed=feed, diagnostics=diagnostics, filters=filters, brand=brand_obj, context_note=context_note)
 
 
 def report_studio_summary(state: ReportStudioState) -> dict[str, Any]:
-    return {
-        "raw_rows": state.diagnostics.raw_rows,
-        "cards": state.diagnostics.cards,
-        "official_publish_ready": state.diagnostics.official_publish_ready,
-        "client_report_ready": state.diagnostics.client_report_ready,
-        "learning_ready": state.diagnostics.learning_ready,
-        "data_issues": state.diagnostics.data_issues,
-        "best_plays": int(len(state.groups.get("best_plays", pd.DataFrame()))),
-        "watchlist": int(len(state.groups.get("watchlist", pd.DataFrame()))),
-        "research": int(len(state.groups.get("no_play", pd.DataFrame()))),
-    }
+    return {"raw_rows": state.diagnostics.raw_rows, "cards": state.diagnostics.cards, "official_publish_ready": state.diagnostics.official_publish_ready, "client_report_ready": state.diagnostics.client_report_ready, "learning_ready": state.diagnostics.learning_ready, "data_issues": state.diagnostics.data_issues, "best_plays": int(len(state.groups.get("best_plays", pd.DataFrame()))), "watchlist": int(len(state.groups.get("watchlist", pd.DataFrame()))), "research": int(len(state.groups.get("no_play", pd.DataFrame())))}
