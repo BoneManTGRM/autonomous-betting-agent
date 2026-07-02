@@ -9,8 +9,9 @@ LIVE_TRIGGER_UNAVAILABLE = "Live trigger unavailable - no matched live feed."
 NO_VERIFIED_PARLAY = "No verified parlay candidate yet - need at least 2 independent positive-EV legs from current provider data."
 DANGLING_ENDINGS = ("where", "where the", "with", "with the", "who are", "because", "and", "but", "the", "of", "in", "against", "expected")
 SAVED_SOURCE_TOKENS = ("saved", "uploaded", "cached", "handoff", "fallback", "manual")
-PROVIDER_TOKENS = ("odds api", "the odds api", "sportsdataio", "sportradar", "api-football", "bookmaker", "draftkings", "fanduel", "betmgm", "caesars", "pinnacle", "consensus")
+PROVIDER_TOKENS = ("odds api", "the odds api", "sportsdataio", "sportradar", "api-football", "bookmaker", "draftkings", "fanduel", "betmgm", "caesars", "pinnacle")
 RAW_PUBLIC_DIAGNOSTIC_PATTERNS = (r"\bendpoint unknown\b", r"\bstatus code unknown\b", r"\brows returned\b\s*:?\s*\d*", r"\braw session key\b", r"\braw source key\b", r"\bUPLOADED_ROW\b")
+LINE_TEXT_KEYS = ("full_market_label", "verified_market_label", "display_market", "public_pick", "final_recommendation", "final_pick", "exact_bet", "selection", "pick", "prediction", "market", "market_type", "side", "outcome")
 
 
 def public_text(value: Any) -> str:
@@ -79,7 +80,7 @@ def market_type(row: Mapping[str, Any]) -> str:
         return "total"
     if any(token in text for token in ("run line", "run_line")):
         return "run_line"
-    if any(token in text for token in ("spread", "handicap", "puck line")):
+    if any(token in text for token in ("spread", "handicap", "puck line", "point spread")):
         return "spread"
     if any(token in text for token in ("player", "shots", "strikeout", "home run", "assist", "rebound", "touchdown", "passing", "rushing", "receiving")):
         return "player_prop"
@@ -96,21 +97,36 @@ def _team_text(row: Mapping[str, Any]) -> str:
     selection = _selection_text(row)
     if normalize_side(selection) in {"Over", "Under"}:
         return first_value(row, "team", "selection_team", "participant", "home_team", "away_team")
-    cleaned = re.sub(r"\b(?:moneyline|ml|spread|run line|over|under|game total|total)\b", "", selection, flags=re.I)
+    cleaned = re.sub(r"\b(?:moneyline|ml|spread|point spread|run line|over|under|game total|team total|total)\b", "", selection, flags=re.I)
     cleaned = re.sub(r"[+\-]?\d+(?:\.\d+)?", "", cleaned).strip(" -:|/")
+    cleaned = re.sub(r"^[A-Za-z ]+\s*:\s*", "", cleaned).strip(" -:|/")
     return cleaned or first_value(row, "team", "selection_team", "participant", "home_team", "away_team")
+
+
+def _line_from_text(row: Mapping[str, Any], kind: str) -> str:
+    blob = " | ".join(public_text(row.get(key)) for key in LINE_TEXT_KEYS if public_text(row.get(key)))
+    if not blob:
+        return ""
+    if kind in {"total", "team_total", "player_prop"}:
+        match = re.search(r"\b(?:over|under|o|u)\b\s*([0-9]+(?:\.5|\.0|\.25|\.75|\.\d+)?)", blob, flags=re.I)
+        return match.group(1) if match else ""
+    if kind in {"spread", "run_line"}:
+        matches = re.findall(r"(?<![A-Za-z0-9])([+\-]\s*\d+(?:\.5|\.0|\.25|\.75|\.\d+)?)\b", blob)
+        if matches:
+            return matches[-1].replace(" ", "")
+    return ""
 
 
 def _line_value(row: Mapping[str, Any], kind: str) -> str:
     if kind == "total":
-        return first_value(row, "total_line", "game_total_line", "total", "point", "points", "line", "handicap")
+        return first_value(row, "total_line", "game_total_line", "total", "point", "points", "line", "handicap") or _line_from_text(row, kind)
     if kind == "team_total":
-        return first_value(row, "team_total_line", "total_line", "total", "point", "points", "line", "handicap")
+        return first_value(row, "team_total_line", "total_line", "total", "point", "points", "line", "handicap") or _line_from_text(row, kind)
     if kind == "run_line":
-        return first_value(row, "run_line", "runline", "spread_line", "handicap", "point", "points", "line")
+        return first_value(row, "run_line", "runline", "spread_line", "handicap", "point", "points", "line") or _line_from_text(row, kind)
     if kind == "spread":
-        return first_value(row, "spread_line", "handicap", "point", "points", "line")
-    return first_value(row, "line", "point", "points", "handicap")
+        return first_value(row, "spread_line", "handicap", "point", "points", "line") or _line_from_text(row, kind)
+    return first_value(row, "line", "point", "points", "handicap") or _line_from_text(row, kind)
 
 
 def build_full_market_label(row: Mapping[str, Any]) -> str:
@@ -141,7 +157,7 @@ def has_exact_market_line(row: Mapping[str, Any]) -> bool:
 
 
 def is_saved_source(row: Mapping[str, Any]) -> bool:
-    text = " ".join(public_text(row.get(key)).lower() for key in ("source_mode", "selected_source_key", "odds_source", "data_source", "source", "source_file", "source_label"))
+    text = " ".join(public_text(row.get(key)).lower() for key in ("source_mode", "selected_source_key", "odds_source", "data_source", "source", "source_file", "source_label", "report_source", "report_source_mode"))
     return any(token in text for token in SAVED_SOURCE_TOKENS)
 
 
@@ -149,10 +165,10 @@ def provider_state(row: Mapping[str, Any]) -> str:
     if is_saved_source(row):
         return "Source saved"
     text = " ".join(public_text(row.get(key)).lower() for key in ("api_match_status", "provider_match_status", "odds_source", "data_source", "source", "provider"))
+    if any(token in text for token in ("not matched", "no match", "unmatched", "missing", "saved", "uploaded", "cached", "handoff")):
+        return "Provider not matched"
     if any(token in text for token in ("matched exact", "exact market", "provider matched", "odds api", "sportsbook", "bookmaker")) or any(token in text for token in PROVIDER_TOKENS):
         return "Provider matched"
-    if any(token in text for token in ("not matched", "no match", "unmatched", "missing")):
-        return "Provider not matched"
     return "Provider not matched"
 
 
@@ -168,12 +184,12 @@ def public_recommendation_status(row: Mapping[str, Any]) -> str:
         return "Blocked / Do not publish as pick"
     if price is None or prob is None:
         return "Research only - missing independent model probability or current provider price"
-    if not has_exact_market_line(row):
-        return "Research only - missing exact market line"
     if ev is None or edge is None:
         return "Research only - missing edge or EV"
     if ev <= 0 or edge <= 0:
         return "No bet / Research only / Price rejected"
+    if not has_exact_market_line(row):
+        return "Research only - missing exact market line"
     if is_saved_source(row) or provider_state(row) != "Provider matched":
         return "Watchlist / Verify price"
     return "Verified candidate / Playable value"
