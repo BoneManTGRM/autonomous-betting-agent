@@ -80,3 +80,23 @@ def test_report_gate_requires_exact_market_line():
         "book": "Book A",
     }
     assert gate.classify_report_row(row)["report_verification_class"] == gate.RESEARCH_ONLY
+
+
+def test_report_gate_top_hundred_limit():
+    gate = importlib.import_module("autonomous_betting_agent.report_verification_gate")
+    rows = []
+    for index in range(120):
+        rows.append({
+            "event": f"A{index} vs C{index}",
+            "provider_event_id": f"evt{index}",
+            "market_type": "moneyline",
+            "selection": f"A{index}",
+            "decimal_price": 2.0,
+            "model_probability": 0.56,
+            "model_market_edge": 0.06,
+            "expected_value_per_unit": 0.12 + index / 1000,
+            "provider_verified": "true",
+            "timestamp": "now",
+            "book": "Book A",
+        })
+    assert len(gate.build_report_rows(rows)) == 100
